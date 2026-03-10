@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "auth_sandbox_2",
+  "project_id": "43278922-327f-499c-9ab4-a7db139425a9"
+}
