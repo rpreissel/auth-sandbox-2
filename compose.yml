@@ -72,7 +72,7 @@ services:
       - tofu-state:${TOFU_STATE_DIR:-/state}
     working_dir: /workspace
     entrypoint: ["/bin/sh", "/workspace/run-keycloak-config.sh"]
-    restart: unless-stopped
+    restart: on-failure
 
   auth-api:
     build:
