@@ -89,6 +89,16 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByRole('button', { name: 'Set password' }).click()
 
   await expect(page.getByText('Password set')).toBeVisible()
+  const bindingNotice = page.getByRole('note', { name: 'Local device binding notice' })
+  await expect(bindingNotice).toBeVisible()
+  await expect(bindingNotice).toContainText("stored in this browser's local storage")
+  await expect(bindingNotice).toContainText('Remove saved device binding')
+
+  await page.reload()
+  await expect(page.getByText('Loaded saved device binding from this browser')).toBeVisible()
+  await expect(page.getByText(userId)).toBeVisible()
+  await expect(page.getByText('Playwright Device')).toBeVisible()
+
   await page.getByRole('button', { name: 'Start login' }).click()
   await expect(page.getByText('Challenge received')).toBeVisible()
 
@@ -111,4 +121,9 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByRole('button', { name: 'Logout' }).click()
   await expect(page.getByText('Logged out')).toBeVisible()
   await expect(page.getByText('No Keycloak tokens yet.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Remove saved device binding' }).click()
+  await expect(page.getByText('Removed saved device binding from this browser')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Register device' })).toBeVisible()
+  await expect(bindingNotice).toHaveCount(0)
 })

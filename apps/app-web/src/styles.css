@@ -73,10 +73,35 @@ textarea {
   gap: 0.75rem;
 }
 
+.binding-stack {
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
 .info-grid article {
   min-width: 180px;
   display: grid;
   gap: 0.2rem;
+}
+
+.binding-note {
+  margin: 0;
+  max-width: 58ch;
+}
+
+.binding-notice {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(210, 92, 43, 0.08);
+  border: 1px solid rgba(178, 74, 31, 0.18);
+}
+
+.binding-notice strong {
+  color: #8f3c18;
 }
 
 input,
@@ -99,6 +124,11 @@ button {
 button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.button-secondary {
+  background: rgba(16, 32, 51, 0.08);
+  color: #102033;
 }
 
 .token-grid {

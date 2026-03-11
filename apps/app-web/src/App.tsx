@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import type { FinishLoginResponse, StartLoginResponse } from '@auth-sandbox-2/shared-types'
 
 import { api } from './api'
-import { createSigningKeys, signEncryptedData } from './crypto'
+import { createSigningKeys, exportPrivateKey, importPrivateKey, signEncryptedData } from './crypto'
 
 type ClaimRecord = Record<string, unknown>
 
@@ -18,21 +18,122 @@ type DeviceState = {
 
 type Step = 'register' | 'password' | 'login' | 'authenticated'
 
+type StoredDeviceBinding = {
+  userId: string
+  deviceName: string
+  publicKey: string
+  publicKeyHash: string
+  privateKey: string
+  passwordRequired: boolean
+}
+
+const DEVICE_BINDING_STORAGE_KEY = 'auth-sandbox-2.device-binding'
+
+function createInitialForm() {
+  return {
+    userId: 'demo-user',
+    deviceName: 'Browser Device',
+    activationCode: '',
+    password: 'ChangeMe123!'
+  }
+}
+
+function readStoredDeviceBinding() {
+  const raw = window.localStorage.getItem(DEVICE_BINDING_STORAGE_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<StoredDeviceBinding>
+    if (
+      typeof parsed.userId !== 'string' ||
+      typeof parsed.deviceName !== 'string' ||
+      typeof parsed.publicKey !== 'string' ||
+      typeof parsed.publicKeyHash !== 'string' ||
+      typeof parsed.privateKey !== 'string' ||
+      typeof parsed.passwordRequired !== 'boolean'
+    ) {
+      return null
+    }
+
+    return parsed as StoredDeviceBinding
+  } catch {
+    return null
+  }
+}
+
+async function persistDeviceBinding(device: DeviceState, passwordRequired: boolean) {
+  const serializedPrivateKey = await exportPrivateKey(device.privateKey)
+  const stored: StoredDeviceBinding = {
+    userId: device.userId,
+    deviceName: device.deviceName,
+    publicKey: device.publicKey,
+    publicKeyHash: device.publicKeyHash,
+    privateKey: serializedPrivateKey,
+    passwordRequired
+  }
+
+  window.localStorage.setItem(DEVICE_BINDING_STORAGE_KEY, JSON.stringify(stored))
+}
+
+function clearDeviceBinding() {
+  window.localStorage.removeItem(DEVICE_BINDING_STORAGE_KEY)
+}
+
 export function App() {
   const [step, setStep] = useState<Step>('register')
   const [status, setStatus] = useState<string>('Ready')
   const [device, setDevice] = useState<DeviceState | null>(null)
   const [challenge, setChallenge] = useState<StartLoginResponse | null>(null)
   const [tokens, setTokens] = useState<FinishLoginResponse | null>(null)
-  const [form, setForm] = useState({
-    userId: 'demo-user',
-    deviceName: 'Browser Device',
-    activationCode: '',
-    password: 'ChangeMe123!'
-  })
+  const [form, setForm] = useState(createInitialForm)
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void (async () => {
+      const stored = readStoredDeviceBinding()
+      if (!stored) {
+        return
+      }
+
+      try {
+        const privateKey = await importPrivateKey(stored.privateKey)
+        if (cancelled) {
+          return
+        }
+
+        setDevice({
+          userId: stored.userId,
+          deviceName: stored.deviceName,
+          publicKey: stored.publicKey,
+          publicKeyHash: stored.publicKeyHash,
+          privateKey
+        })
+        setForm((current) => ({
+          ...current,
+          userId: stored.userId,
+          deviceName: stored.deviceName,
+          activationCode: ''
+        }))
+        setStep(stored.passwordRequired ? 'password' : 'login')
+        setStatus('Loaded saved device binding from this browser')
+      } catch {
+        clearDeviceBinding()
+        if (!cancelled) {
+          setStatus('Saved device binding was invalid and has been cleared')
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function handleRegister(event: FormEvent) {
     event.preventDefault()
@@ -46,13 +147,16 @@ export function App() {
       publicKey: signingKeys.publicKey
     })
 
-    setDevice({
+    const nextDevice = {
       userId: form.userId,
       deviceName: result.deviceName,
       publicKey: signingKeys.publicKey,
       publicKeyHash: result.publicKeyHash,
       privateKey: signingKeys.privateKey
-    })
+    }
+
+    setDevice(nextDevice)
+    await persistDeviceBinding(nextDevice, result.passwordRequired)
     setStatus(`Device registered: ${result.deviceName}`)
     setStep(result.passwordRequired ? 'password' : 'login')
   }
@@ -62,6 +166,7 @@ export function App() {
     if (!device) return
     setStatus('Setting password in backend...')
     await api.setPassword({ userId: device.userId, password: form.password })
+    await persistDeviceBinding(device, false)
     setStatus('Password set')
     setStep('login')
   }
@@ -106,6 +211,16 @@ export function App() {
     setStep('login')
   }
 
+  function handleRemoveBinding() {
+    clearDeviceBinding()
+    setDevice(null)
+    setChallenge(null)
+    setTokens(null)
+    setForm(createInitialForm())
+    setStatus('Removed saved device binding from this browser')
+    setStep('register')
+  }
+
   return (
     <main className="shell">
       <section className="hero card">
@@ -119,6 +234,35 @@ export function App() {
           <h2>Device flow</h2>
           <p>{status}</p>
         </div>
+
+        {device && (
+          <div className="stack binding-stack">
+            <div className="info-grid">
+              <article>
+                <strong>User</strong>
+                <span>{device.userId}</span>
+              </article>
+              <article>
+                <strong>Device</strong>
+                <span>{device.deviceName}</span>
+              </article>
+              <article>
+                <strong>Public key hash</strong>
+                <span>{device.publicKeyHash}</span>
+              </article>
+            </div>
+            <div className="binding-notice" role="note" aria-label="Local device binding notice">
+              <strong>Saved in this browser</strong>
+              <p className="binding-note">The device binding and its private key are stored in this browser's local storage so login still works after a reload.</p>
+              <p className="binding-note">Use Remove saved device binding on shared or temporary machines to clear the local copy.</p>
+            </div>
+            <div className="actions">
+              <button type="button" className="button-secondary" onClick={handleRemoveBinding}>
+                Remove saved device binding
+              </button>
+            </div>
+          </div>
+        )}
 
         {step === 'register' && (
           <form className="grid" onSubmit={handleRegister}>
@@ -150,20 +294,6 @@ export function App() {
 
         {(step === 'login' || step === 'authenticated') && device && (
           <div className="stack">
-            <div className="info-grid">
-              <article>
-                <strong>User</strong>
-                <span>{device.userId}</span>
-              </article>
-              <article>
-                <strong>Device</strong>
-                <span>{device.deviceName}</span>
-              </article>
-              <article>
-                <strong>Public key hash</strong>
-                <span>{device.publicKeyHash}</span>
-              </article>
-            </div>
             <div className="actions">
               <button onClick={handleStartLogin}>Start login</button>
               <button onClick={handleFinishLogin} disabled={!challenge}>Finish login</button>
