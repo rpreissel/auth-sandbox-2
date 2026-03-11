@@ -107,6 +107,7 @@ services:
       - "8443:8443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./local-certs:/etc/caddy/local-certs:ro
       - caddy-data:/data
       - caddy-config:/config
       - ./apps/app-web/dist:/srv/app-web:ro

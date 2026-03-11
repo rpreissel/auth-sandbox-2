@@ -88,10 +88,19 @@ pnpm build
 3. Start the runtime stack:
 
 ```bash
+bash scripts/generate-local-certs.sh
+bash scripts/trust-local-ca-macos.sh
+```
+
+This sets up a fixed local CA and server certificate for all `*.localhost` hosts used by the sandbox.
+
+4. Start the runtime stack:
+
+```bash
 podman-compose up -d
 ```
 
-4. Check the main health endpoint:
+5. Check the main health endpoint:
 
 ```bash
 curl -k https://auth.localhost:8443/api/health

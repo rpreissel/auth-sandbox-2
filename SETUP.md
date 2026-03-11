@@ -25,6 +25,15 @@ pnpm --filter home-web build
 
 ## Start the local stack
 
+Before the first start, generate and trust the fixed local CA/certificate:
+
+```bash
+bash scripts/generate-local-certs.sh
+bash scripts/trust-local-ca-macos.sh
+```
+
+This creates a persistent local CA plus one SAN certificate for `home.localhost`, `app.localhost`, `admin.localhost`, `auth.localhost`, and `keycloak.localhost` in `local-certs/`.
+
 ```bash
 podman-compose up -d
 ```
@@ -53,7 +62,7 @@ curl -k https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid
 - `https://admin.localhost:8443`
 - `https://keycloak.localhost:8443`
 
-If your browser warns about the certificate, trust Caddy's local CA or continue once for local development.
+The certificate should now be trusted by macOS browsers that use the login keychain trust store.
 
 ## Manual demo flow
 

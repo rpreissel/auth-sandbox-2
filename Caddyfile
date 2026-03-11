@@ -3,7 +3,7 @@ http://home.localhost:8088 {
 }
 
 https://home.localhost:8443 {
-  tls internal
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   root * /srv/home-web
   file_server
 }
@@ -13,7 +13,7 @@ http://app.localhost:8088 {
 }
 
 https://app.localhost:8443 {
-  tls internal
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   root * /srv/app-web
   file_server
 }
@@ -23,7 +23,7 @@ http://admin.localhost:8088 {
 }
 
 https://admin.localhost:8443 {
-  tls internal
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   root * /srv/admin-web
   file_server
 }
@@ -33,7 +33,7 @@ http://auth.localhost:8088 {
 }
 
 https://auth.localhost:8443 {
-  tls internal
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   reverse_proxy auth-api:3000
 }
 
@@ -42,6 +42,6 @@ http://keycloak.localhost:8088 {
 }
 
 https://keycloak.localhost:8443 {
-  tls internal
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   reverse_proxy keycloak:8080
 }
