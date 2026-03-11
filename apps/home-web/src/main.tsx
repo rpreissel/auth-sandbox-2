@@ -115,6 +115,7 @@ function HomeApp() {
         <LinkCard title="Admin Web" href="https://admin.localhost:8443" description="Create registration codes and inspect devices." />
         <LinkCard title="Auth API" href="https://auth.localhost:8443/api/health" description="Fastify backend health endpoint." />
         <LinkCard title="Keycloak" href="https://keycloak.localhost:8443" description="Realm, users, credentials, and admin console." />
+        <LinkCard title="DB Viewer" href="https://db.localhost:8443" description="Inspect the shared Postgres database and its auth_api and keycloak schemas." />
       </section>
 
       <section className="panel">

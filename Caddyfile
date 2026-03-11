@@ -45,3 +45,12 @@ https://keycloak.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   reverse_proxy keycloak:8080
 }
+
+http://db.localhost:8088 {
+  redir https://db.localhost:8443{uri}
+}
+
+https://db.localhost:8443 {
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  reverse_proxy adminer:8080
+}

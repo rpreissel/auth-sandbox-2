@@ -95,6 +95,14 @@ services:
       keycloak-config:
         condition: service_started
 
+  adminer:
+    image: docker.io/library/adminer:4.8.1-standalone
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   caddy:
     image: docker.io/library/caddy:2.8.4-alpine
     ports:
@@ -110,6 +118,7 @@ services:
       - ./apps/home-web/dist:/srv/home-web:ro
     depends_on:
       - auth-api
+      - adminer
       - keycloak
 
 volumes:

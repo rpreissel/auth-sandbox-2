@@ -3,6 +3,7 @@ import type { APIRequestContext } from '@playwright/test'
 
 const AUTH_API_URL = 'https://auth.localhost:8443'
 const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration'
+const DB_VIEWER_URL = 'https://db.localhost:8443'
 
 async function waitForRuntimeReady(request: APIRequestContext) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -35,10 +36,21 @@ test('shared postgres runtime exposes auth and keycloak endpoints', async ({ req
   expect(metadataResponse.ok()).toBeTruthy()
 })
 
+test('postgres viewer login is reachable', async ({ page }) => {
+  await page.goto(DB_VIEWER_URL)
+  await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible()
+  await expect(page.getByRole('combobox').first()).toContainText('PostgreSQL')
+  await expect(page.getByPlaceholder('localhost')).toHaveValue('postgres')
+  await expect(page.getByRole('textbox').nth(1)).toBeVisible()
+  await expect(page.getByRole('textbox').nth(2)).toBeVisible()
+  await expect(page.getByRole('textbox').nth(3)).toBeVisible()
+})
+
 test('homepage contains key links', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /minimal device-login sandbox/i })).toBeVisible()
   await expect(page.getByRole('link', { name: /app web/i })).toBeVisible()
+  await expect(page.getByRole('link', { name: /db viewer/i })).toBeVisible()
   await expect(page.getByRole('heading', { name: /sequence diagrams/i })).toBeVisible()
   await expect(page.getByText('Registration and device setup')).toBeVisible()
   await expect(page.getByText('Encrypted login and token lifecycle')).toBeVisible()

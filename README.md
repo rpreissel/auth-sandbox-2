@@ -37,6 +37,7 @@ Explicitly out of scope:
 - `https://admin.localhost:8443` - admin app
 - `https://auth.localhost:8443/api/health` - auth API health
 - `https://keycloak.localhost:8443` - Keycloak
+- `https://db.localhost:8443` - Adminer Postgres viewer
 
 ## Main flow
 
@@ -105,6 +106,17 @@ podman-compose up -d
 ```bash
 curl -k https://auth.localhost:8443/api/health
 ```
+
+6. Open the Postgres viewer when you need to inspect the shared database:
+
+- URL: `https://db.localhost:8443`
+- System: `PostgreSQL`
+- Server: `postgres`
+- Username: `postgres`
+- Password: `postgres`
+- Database: `auth_sandbox_2`
+
+Use the `auth_api` and `keycloak` schemas to inspect app data separately inside the same database.
 
 ## Quality checks
 
