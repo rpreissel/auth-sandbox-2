@@ -43,17 +43,9 @@ services:
       KC_HOSTNAME_ADMIN: https://keycloak.localhost:8443
       KC_HTTP_ENABLED: 'true'
       KC_PROXY_HEADERS: xforwarded
-      JAVA_OPTS_APPEND: -javaagent:/opt/opentelemetry/opentelemetry-javaagent.jar
-      OTEL_SERVICE_NAME: keycloak
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
-      OTEL_METRICS_EXPORTER: none
-      OTEL_LOGS_EXPORTER: none
     depends_on:
       keycloak-db:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
     command: ["start-dev", "--http-port=8080"]
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
@@ -100,8 +92,6 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
       KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      OTEL_ENABLED: ${OTEL_ENABLED:-true}
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443
       CI: 'true'
     depends_on:
@@ -109,58 +99,6 @@ services:
         condition: service_healthy
       keycloak-config:
         condition: service_started
-
-  otel-collector:
-    image: docker.io/otel/opentelemetry-collector-contrib:0.114.0
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    volumes:
-      - ./infra/observability/otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
-      - ./infra/observability/healthcheck.sh:/healthcheck.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh"]
-      interval: 30s
-      timeout: 5s
-      retries: 1
-
-  tempo:
-    image: docker.io/grafana/tempo:2.7.1
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./infra/observability/tempo.yaml:/etc/tempo.yaml:ro
-      - ./infra/observability/healthcheck.sh:/healthcheck.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh"]
-      interval: 30s
-      timeout: 5s
-      retries: 1
-
-  loki:
-    image: docker.io/grafana/loki:3.2.1
-    command: ["-config.file=/etc/loki/local-config.yaml"]
-    volumes:
-      - ./infra/observability/healthcheck.sh:/healthcheck.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh"]
-      interval: 30s
-      timeout: 5s
-      retries: 1
-
-  grafana:
-    image: docker.io/grafana/grafana:11.2.0
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-    volumes:
-      - ./infra/observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
-      - ./infra/observability/healthcheck.sh:/healthcheck.sh:ro
-    depends_on:
-      - loki
-      - tempo
-    healthcheck:
-      test: ["CMD-SHELL", "/healthcheck.sh"]
-      interval: 30s
-      timeout: 5s
-      retries: 1
 
   caddy:
     image: docker.io/library/caddy:2.8.4-alpine
@@ -176,7 +114,6 @@ services:
       - ./apps/home-web/dist:/srv/home-web:ro
     depends_on:
       - auth-api
-      - grafana
       - keycloak
 
 volumes:

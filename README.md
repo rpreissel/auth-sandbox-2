@@ -29,7 +29,6 @@ Explicitly out of scope:
 - `postgres` - auth state storage
 - `caddy` - local reverse proxy
 - `opentofu` - Keycloak realm, client, scope, and flow config
-- `grafana` + `tempo` + `loki` + `otel-collector` - observability stack
 
 ## Local URLs
 
@@ -38,7 +37,6 @@ Explicitly out of scope:
 - `https://admin.localhost:8443` - admin app
 - `https://auth.localhost:8443/api/health` - auth API health
 - `https://keycloak.localhost:8443` - Keycloak
-- `https://grafana.localhost:8443` - Grafana
 
 ## Main flow
 
@@ -71,7 +69,6 @@ Explicitly out of scope:
 - `packages/shared-types` - shared request and response types
 - `keycloak-extension` - custom device credential and login authenticator
 - `infra/tofu/keycloak` - realm and flow config
-- `infra/observability` - collector, Tempo, Loki, Grafana config
 - `e2e` - Playwright coverage
 
 ## Run locally
@@ -115,4 +112,3 @@ pnpm --filter @auth-sandbox-2/e2e test
 
 - End-to-end device flow works: register, set password, login, refresh, logout.
 - Playwright covers homepage navigation plus the full device flow.
-- Observability stack is wired, but the local `otel-collector` health/export path still needs hardening.

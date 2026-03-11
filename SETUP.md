@@ -36,7 +36,6 @@ This starts:
 - Keycloak with the custom extension
 - OpenTofu runner for Keycloak config
 - auth-api
-- Grafana, Tempo, Loki, OTEL collector
 - Caddy reverse proxy
 
 ## Verify services
@@ -53,7 +52,6 @@ curl -k https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid
 - `https://app.localhost:8443`
 - `https://admin.localhost:8443`
 - `https://keycloak.localhost:8443`
-- `https://grafana.localhost:8443`
 
 If your browser warns about the certificate, trust Caddy's local CA or continue once for local development.
 
@@ -81,4 +79,3 @@ pnpm --filter @auth-sandbox-2/e2e test
 - Keycloak user creation is backend-driven, and `username == userId`.
 - Device credentials are created through the custom realm resource endpoint at `/realms/{realm}/device-credentials`.
 - The Keycloak browser flow is intentionally minimal and uses a single `device-login-token` authenticator execution.
-- The OTEL collector currently starts but may still report unhealthy or refuse exports locally; this does not block the core device-login demo flow.

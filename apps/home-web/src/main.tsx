@@ -8,7 +8,7 @@ function HomeApp() {
     <main className="shell">
       <section className="hero">
         <p className="eyebrow">auth-sandbox-2</p>
-        <h1>Minimal device-login sandbox with Keycloak, OpenTofu, observability, and browser tooling.</h1>
+        <h1>Minimal device-login sandbox with Keycloak, OpenTofu, and browser tooling.</h1>
         <p>
           This project focuses only on registration codes, device registration, encrypted challenge login,
           backend-driven password setup, token inspection, refresh, and logout.
@@ -21,7 +21,6 @@ function HomeApp() {
         <LinkCard title="Admin Web" href="https://admin.localhost:8443" description="Create registration codes and inspect devices." />
         <LinkCard title="Auth API" href="https://auth.localhost:8443/api/health" description="Fastify backend health endpoint." />
         <LinkCard title="Keycloak" href="https://keycloak.localhost:8443" description="Realm, users, credentials, and admin console." />
-        <LinkCard title="Grafana" href="https://grafana.localhost:8443" description="Trace, log, and error correlation." />
       </section>
 
       <section className="panel">
@@ -48,8 +47,8 @@ function HomeApp() {
             <p>App displays tokens and claims, then supports refresh and logout.</p>
           </article>
           <article>
-            <strong>6. Observability</strong>
-            <p>Grafana, Tempo, and Loki show spans, errors, and correlated logs.</p>
+            <strong>6. Local runtime</strong>
+            <p>Caddy serves the frontends and routes requests to auth-api and Keycloak for the full demo flow.</p>
           </article>
         </div>
       </section>
@@ -70,8 +69,8 @@ function HomeApp() {
           <div>Auth API</div>
           <span>login token</span>
           <div>Keycloak</div>
-          <span>tokens + logs</span>
-          <div>Grafana</div>
+          <span>tokens</span>
+          <div>App Web</div>
         </div>
       </section>
     </main>

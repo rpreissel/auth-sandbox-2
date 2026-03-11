@@ -18,8 +18,7 @@ const envSchema = z.object({
   KEYCLOAK_ADMIN_USERNAME: z.string().default('admin'),
   KEYCLOAK_ADMIN_PASSWORD: z.string().default('admin'),
   CORS_ORIGIN: z.string().default('https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443'),
-  CHALLENGE_TTL_SECONDS: z.coerce.number().default(300),
-  OTEL_ENABLED: z.string().default('true')
+  CHALLENGE_TTL_SECONDS: z.coerce.number().default(300)
 })
 
 const env = envSchema.parse(process.env)
@@ -43,12 +42,4 @@ export const keycloakConfig = {
   adminClientSecret: env.KEYCLOAK_ADMIN_CLIENT_SECRET,
   adminUsername: env.KEYCLOAK_ADMIN_USERNAME,
   adminPassword: env.KEYCLOAK_ADMIN_PASSWORD
-}
-
-export const otelConfig = {
-  enabled: env.OTEL_ENABLED === 'true'
-}
-
-export const runtimeFlags = {
-  allowTelemetryFailure: true
 }

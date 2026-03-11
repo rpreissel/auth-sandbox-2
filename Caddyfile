@@ -45,12 +45,3 @@ https://keycloak.localhost:8443 {
   tls internal
   reverse_proxy keycloak:8080
 }
-
-http://grafana.localhost:8088 {
-  redir https://grafana.localhost:8443{uri}
-}
-
-https://grafana.localhost:8443 {
-  tls internal
-  reverse_proxy grafana:3000
-}
