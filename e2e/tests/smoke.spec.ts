@@ -112,6 +112,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(comparisonClaimsTable).toBeVisible()
   await expect(comparisonClaimsTable.getByRole('row', { name: /exp/i })).toContainText('Unix')
   await expect(page.locator('summary').filter({ hasText: 'token JWT' })).toHaveCount(3)
+  await expect(comparisonClaimsTable.getByRole('row', { name: /email_verified/i })).toContainText('false')
   await expect(claimSummary.locator('article').filter({ hasText: 'User ID' }).locator('strong')).toHaveText(userId)
   await expect(claimSummary.locator('article').filter({ hasText: 'Username' }).locator('strong')).toHaveText(userId)
   await expect(claimSummary.locator('article').filter({ hasText: 'Subject' }).locator('strong')).not.toBeEmpty()

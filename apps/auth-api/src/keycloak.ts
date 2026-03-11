@@ -93,7 +93,7 @@ export class KeycloakAdminClient {
       body: JSON.stringify({
         username: userId,
         enabled: true,
-        emailVerified: true,
+        emailVerified: false,
         requiredActions: [],
         firstName,
         lastName: rest.join(' ') || undefined
