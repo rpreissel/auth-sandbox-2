@@ -27,7 +27,18 @@ type StoredDeviceBinding = {
   passwordRequired: boolean
 }
 
+type ClaimRow = {
+  key: string
+  primaryValue: string
+  secondaryValue?: string
+  structured?: boolean
+  compact?: boolean
+  missing?: boolean
+}
+
 const DEVICE_BINDING_STORAGE_KEY = 'auth-sandbox-2.device-binding'
+const TIMESTAMP_CLAIM_KEYS = new Set(['auth_time', 'exp', 'iat', 'nbf'])
+const PRIORITY_CLAIM_KEYS = ['sub', 'preferred_username', 'userId', 'scope', 'azp', 'aud', 'iss', 'auth_time', 'iat', 'nbf', 'exp']
 
 function createInitialForm() {
   return {
@@ -91,6 +102,7 @@ export function App() {
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
+  const sharedTokenClaimKeys = useMemo(() => buildSharedClaimKeys(accessClaims, idClaims), [accessClaims, idClaims])
 
   useEffect(() => {
     let cancelled = false
@@ -311,9 +323,14 @@ export function App() {
           <>
             <ClaimHighlights accessClaims={accessClaims} idClaims={idClaims} />
             <div className="token-grid">
-              <TokenPanel title="Access token" token={tokens.accessToken} claims={accessClaims} />
-              <TokenPanel title="ID token" token={tokens.idToken} claims={idClaims} />
-              <TokenPanel title="Refresh token" token={tokens.refreshToken} claims={null} />
+              <TokenComparisonPanel
+                accessToken={tokens.accessToken}
+                accessClaims={accessClaims}
+                idToken={tokens.idToken}
+                idClaims={idClaims}
+                claimKeys={sharedTokenClaimKeys}
+              />
+              <TokenPanel title="Refresh token" token={tokens.refreshToken} rawLabel="Refresh token JWT" claims={null} />
             </div>
           </>
         )}
@@ -355,13 +372,119 @@ function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord
   )
 }
 
-function TokenPanel({ title, token, claims }: { title: string; token: string; claims: ClaimRecord | null }) {
+function TokenComparisonPanel(props: {
+  accessToken: string
+  accessClaims: ClaimRecord | null
+  idToken: string
+  idClaims: ClaimRecord | null
+  claimKeys: string[]
+}) {
+  return (
+    <article className="token-panel token-panel-comparison">
+      <h3>Access and ID tokens</h3>
+      {props.accessClaims && props.idClaims ? (
+        <TokenComparisonTable accessClaims={props.accessClaims} idClaims={props.idClaims} claimKeys={props.claimKeys} />
+      ) : (
+        <p className="muted-copy">Decoded claims are unavailable.</p>
+      )}
+      <div className="raw-token-grid">
+        <details className="token-raw">
+          <summary>Access token JWT</summary>
+          <textarea value={props.accessToken} readOnly rows={8} />
+        </details>
+        <details className="token-raw">
+          <summary>ID token JWT</summary>
+          <textarea value={props.idToken} readOnly rows={8} />
+        </details>
+      </div>
+    </article>
+  )
+}
+
+function TokenPanel({ title, token, rawLabel, claims }: { title: string; token: string; rawLabel: string; claims: ClaimRecord | null }) {
   return (
     <article className="token-panel">
       <h3>{title}</h3>
-      <textarea value={token} readOnly rows={8} />
-      {claims && <pre>{JSON.stringify(claims, null, 2)}</pre>}
+      {claims ? <ClaimsTable title={title} claims={claims} /> : <p className="muted-copy">No decoded claims available for this token.</p>}
+      <details className="token-raw">
+        <summary>{rawLabel}</summary>
+        <textarea value={token} readOnly rows={8} />
+      </details>
     </article>
+  )
+}
+
+function TokenComparisonTable({ accessClaims, idClaims, claimKeys }: { accessClaims: ClaimRecord; idClaims: ClaimRecord; claimKeys: string[] }) {
+  const rows = claimKeys.map((key) => ({
+    key,
+    access: buildClaimCell(accessClaims, key),
+    id: buildClaimCell(idClaims, key)
+  }))
+
+  return (
+    <div className="claims-table-wrap">
+      <table className="claims-table claims-table-comparison" aria-label="Access and ID token claims">
+        <thead>
+          <tr>
+            <th scope="col">Claim</th>
+            <th scope="col">Access token</th>
+            <th scope="col">ID token</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className={row.access.compact && row.id.compact ? 'claims-row-compact' : undefined}>
+              <th scope="row">{row.key}</th>
+              <td>{renderClaimCell(row.access)}</td>
+              <td>{renderClaimCell(row.id)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ClaimsTable({ title, claims }: { title: string; claims: ClaimRecord }) {
+  const rows = Object.keys(claims)
+    .sort(compareClaimKeys)
+    .map((key) => ({
+      key,
+      cell: buildClaimCell(claims, key)
+    }))
+
+  return (
+    <div className="claims-table-wrap">
+      <table className="claims-table" aria-label={`${title} claims`}>
+        <thead>
+          <tr>
+            <th scope="col">Claim</th>
+            <th scope="col">Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className={row.cell.compact ? 'claims-row-compact' : undefined}>
+              <th scope="row">{row.key}</th>
+              <td>{renderClaimCell(row.cell)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function renderClaimCell(row: Omit<ClaimRow, 'key'>) {
+  if (row.structured) {
+    return <pre className="claim-structured">{row.primaryValue}</pre>
+  }
+
+  return (
+    <div className="claim-value">
+      <span className={row.missing ? 'claim-primary claim-missing' : 'claim-primary'}>{row.primaryValue}</span>
+      {row.secondaryValue && <span className="claim-secondary">{row.secondaryValue}</span>}
+    </div>
   )
 }
 
@@ -373,6 +496,99 @@ function readString(claims: ClaimRecord | null, key: string) {
 function readNumber(claims: ClaimRecord | null, key: string) {
   const value = claims?.[key]
   return typeof value === 'number' ? value : null
+}
+
+function buildSharedClaimKeys(accessClaims: ClaimRecord | null, idClaims: ClaimRecord | null) {
+  const keys = new Set<string>()
+
+  for (const claims of [accessClaims, idClaims]) {
+    if (!claims) {
+      continue
+    }
+
+    for (const key of Object.keys(claims)) {
+      keys.add(key)
+    }
+  }
+
+  return [...keys].sort(compareClaimKeys)
+}
+
+function buildClaimCell(claims: ClaimRecord, key: string): Omit<ClaimRow, 'key'> {
+  if (!(key in claims)) {
+    return {
+      primaryValue: '—',
+      compact: true,
+      missing: true
+    }
+  }
+
+  return formatClaimValue(key, claims[key])
+}
+
+function formatClaimValue(key: string, value: unknown) {
+  if (typeof value === 'number' && TIMESTAMP_CLAIM_KEYS.has(key)) {
+    return {
+      primaryValue: new Date(value * 1000).toLocaleString(),
+      secondaryValue: `Unix: ${value}`,
+      compact: true
+    }
+  }
+
+  if (Array.isArray(value) && value.every((entry) => typeof entry === 'string' || typeof entry === 'number')) {
+    return {
+      primaryValue: value.join(', '),
+      compact: true
+    }
+  }
+
+  if (typeof value === 'string' && value.includes('://')) {
+    return {
+      primaryValue: value,
+      compact: true
+    }
+  }
+
+  if (Array.isArray(value) || isRecord(value)) {
+    return {
+      primaryValue: JSON.stringify(value, null, 2),
+      structured: true
+    }
+  }
+
+  return {
+    primaryValue: stringifyClaimValue(value),
+    compact: typeof value !== 'string' || value.length < 72
+  }
+}
+
+function stringifyClaimValue(value: unknown) {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+    return String(value)
+  }
+
+  return JSON.stringify(value)
+}
+
+function compareClaimKeys(left: string, right: string) {
+  const leftPriority = PRIORITY_CLAIM_KEYS.indexOf(left)
+  const rightPriority = PRIORITY_CLAIM_KEYS.indexOf(right)
+
+  if (leftPriority !== -1 || rightPriority !== -1) {
+    if (leftPriority === -1) {
+      return 1
+    }
+    if (rightPriority === -1) {
+      return -1
+    }
+    return leftPriority - rightPriority
+  }
+
+  return left.localeCompare(right)
 }
 
 function formatExpiry(exp: number | null) {
