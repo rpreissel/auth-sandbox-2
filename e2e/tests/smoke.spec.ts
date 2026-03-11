@@ -65,6 +65,13 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('heading', { name: 'Access token' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'ID token' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Refresh token' })).toBeVisible()
+  const claimSummary = page.getByLabel('Token claim summary')
+  await expect(claimSummary).toBeVisible()
+  await expect(claimSummary.locator('article').filter({ hasText: 'User ID' }).locator('strong')).toHaveText(userId)
+  await expect(claimSummary.locator('article').filter({ hasText: 'Username' }).locator('strong')).toHaveText(userId)
+  await expect(claimSummary.locator('article').filter({ hasText: 'Subject' }).locator('strong')).not.toBeEmpty()
+  await expect(claimSummary.locator('article').filter({ hasText: 'Roles' }).locator('strong')).not.toBeEmpty()
+  await expect(claimSummary.locator('article').filter({ hasText: 'Expires' }).locator('strong')).not.toBeEmpty()
 
   await page.getByRole('button', { name: 'Refresh' }).click()
   await expect(page.getByText('Tokens refreshed')).toBeVisible()

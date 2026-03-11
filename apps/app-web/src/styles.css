@@ -106,6 +106,33 @@ button:disabled {
   gap: 1rem;
 }
 
+.claim-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.claim-summary article {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(16, 32, 51, 0.1);
+}
+
+.claim-summary span {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c4a28;
+}
+
+.claim-summary strong {
+  overflow-wrap: anywhere;
+}
+
 .token-panel {
   display: grid;
   gap: 0.75rem;

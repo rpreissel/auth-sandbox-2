@@ -6,6 +6,8 @@ import type { FinishLoginResponse, StartLoginResponse } from '@auth-sandbox-2/sh
 import { api } from './api'
 import { createSigningKeys, signEncryptedData } from './crypto'
 
+type ClaimRecord = Record<string, unknown>
+
 type DeviceState = {
   userId: string
   deviceName: string
@@ -29,8 +31,8 @@ export function App() {
     password: 'ChangeMe123!'
   })
 
-  const accessClaims = useMemo(() => tokens?.accessTokenClaims ?? null, [tokens])
-  const idClaims = useMemo(() => tokens?.idTokenClaims ?? null, [tokens])
+  const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
+  const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
 
   async function handleRegister(event: FormEvent) {
     event.preventDefault()
@@ -176,18 +178,54 @@ export function App() {
         <h2>Tokens and claims</h2>
         {!tokens && <p>No Keycloak tokens yet.</p>}
         {tokens && (
-          <div className="token-grid">
-            <TokenPanel title="Access token" token={tokens.accessToken} claims={accessClaims} />
-            <TokenPanel title="ID token" token={tokens.idToken} claims={idClaims} />
-            <TokenPanel title="Refresh token" token={tokens.refreshToken} claims={null} />
-          </div>
+          <>
+            <ClaimHighlights accessClaims={accessClaims} idClaims={idClaims} />
+            <div className="token-grid">
+              <TokenPanel title="Access token" token={tokens.accessToken} claims={accessClaims} />
+              <TokenPanel title="ID token" token={tokens.idToken} claims={idClaims} />
+              <TokenPanel title="Refresh token" token={tokens.refreshToken} claims={null} />
+            </div>
+          </>
         )}
       </section>
     </main>
   )
 }
 
-function TokenPanel({ title, token, claims }: { title: string; token: string; claims: Record<string, unknown> | null }) {
+function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord | null; idClaims: ClaimRecord | null }) {
+  const username = readString(accessClaims, 'preferred_username') ?? readString(idClaims, 'preferred_username') ?? 'Unavailable'
+  const userId = readString(accessClaims, 'userId') ?? readString(idClaims, 'userId') ?? username
+  const subject = readString(accessClaims, 'sub') ?? readString(idClaims, 'sub') ?? 'Unavailable'
+  const expiresAt = formatExpiry(readNumber(accessClaims, 'exp') ?? readNumber(idClaims, 'exp'))
+  const roles = extractRoles(accessClaims)
+
+  return (
+    <section className="claim-summary" aria-label="Token claim summary">
+      <article>
+        <span>User ID</span>
+        <strong>{userId}</strong>
+      </article>
+      <article>
+        <span>Username</span>
+        <strong>{username}</strong>
+      </article>
+      <article>
+        <span>Subject</span>
+        <strong>{subject}</strong>
+      </article>
+      <article>
+        <span>Roles</span>
+        <strong>{roles.length ? roles.join(', ') : 'No roles'}</strong>
+      </article>
+      <article>
+        <span>Expires</span>
+        <strong>{expiresAt}</strong>
+      </article>
+    </section>
+  )
+}
+
+function TokenPanel({ title, token, claims }: { title: string; token: string; claims: ClaimRecord | null }) {
   return (
     <article className="token-panel">
       <h3>{title}</h3>
@@ -195,4 +233,59 @@ function TokenPanel({ title, token, claims }: { title: string; token: string; cl
       {claims && <pre>{JSON.stringify(claims, null, 2)}</pre>}
     </article>
   )
+}
+
+function readString(claims: ClaimRecord | null, key: string) {
+  const value = claims?.[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function readNumber(claims: ClaimRecord | null, key: string) {
+  const value = claims?.[key]
+  return typeof value === 'number' ? value : null
+}
+
+function formatExpiry(exp: number | null) {
+  if (!exp) {
+    return 'Unavailable'
+  }
+
+  return new Date(exp * 1000).toLocaleString()
+}
+
+function extractRoles(claims: ClaimRecord | null) {
+  if (!claims) {
+    return []
+  }
+
+  const roles = new Set<string>()
+  const realmAccess = claims.realm_access
+
+  if (isRecord(realmAccess) && Array.isArray(realmAccess.roles)) {
+    for (const role of realmAccess.roles) {
+      if (typeof role === 'string' && role.length > 0) {
+        roles.add(role)
+      }
+    }
+  }
+
+  const resourceAccess = claims.resource_access
+
+  if (isRecord(resourceAccess)) {
+    for (const client of Object.values(resourceAccess)) {
+      if (isRecord(client) && Array.isArray(client.roles)) {
+        for (const role of client.roles) {
+          if (typeof role === 'string' && role.length > 0) {
+            roles.add(role)
+          }
+        }
+      }
+    }
+  }
+
+  return [...roles]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
