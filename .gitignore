@@ -2,3 +2,19 @@
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.pnpm-store/
+.env
+.env.local
+.DS_Store
+.local/
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+.opencode/

@@ -1,0 +1,56 @@
+http://home.localhost:8088 {
+  redir https://home.localhost:8443{uri}
+}
+
+https://home.localhost:8443 {
+  tls internal
+  root * /srv/home-web
+  file_server
+}
+
+http://app.localhost:8088 {
+  redir https://app.localhost:8443{uri}
+}
+
+https://app.localhost:8443 {
+  tls internal
+  root * /srv/app-web
+  file_server
+}
+
+http://admin.localhost:8088 {
+  redir https://admin.localhost:8443{uri}
+}
+
+https://admin.localhost:8443 {
+  tls internal
+  root * /srv/admin-web
+  file_server
+}
+
+http://auth.localhost:8088 {
+  redir https://auth.localhost:8443{uri}
+}
+
+https://auth.localhost:8443 {
+  tls internal
+  reverse_proxy auth-api:3000
+}
+
+http://keycloak.localhost:8088 {
+  redir https://keycloak.localhost:8443{uri}
+}
+
+https://keycloak.localhost:8443 {
+  tls internal
+  reverse_proxy keycloak:8080
+}
+
+http://grafana.localhost:8088 {
+  redir https://grafana.localhost:8443{uri}
+}
+
+https://grafana.localhost:8443 {
+  tls internal
+  reverse_proxy grafana:3000
+}

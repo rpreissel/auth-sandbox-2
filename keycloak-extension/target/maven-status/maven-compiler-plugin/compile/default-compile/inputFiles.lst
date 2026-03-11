@@ -1,0 +1,8 @@
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceCredentialModel.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceCredentialProvider.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceCredentialResourceProvider.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceCredentialResourceProviderFactory.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceLoginConditionAuthenticator.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceLoginConditionAuthenticatorFactory.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceLoginTokenAuthenticator.java
+/Users/rene/Develop/opencode/auth-sandbox-2/keycloak-extension/src/main/java/dev/authsandbox/keycloak/DeviceLoginTokenAuthenticatorFactory.java

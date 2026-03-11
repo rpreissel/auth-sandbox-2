@@ -1,0 +1,127 @@
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: #102033;
+  background:
+    radial-gradient(circle at top left, rgba(255, 214, 153, 0.55), transparent 28%),
+    linear-gradient(180deg, #f6f1e8 0%, #f3f7fb 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  width: min(1120px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(16, 32, 51, 0.12);
+  border-radius: 24px;
+  padding: 1.5rem;
+  box-shadow: 0 24px 80px rgba(16, 32, 51, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.hero h1,
+.card h2,
+.card h3 {
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+  color: #b24a1f;
+}
+
+.lede {
+  max-width: 60ch;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.grid label,
+.stack {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.actions,
+.info-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.info-grid article {
+  min-width: 180px;
+  display: grid;
+  gap: 0.2rem;
+}
+
+input,
+textarea {
+  border-radius: 14px;
+  border: 1px solid rgba(16, 32, 51, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.8rem 0.9rem;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.8rem 1.2rem;
+  background: linear-gradient(135deg, #d25c2b 0%, #ca8b2d 100%);
+  color: white;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.token-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.token-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+pre {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 18px;
+  background: #102033;
+  color: #f6f1e8;
+  overflow: auto;
+}
+
+@media (min-width: 900px) {
+  .token-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

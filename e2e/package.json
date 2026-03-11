@@ -1,0 +1,18 @@
+{
+  "name": "@auth-sandbox-2/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "lint": "playwright test --list",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node --eval \"console.log('e2e: no build step')\"",
+    "format:check": "node --eval \"console.log('e2e: format check skipped')\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}
