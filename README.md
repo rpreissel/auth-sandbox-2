@@ -26,7 +26,7 @@ Explicitly out of scope:
 - `admin-web` - React + TypeScript admin UI
 - `home-web` - React + TypeScript landing page
 - `keycloak` - IAM and credential authority
-- `postgres` - auth state storage
+- `postgres` - shared storage for auth-api and Keycloak with separate schemas
 - `caddy` - local reverse proxy
 - `opentofu` - Keycloak realm, client, scope, and flow config
 
@@ -121,3 +121,4 @@ pnpm --filter @auth-sandbox-2/e2e test
 
 - End-to-end device flow works: register, set password, login, refresh, logout.
 - Playwright covers homepage navigation plus the full device flow.
+- Runtime uses one PostgreSQL database with separate schemas for `auth-api` and Keycloak.

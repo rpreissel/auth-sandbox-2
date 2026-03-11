@@ -40,8 +40,7 @@ podman-compose up -d
 
 This starts:
 
-- Postgres for app data
-- Postgres for Keycloak
+- one Postgres instance and database with separate schemas for auth-api and Keycloak
 - Keycloak with the custom extension
 - OpenTofu runner for Keycloak config
 - auth-api

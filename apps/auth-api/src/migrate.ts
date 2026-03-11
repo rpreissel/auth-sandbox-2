@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { appConfig } from './config.js'
 import { pool } from './db.js'
 import { logger } from './logger.js'
 

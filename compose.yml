@@ -3,26 +3,19 @@ services:
     image: docker.io/library/postgres:17-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-auth_sandbox_2}
-      POSTGRES_USER: ${POSTGRES_USER:-auth_sandbox}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-auth_sandbox}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres}
+      AUTH_API_DB_USER: ${AUTH_API_DB_USER:-auth_sandbox}
+      AUTH_API_DB_PASSWORD: ${AUTH_API_DB_PASSWORD:-auth_sandbox}
+      AUTH_API_DB_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
+      KEYCLOAK_DB_USER: ${KEYCLOAK_DB_USER:-keycloak}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      KEYCLOAK_DB_SCHEMA: ${KEYCLOAK_DB_SCHEMA:-keycloak}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - shared-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-single-postgres.sh:/docker-entrypoint-initdb.d/10-init-single-postgres.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-auth_sandbox} -d ${POSTGRES_DB:-auth_sandbox_2}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  keycloak-db:
-    image: docker.io/library/postgres:17-alpine
-    environment:
-      POSTGRES_DB: ${KEYCLOAK_DB:-keycloak}
-      POSTGRES_USER: ${KEYCLOAK_DB_USER:-keycloak}
-      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
-    volumes:
-      - keycloak-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER:-keycloak} -d ${KEYCLOAK_DB:-keycloak}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_ADMIN_USER:-postgres} -d ${POSTGRES_DB:-auth_sandbox_2}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,9 +26,10 @@ services:
       dockerfile: keycloak-extension/Dockerfile
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/${KEYCLOAK_DB:-keycloak}
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
       KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-keycloak}
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      KC_DB_SCHEMA: ${KEYCLOAK_DB_SCHEMA:-keycloak}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HEALTH_ENABLED: 'true'
@@ -44,7 +38,7 @@ services:
       KC_HTTP_ENABLED: 'true'
       KC_PROXY_HEADERS: xforwarded
     depends_on:
-      keycloak-db:
+      postgres:
         condition: service_healthy
     command: ["start-dev", "--http-port=8080"]
     healthcheck:
@@ -82,7 +76,8 @@ services:
       AUTH_API_HOST: 0.0.0.0
       AUTH_API_PORT: 3000
       AUTH_API_PUBLIC_URL: https://auth.localhost:8443
-      DATABASE_URL: postgresql://${POSTGRES_USER:-auth_sandbox}:${POSTGRES_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
+      DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
+      DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
@@ -118,8 +113,7 @@ services:
       - keycloak
 
 volumes:
-  postgres-data:
-  keycloak-db-data:
+  shared-postgres-data:
   tofu-state:
   caddy-data:
   caddy-config:

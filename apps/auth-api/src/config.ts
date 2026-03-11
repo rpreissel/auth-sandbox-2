@@ -8,6 +8,7 @@ const envSchema = z.object({
   AUTH_API_PORT: z.coerce.number().default(3000),
   AUTH_API_PUBLIC_URL: z.string().url().default('https://auth.localhost:8443'),
   DATABASE_URL: z.string().default('postgresql://auth_sandbox:auth_sandbox@postgres:5432/auth_sandbox_2'),
+  DATABASE_SCHEMA: z.string().regex(/^[a-z_][a-z0-9_]*$/).default('auth_api'),
   KEYCLOAK_BASE_URL: z.string().default('http://keycloak:8080'),
   KEYCLOAK_PUBLIC_URL: z.string().default('https://keycloak.localhost:8443'),
   KEYCLOAK_REALM: z.string().default('auth-sandbox-2'),
@@ -28,6 +29,7 @@ export const appConfig = {
   port: env.AUTH_API_PORT,
   publicUrl: env.AUTH_API_PUBLIC_URL,
   databaseUrl: env.DATABASE_URL,
+  databaseSchema: env.DATABASE_SCHEMA,
   challengeTtlSeconds: env.CHALLENGE_TTL_SECONDS,
   corsOrigins: env.CORS_ORIGIN.split(',').map((value) => value.trim())
 }

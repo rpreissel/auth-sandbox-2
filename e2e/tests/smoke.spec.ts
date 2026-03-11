@@ -25,6 +25,16 @@ test.beforeEach(async ({ request }) => {
   await waitForRuntimeReady(request)
 })
 
+test('shared postgres runtime exposes auth and keycloak endpoints', async ({ request }) => {
+  const [healthResponse, metadataResponse] = await Promise.all([
+    request.get(`${AUTH_API_URL}/api/health`),
+    request.get(KEYCLOAK_METADATA_URL)
+  ])
+
+  expect(healthResponse.ok()).toBeTruthy()
+  expect(metadataResponse.ok()).toBeTruthy()
+})
+
 test('homepage contains key links', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /minimal device-login sandbox/i })).toBeVisible()
