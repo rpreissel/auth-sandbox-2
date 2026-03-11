@@ -69,6 +69,33 @@ body {
   max-width: 72ch;
 }
 
+.login-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.login-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.credential-item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 20px;
+  background: rgba(16, 32, 51, 0.04);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.credential-item span {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b24a1f;
+}
+
 .sequence-stack {
   display: grid;
   gap: 1rem;

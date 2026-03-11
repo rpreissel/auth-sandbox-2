@@ -118,6 +118,22 @@ function HomeApp() {
         <LinkCard title="DB Viewer" href="https://db.localhost:8443" description="Inspect the shared Postgres database and its auth_api and keycloak schemas." />
       </section>
 
+      <section className="panel login-panel">
+        <h2>DB viewer login</h2>
+        <p className="panel-copy">
+          Adminer can default the server, but it does not cleanly prefill the full login in this local setup. Use these credentials for the shared database.
+        </p>
+        <div className="login-grid" aria-label="DB viewer login details">
+          <CredentialItem label="URL" value="https://db.localhost:8443" />
+          <CredentialItem label="System" value="PostgreSQL" />
+          <CredentialItem label="Server" value="postgres" />
+          <CredentialItem label="Username" value="postgres" />
+          <CredentialItem label="Password" value="postgres" />
+          <CredentialItem label="Database" value="auth_sandbox_2" />
+          <CredentialItem label="Schemas" value="auth_api, keycloak" />
+        </div>
+      </section>
+
       <section className="panel">
         <h2>Sequence diagrams</h2>
         <p className="panel-copy">
@@ -262,11 +278,20 @@ function escapeMermaid(value: string) {
 
 function LinkCard(props: { title: string; href: string; description: string }) {
   return (
-    <a className="link-card" href={props.href}>
+    <a className="link-card" href={props.href} target="_blank" rel="noreferrer">
       <strong>{props.title}</strong>
       <span>{props.description}</span>
       <code>{props.href}</code>
     </a>
+  )
+}
+
+function CredentialItem(props: { label: string; value: string }) {
+  return (
+    <article className="credential-item">
+      <span>{props.label}</span>
+      <code>{props.value}</code>
+    </article>
   )
 }
 
