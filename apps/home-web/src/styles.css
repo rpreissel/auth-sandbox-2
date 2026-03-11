@@ -65,39 +65,63 @@ body {
   gap: 0.55rem;
 }
 
-.flow-grid {
+.panel-copy {
+  max-width: 72ch;
+}
+
+.sequence-stack {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1rem;
 }
 
-.flow-grid article {
-  padding: 1rem;
+.sequence-card {
+  padding: 1.1rem;
+  border-radius: 24px;
+  background: rgba(16, 32, 51, 0.04);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.sequence-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.sequence-actors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.sequence-actors span {
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(16, 32, 51, 0.1);
+  font-size: 0.9rem;
+}
+
+.mermaid-shell {
+  overflow-x: auto;
+  padding: 0.35rem;
   border-radius: 20px;
-  background: rgba(16, 32, 51, 0.05);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 248, 242, 0.92));
+  border: 1px solid rgba(16, 32, 51, 0.08);
 }
 
-.diagram {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
-  align-items: center;
+.mermaid-diagram {
+  min-width: 720px;
 }
 
-.diagram div,
-.diagram span {
-  padding: 0.9rem;
-  border-radius: 18px;
-  text-align: center;
+.mermaid-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
-.diagram div {
-  background: #102033;
-  color: white;
-}
-
-.diagram span {
-  background: rgba(210, 92, 43, 0.12);
+.mermaid-diagram [font-family] {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif !important;
 }
 
 code {
@@ -105,7 +129,11 @@ code {
 }
 
 @media (max-width: 900px) {
-  .diagram {
-    grid-template-columns: 1fr;
+  .shell {
+    width: min(100vw - 1rem, 1160px);
+  }
+
+  .mermaid-diagram {
+    min-width: 560px;
   }
 }

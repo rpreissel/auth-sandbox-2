@@ -13,6 +13,7 @@
     "format:check": "node --eval \"console.log('home-web: format check skipped')\""
   },
   "dependencies": {
+    "mermaid": "^11.13.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
