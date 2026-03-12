@@ -75,3 +75,132 @@ button {
   border-radius: 18px;
   background: rgba(14, 34, 52, 0.05);
 }
+
+.trace-hero {
+  background: linear-gradient(135deg, rgba(14, 34, 52, 0.96), rgba(42, 77, 96, 0.92));
+  color: #f5efe4;
+}
+
+.trace-warning {
+  margin: 0;
+  color: #ffdca8;
+}
+
+.trace-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.trace-column {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  min-height: 26rem;
+}
+
+.trace-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.trace-list,
+.trace-timeline,
+.artifact-list,
+.trace-detail,
+.trace-summary-grid,
+.explanation-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.trace-list-item,
+.trace-span-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(14, 34, 52, 0.12);
+  background: rgba(255, 255, 255, 0.95);
+  color: #0e2234;
+  border-radius: 18px;
+  padding: 0.95rem;
+  display: grid;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.trace-list-item strong,
+.trace-span-item strong,
+.trace-summary-grid strong,
+.explanation-list strong {
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.trace-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.trace-summary-grid article {
+  background: rgba(14, 34, 52, 0.05);
+  border-radius: 16px;
+  padding: 0.85rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.trace-summary-grid span,
+.artifact-block > span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: #aa4d1f;
+}
+
+.compact-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.artifact-viewer {
+  display: grid;
+  gap: 0.9rem;
+  padding-top: 0.5rem;
+}
+
+.artifact-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.artifact-block pre {
+  margin: 0;
+  padding: 0.9rem;
+  border-radius: 16px;
+  background: #102433;
+  color: #f5efe4;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.explanation-list article {
+  background: rgba(170, 77, 31, 0.08);
+  border-radius: 16px;
+  padding: 0.85rem;
+}
+
+.proxy-log-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.proxy-log-entry {
+  background: rgba(14, 34, 52, 0.05);
+}
+
+@media (max-width: 980px) {
+  .trace-layout {
+    grid-template-columns: 1fr;
+  }
+}

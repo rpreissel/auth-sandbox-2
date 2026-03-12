@@ -99,3 +99,177 @@ export type HealthResponse = {
   status: 'ok'
   service: string
 }
+
+export type TraceStatus = 'running' | 'success' | 'error'
+
+export type SpanKind = 'client_event' | 'http_in' | 'http_out' | 'crypto' | 'process'
+
+export type ActorType = 'client' | 'backend' | 'proxy' | 'keycloak'
+
+export type TraceListItem = {
+  traceId: string
+  correlationId: string
+  traceType: string
+  title: string
+  status: TraceStatus
+  startedAt: IsoDateTime
+  finishedAt: IsoDateTime | null
+  durationMs: number | null
+  rootClient: string | null
+  rootEntrypoint: string | null
+  userId: string | null
+  deviceId: string | null
+  spanCount: number
+  errorCount: number
+  actors: string[]
+}
+
+export type TraceListResponse = {
+  items: TraceListItem[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export type TraceOverview = {
+  traceId: string
+  correlationId: string
+  traceType: string
+  status: TraceStatus
+  title: string
+  summary: string | null
+  startedAt: IsoDateTime
+  finishedAt: IsoDateTime | null
+  durationMs: number | null
+  rootClient: string | null
+  rootEntrypoint: string | null
+  userId: string | null
+  deviceId: string | null
+  sessionId: string | null
+}
+
+export type TraceLane = {
+  actorType: ActorType
+  actorName: string
+}
+
+export type SpanSummary = {
+  spanId: string
+  parentSpanId: string | null
+  kind: SpanKind
+  actorType: ActorType
+  actorName: string
+  operation: string
+  method?: string | null
+  url?: string | null
+  route?: string | null
+  targetName?: string | null
+  status: TraceStatus
+  statusCode?: number | null
+  startedAt: IsoDateTime
+  finishedAt: IsoDateTime | null
+  durationMs: number | null
+  artifactCount: number
+  hasError: boolean
+}
+
+export type TraceDetailResponse = {
+  trace: TraceOverview
+  lanes: TraceLane[]
+  spans: SpanSummary[]
+}
+
+export type ArtifactSummary = {
+  artifactId: string
+  artifactType: string
+  name: string
+  encoding: string | null
+  contentType: string | null
+  direction: string | null
+  summary: string | null
+}
+
+export type SpanDetail = {
+  spanId: string
+  traceId: string
+  parentSpanId: string | null
+  kind: SpanKind
+  actorType: ActorType
+  actorName: string
+  targetName: string | null
+  operation: string
+  method: string | null
+  url: string | null
+  route: string | null
+  status: TraceStatus
+  statusCode: number | null
+  startedAt: IsoDateTime
+  finishedAt: IsoDateTime | null
+  durationMs: number | null
+  userId: string | null
+  deviceId: string | null
+  sessionId: string | null
+  challengeId: string | null
+  notes: string | null
+}
+
+export type SpanDetailResponse = {
+  span: SpanDetail
+  relatedSpans: {
+    parent: string | null
+    children: string[]
+    siblings: string[]
+  }
+  artifacts: ArtifactSummary[]
+}
+
+export type FieldExplanation = {
+  fieldPath: string
+  label: string
+  rawValue: string | null
+  normalizedValue: string | null
+  explanation: string
+}
+
+export type ArtifactDetailResponse = {
+  artifact: {
+    artifactId: string
+    spanId: string
+    artifactType: string
+    name: string
+    contentType: string | null
+    encoding: string | null
+    direction: string | null
+    explanation: string | null
+  }
+  views: {
+    raw: string
+    decoded: unknown
+    decrypted: unknown
+    explained: FieldExplanation[]
+  }
+}
+
+export type ClientEventArtifactInput = {
+  artifactType: string
+  name: string
+  contentType?: string | null
+  encoding?: string | null
+  direction?: string | null
+  rawValue: string
+  explanation?: string | null
+}
+
+export type ClientEventInput = {
+  traceId: string
+  traceType?: string
+  parentSpanId?: string | null
+  actorName: string
+  operation: string
+  status?: TraceStatus
+  timestamp?: IsoDateTime
+  userId?: string | null
+  deviceId?: string | null
+  sessionId?: string | null
+  artifacts?: ClientEventArtifactInput[]
+}

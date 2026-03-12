@@ -6,6 +6,7 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set auth_user="${AUTH_API_DB_USER:-auth_sandbox}" \
   --set auth_password="${AUTH_API_DB_PASSWORD:-auth_sandbox}" \
   --set auth_schema="${AUTH_API_DB_SCHEMA:-auth_api}" \
+  --set observability_schema="observability" \
   --set keycloak_user="${KEYCLOAK_DB_USER:-keycloak}" \
   --set keycloak_password="${KEYCLOAK_DB_PASSWORD:-keycloak}" \
   --set keycloak_schema="${KEYCLOAK_DB_SCHEMA:-keycloak}" <<'SQL'
@@ -37,10 +38,16 @@ select format('revoke all on database %I from public', :'db_name')
 select format('grant connect, temporary on database %I to %I', :'db_name', :'auth_user')
 \gexec
 
+select format('grant create on database %I to %I', :'db_name', :'auth_user')
+\gexec
+
 select format('grant connect, temporary on database %I to %I', :'db_name', :'keycloak_user')
 \gexec
 
 select format('create schema if not exists %I authorization %I', :'auth_schema', :'auth_user')
+\gexec
+
+select format('create schema if not exists %I authorization %I', :'observability_schema', :'auth_user')
 \gexec
 
 select format('create schema if not exists %I authorization %I', :'keycloak_schema', :'keycloak_user')
@@ -49,10 +56,16 @@ select format('create schema if not exists %I authorization %I', :'keycloak_sche
 select format('alter schema %I owner to %I', :'auth_schema', :'auth_user')
 \gexec
 
+select format('alter schema %I owner to %I', :'observability_schema', :'auth_user')
+\gexec
+
 select format('alter schema %I owner to %I', :'keycloak_schema', :'keycloak_user')
 \gexec
 
 select format('grant usage, create on schema %I to %I', :'auth_schema', :'auth_user')
+\gexec
+
+select format('grant usage, create on schema %I to %I', :'observability_schema', :'auth_user')
 \gexec
 
 select format('grant usage, create on schema %I to %I', :'keycloak_schema', :'keycloak_user')
@@ -70,13 +83,22 @@ select format('grant usage on schema public to %I', :'keycloak_user')
 select format('revoke all on schema %I from public', :'auth_schema')
 \gexec
 
+select format('revoke all on schema %I from public', :'observability_schema')
+\gexec
+
 select format('revoke all on schema %I from public', :'keycloak_schema')
 \gexec
 
 select format('revoke all on all tables in schema %I from public', :'auth_schema')
 \gexec
 
+select format('revoke all on all tables in schema %I from public', :'observability_schema')
+\gexec
+
 select format('revoke all on all sequences in schema %I from public', :'auth_schema')
+\gexec
+
+select format('revoke all on all sequences in schema %I from public', :'observability_schema')
 \gexec
 
 select format('revoke all on all tables in schema %I from public', :'keycloak_schema')

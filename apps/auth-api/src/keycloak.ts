@@ -5,6 +5,7 @@ import type { TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { appConfig, keycloakConfig } from './config.js'
 import { decodeTokenClaims } from './lib/jwt.js'
+import { buildTraceHeaders, recordArtifact, recordHttpExchange, runWithSpan } from './observability.js'
 
 type KeycloakTokenResponse = {
   access_token: string
@@ -29,20 +30,12 @@ type CreateDeviceCredentialResponse = {
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init)
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`${init?.method ?? 'GET'} ${input} failed: ${response.status} ${body}`)
-  }
-  return response.json() as Promise<T>
+  const { data } = await performObservedRequest<T>(input, init)
+  return data
 }
 
 async function fetchNoContent(input: string, init?: RequestInit) {
-  const response = await fetch(input, init)
-  if (!response.ok && response.status !== 204 && response.status !== 201) {
-    const body = await response.text()
-    throw new Error(`${init?.method ?? 'GET'} ${input} failed: ${response.status} ${body}`)
-  }
+  const { response } = await performObservedRequest(input, init)
   return response
 }
 
@@ -52,6 +45,138 @@ function createFormBody(values: Record<string, string>) {
     body.set(key, value)
   }
   return body
+}
+
+async function performObservedRequest<T>(input: string, init?: RequestInit) {
+  const method = init?.method ?? 'GET'
+  const requestHeaders = new Headers(init?.headers)
+  const traceHeaders = buildTraceHeaders()
+  for (const [key, value] of Object.entries(traceHeaders)) {
+    requestHeaders.set(key, value)
+  }
+
+  const bodyText = serializeRequestBody(init?.body)
+
+  return runWithSpan(
+    {
+      kind: 'http_out',
+      actorType: 'backend',
+      actorName: 'keycloak',
+      targetName: 'keycloak',
+      operation: `${method} ${new URL(input).pathname}`,
+      method,
+      url: input,
+      notes: 'Outgoing Keycloak call captured with full demo payload logging.'
+    },
+    async (spanId) => {
+      const response = await fetch(input, {
+        ...init,
+        headers: requestHeaders
+      })
+      const responseText = await response.text()
+
+      await recordHttpExchange({
+        spanId,
+        requestHeaders,
+        requestBody: bodyText,
+        responseHeaders: response.headers,
+        responseBody: responseText,
+        requestContentType: requestHeaders.get('content-type'),
+        responseContentType: response.headers.get('content-type')
+      })
+
+      if (!response.ok && response.status !== 204 && response.status !== 201) {
+        await recordArtifact({
+          spanId,
+          artifactType: 'error',
+          name: 'keycloak_error_response',
+          contentType: response.headers.get('content-type') ?? 'text/plain',
+          encoding: 'raw',
+          direction: 'inbound',
+          rawValue: responseText,
+          explanation: 'Keycloak returned a non-success HTTP status.'
+        })
+        throw new Error(`${method} ${input} failed: ${response.status} ${responseText}`)
+      }
+
+      const contentType = response.headers.get('content-type') ?? ''
+      const data = contentType.includes('application/json') && responseText.length > 0
+        ? JSON.parse(responseText) as T
+        : undefined
+
+      if (hasJwtField(data, 'access_token')) {
+        await recordArtifact({
+          spanId,
+          artifactType: 'jwt',
+          name: 'access_token',
+          contentType: 'application/jwt',
+          encoding: 'jwt',
+          direction: 'inbound',
+          rawValue: data.access_token,
+          explanation: 'Decoded Keycloak access token stored for demo trace inspection.'
+        })
+      }
+
+      if (hasJwtField(data, 'id_token')) {
+        await recordArtifact({
+          spanId,
+          artifactType: 'jwt',
+          name: 'id_token',
+          contentType: 'application/jwt',
+          encoding: 'jwt',
+          direction: 'inbound',
+          rawValue: data.id_token,
+          explanation: 'Decoded Keycloak ID token stored for demo trace inspection.'
+        })
+      }
+
+      if (hasJwtField(data, 'refresh_token')) {
+        await recordArtifact({
+          spanId,
+          artifactType: 'jwt',
+          name: 'refresh_token',
+          contentType: 'application/jwt',
+          encoding: 'jwt',
+          direction: 'inbound',
+          rawValue: data.refresh_token,
+          explanation: 'Decoded Keycloak refresh token stored for demo trace inspection.'
+        })
+      }
+
+      return {
+        data: data as T,
+        response
+      }
+    }
+  )
+}
+
+function serializeRequestBody(body: RequestInit['body']) {
+  if (!body) {
+    return null
+  }
+
+  if (typeof body === 'string') {
+    return body
+  }
+
+  if (body instanceof URLSearchParams) {
+    return body.toString()
+  }
+
+  if (body instanceof Uint8Array) {
+    return Buffer.from(body).toString('base64')
+  }
+
+  return String(body)
+}
+
+function isTokenResponse(value: unknown): value is KeycloakTokenResponse {
+  return typeof value === 'object' && value !== null && 'access_token' in value && 'id_token' in value && 'refresh_token' in value
+}
+
+function hasJwtField<T extends string>(value: unknown, field: T): value is Record<T, string> {
+  return typeof value === 'object' && value !== null && field in value && typeof (value as Record<string, unknown>)[field] === 'string'
 }
 
 export class KeycloakAdminClient {

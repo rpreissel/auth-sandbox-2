@@ -27,6 +27,11 @@ type StoredDeviceBinding = {
   passwordRequired: boolean
 }
 
+type TraceState = {
+  traceId: string
+  sessionId: string
+}
+
 type ClaimRow = {
   key: string
   primaryValue: string
@@ -109,6 +114,7 @@ export function App() {
   const [tokens, setTokens] = useState<FinishLoginResponse | null>(null)
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
+  const [traceState, setTraceState] = useState<TraceState | null>(null)
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -170,13 +176,52 @@ export function App() {
     }
   }
 
+  async function createFlowTrace(operation: string, artifacts?: Array<{ name: string; value: unknown; encoding?: string; contentType?: string }>) {
+    const nextTrace = {
+      traceId: crypto.randomUUID(),
+      sessionId: crypto.randomUUID()
+    }
+
+    setTraceState(nextTrace)
+
+    await api.sendClientEvent(
+      {
+        traceId: nextTrace.traceId,
+        traceType: operation,
+        actorName: 'web-client',
+        operation,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        userId: device?.userId ?? form.userId,
+        deviceId: device?.publicKeyHash ?? null,
+        sessionId: nextTrace.sessionId,
+        artifacts: artifacts?.map((artifact) => ({
+          artifactType: 'event_payload',
+          name: artifact.name,
+          contentType: artifact.contentType ?? 'application/json',
+          encoding: artifact.encoding ?? 'json',
+          direction: 'outbound',
+          rawValue: typeof artifact.value === 'string' ? artifact.value : JSON.stringify(artifact.value, null, 2),
+          explanation: 'Client-side event payload captured by the demo trace explorer.'
+        }))
+      },
+      {
+        traceId: nextTrace.traceId,
+        sessionId: nextTrace.sessionId
+      }
+    )
+
+    return nextTrace
+  }
+
   async function requestLoginChallenge(nextStatus: string) {
     if (!device) {
       return
     }
 
     setStatus('Requesting encrypted challenge...')
-    const result = await api.startLogin({ publicKeyHash: device.publicKeyHash })
+    const flow = traceState ?? await createFlowTrace('device_login_started', [{ name: 'device_binding', value: { publicKeyHash: device.publicKeyHash, userId: device.userId } }])
+    const result = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
     setChallenge(result)
     setStep('login')
     setSecurePrompt({
@@ -190,6 +235,7 @@ export function App() {
   }
 
   async function completeRegister() {
+    const flow = await createFlowTrace('device_registration_started', [{ name: 'registration_form', value: form }])
     setStatus('Preparing secure device key...')
     const signingKeys = await createSigningKeys()
     setStatus('Saving device binding...')
@@ -198,7 +244,7 @@ export function App() {
       deviceName: form.deviceName,
       activationCode: form.activationCode,
       publicKey: signingKeys.publicKey
-    })
+    }, flow)
 
     const nextDevice = {
       userId: form.userId,
@@ -219,7 +265,7 @@ export function App() {
       return
     }
 
-    await requestLoginChallenge('Approve keychain access to finish sign-in')
+      await requestLoginChallenge('Approve keychain access to finish sign-in')
   }
 
   async function handleRegister(event: FormEvent) {
@@ -237,8 +283,9 @@ export function App() {
     event.preventDefault()
     if (!device) return
     await runAction(async () => {
+      const flow = traceState ?? await createFlowTrace('device_password_setup', [{ name: 'password_request', value: { userId: device.userId, password: form.password } }])
       setStatus('Saving Keycloak password...')
-      await api.setPassword({ userId: device.userId, password: form.password })
+      await api.setPassword({ userId: device.userId, password: form.password }, flow)
       await persistDeviceBinding(device, false)
       await requestLoginChallenge('Approve keychain access to finish automatic sign-in')
     })
@@ -254,6 +301,7 @@ export function App() {
   async function handleFinishLogin() {
     if (!device || !challenge) return
     await runAction(async () => {
+      const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{ name: 'challenge_payload', value: challenge }])
       setStatus('Using Secure Element...')
       const signature = await signEncryptedData(challenge.encryptedData, device.privateKey)
       const result = await api.finishLogin({
@@ -262,7 +310,7 @@ export function App() {
         encryptedData: challenge.encryptedData,
         iv: challenge.iv,
         signature
-      })
+      }, flow)
       setTokens(result)
       setChallenge(null)
       setStatus('Signed in')
@@ -273,7 +321,8 @@ export function App() {
   async function handleRefresh() {
     if (!tokens) return
     await runAction(async () => {
-      const refreshed = await api.refresh({ refreshToken: tokens.refreshToken })
+      const flow = traceState ?? await createFlowTrace('device_token_refresh_started', [{ name: 'refresh_token', value: tokens.refreshToken, encoding: 'jwt', contentType: 'application/jwt' }])
+      const refreshed = await api.refresh({ refreshToken: tokens.refreshToken }, flow)
       setTokens({ ...refreshed, requiredAction: null })
       setStatus('Tokens refreshed')
     })
@@ -282,7 +331,8 @@ export function App() {
   async function handleLogout() {
     if (!tokens) return
     await runAction(async () => {
-      await api.logout({ refreshToken: tokens.refreshToken })
+      const flow = traceState ?? await createFlowTrace('device_logout_started', [{ name: 'refresh_token', value: tokens.refreshToken, encoding: 'jwt', contentType: 'application/jwt' }])
+      await api.logout({ refreshToken: tokens.refreshToken }, flow)
       setTokens(null)
       setChallenge(null)
       setStatus('Signed out. This phone is still ready to sign in again.')

@@ -116,6 +116,7 @@ services:
       - ./apps/app-web/dist:/srv/app-web:ro
       - ./apps/admin-web/dist:/srv/admin-web:ro
       - ./apps/home-web/dist:/srv/home-web:ro
+      - ./runtime/caddy-logs:/var/log/caddy
     depends_on:
       - auth-api
       - adminer

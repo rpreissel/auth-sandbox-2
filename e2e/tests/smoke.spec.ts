@@ -4,6 +4,7 @@ import type { APIRequestContext } from '@playwright/test'
 const AUTH_API_URL = 'https://auth.localhost:8443'
 const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration'
 const DB_VIEWER_URL = 'https://db.localhost:8443'
+const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 
 async function waitForRuntimeReady(request: APIRequestContext) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -156,4 +157,29 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByText('Device binding removed from this phone')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible()
   await expect(bindingNotice).toHaveCount(0)
+
+  await page.goto(ADMIN_WEB_URL)
+  await expect(page.getByRole('heading', { name: /demo observability with raw, decoded, decrypted, and explained data/i })).toBeVisible()
+  await expect(page.getByText(/demo mode captures all payloads/i)).toBeVisible()
+
+  const traceList = page.getByRole('list', { name: 'Trace list' })
+  await expect(traceList).toContainText('Finish device login')
+
+  await traceList.getByRole('button', { name: /Finish device login/i }).first().click()
+  await expect(page.getByText('Span and artifact detail')).toBeVisible()
+
+  const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
+  await expect(timeline).toContainText('auth-api')
+  await expect(timeline).toContainText('keycloak')
+  await timeline.getByRole('button', { name: /keycloak/i }).first().click()
+
+  const artifactList = page.getByRole('list', { name: 'Artifact list' })
+  await expect(artifactList).toContainText('access_token')
+  await artifactList.getByRole('button', { name: /access_token/i }).click()
+
+  const artifactViewer = page.getByLabel('Artifact viewer')
+  await expect(artifactViewer).toContainText('Decoded')
+  await expect(artifactViewer).toContainText('Explained')
+  await expect(artifactViewer).toContainText('Subject')
+  await expect(artifactViewer).toContainText('Audience')
 })

@@ -1,9 +1,27 @@
+{
+  log {
+    output file /var/log/caddy/access.json {
+      roll_size 10MiB
+      roll_keep 5
+      roll_keep_for 168h
+    }
+    format json
+  }
+}
+
 http://home.localhost:8088 {
   redir https://home.localhost:8443{uri}
 }
 
 https://home.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host home.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
   root * /srv/home-web
   file_server
 }
@@ -14,6 +32,13 @@ http://app.localhost:8088 {
 
 https://app.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host app.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
   root * /srv/app-web
   file_server
 }
@@ -24,6 +49,17 @@ http://admin.localhost:8088 {
 
 https://admin.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host admin.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
+  handle_path /caddy-logs/* {
+    root * /var/log/caddy
+    file_server
+  }
   root * /srv/admin-web
   file_server
 }
@@ -34,6 +70,16 @@ http://auth.localhost:8088 {
 
 https://auth.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host auth.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
+  log_append upstream_host {rp.upstream.host}
+  log_append upstream_duration_ms {rp.upstream.duration_ms}
+  log_append upstream_latency_ms {rp.upstream.latency_ms}
   reverse_proxy auth-api:3000
 }
 
@@ -43,6 +89,16 @@ http://keycloak.localhost:8088 {
 
 https://keycloak.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host keycloak.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
+  log_append upstream_host {rp.upstream.host}
+  log_append upstream_duration_ms {rp.upstream.duration_ms}
+  log_append upstream_latency_ms {rp.upstream.latency_ms}
   reverse_proxy keycloak:8080
 }
 
@@ -52,5 +108,15 @@ http://db.localhost:8088 {
 
 https://db.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host db.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
+  log_append upstream_host {rp.upstream.host}
+  log_append upstream_duration_ms {rp.upstream.duration_ms}
+  log_append upstream_latency_ms {rp.upstream.latency_ms}
   reverse_proxy adminer:8080
 }
