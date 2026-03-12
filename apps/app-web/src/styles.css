@@ -1,13 +1,21 @@
 :root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-family: "IBM Plex Sans", "SF Pro Text", "Segoe UI", sans-serif;
   color: #102033;
   background:
-    radial-gradient(circle at top left, rgba(255, 214, 153, 0.55), transparent 28%),
-    linear-gradient(180deg, #f6f1e8 0%, #f3f7fb 100%);
+    radial-gradient(circle at top left, rgba(51, 168, 255, 0.2), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(141, 210, 255, 0.22), transparent 28%),
+    linear-gradient(180deg, #d6e6f7 0%, #edf4fb 100%);
+  color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
@@ -21,214 +29,386 @@ textarea {
 }
 
 .shell {
-  width: min(1120px, calc(100vw - 2rem));
-  margin: 0 auto;
-  padding: 2rem 0 4rem;
+  min-height: 100vh;
   display: grid;
-  gap: 1.5rem;
+  place-items: center;
+  padding: 1rem;
+}
+
+.phone-shell {
+  position: relative;
+  width: min(100%, 430px);
+}
+
+.phone-frame {
+  position: relative;
+  padding: 0.85rem;
+  border-radius: 34px;
+  background: linear-gradient(180deg, #232a35 0%, #10161f 100%);
+  box-shadow: 0 30px 72px rgba(10, 19, 28, 0.28);
+}
+
+.phone-frame::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.6rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: rgba(74, 83, 97, 0.96);
+  z-index: 3;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem 0.75rem;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.status-icons {
+  display: flex;
+  gap: 0.28rem;
+}
+
+.status-icons span {
+  width: 0.82rem;
+  height: 0.82rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.app-shell {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 0.95rem;
+  min-height: 82vh;
+  padding: 0.35rem 0.85rem 1.2rem;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.42), transparent 24%),
+    linear-gradient(180deg, #f7fbff 0%, #eef4fb 52%, #e9f0f7 100%);
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(16, 32, 51, 0.12);
+  background: rgba(248, 251, 255, 0.82);
+  border: 1px solid rgba(16, 32, 51, 0.08);
   border-radius: 24px;
-  padding: 1.5rem;
-  box-shadow: 0 24px 80px rgba(16, 32, 51, 0.08);
-  backdrop-filter: blur(10px);
+  padding: 1rem;
+  box-shadow: 0 16px 32px rgba(16, 32, 51, 0.07);
+  backdrop-filter: blur(14px);
 }
 
 .hero h1,
 .card h2,
-.card h3 {
+.card h3,
+.challenge-card strong,
+.binding-stack strong,
+.token-empty h3,
+.prompt-sheet h3 {
   font-family: "IBM Plex Serif", Georgia, serif;
 }
 
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.8rem;
-  color: #b24a1f;
+.hero h1,
+.card h2,
+.card h3,
+.token-empty h3,
+.prompt-sheet h3,
+.challenge-card strong,
+.binding-stack strong {
+  margin: 0;
 }
 
-.lede {
-  max-width: 60ch;
+.hero-card,
+.status-card,
+.flow-card,
+.token-card,
+.binding-stack,
+.challenge-card,
+.token-empty,
+.token-panel,
+.android-intro,
+.token-overview article,
+.status-strip,
+.prompt-helper,
+.prompt-sheet {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.eyebrow,
+.section-label,
+.field-label,
+.claim-summary span,
+.token-hero span,
+.claims-table thead th,
+.prompt-caption {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+
+.eyebrow,
+.section-label,
+.field-label,
+.claim-summary span,
+.token-hero span,
+.claims-table thead th,
+.prompt-caption {
+  color: #0d63c9;
+}
+
+.lede,
+.muted-copy,
+.binding-note,
+.token-empty p,
+.challenge-card p,
+.device-details p,
+.prompt-sheet p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.muted-copy {
+  color: rgba(16, 32, 51, 0.66);
+  font-size: 0.94rem;
+}
+
+.status-strip {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 0.55rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(11, 87, 208, 0.1);
+  color: #0b57d0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.simple-heading {
+  display: block;
+}
+
+.android-intro {
+  padding: 0.95rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(11, 87, 208, 0.08), rgba(81, 145, 255, 0.12));
+  border: 1px solid rgba(11, 87, 208, 0.1);
+}
+
+.binding-stack {
+  padding: 0.95rem;
+  border-radius: 22px;
+  background: rgba(243, 248, 254, 0.92);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.device-summary,
+.token-hero,
+.claim-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.device-summary div,
+.token-hero article,
+.claim-summary article {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(16, 32, 51, 0.06);
+}
+
+.claim-summary article:last-child {
+  grid-column: 1 / -1;
+}
+
+.binding-notice {
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: rgba(229, 241, 255, 0.9);
+  border: 1px solid rgba(13, 99, 201, 0.12);
+}
+
+.device-details,
+.token-details,
+.token-raw {
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.85rem 0.95rem;
+}
+
+.device-details summary,
+.token-details summary,
+.token-raw summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.device-details p {
+  margin-top: 0.7rem;
+  overflow-wrap: anywhere;
+  color: rgba(16, 32, 51, 0.68);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
-.grid label,
-.stack {
+.grid label {
   display: grid;
-  gap: 0.5rem;
-}
-
-.actions,
-.info-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.binding-stack {
-  padding: 1rem;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(16, 32, 51, 0.08);
-}
-
-.info-grid article {
-  min-width: 180px;
-  display: grid;
-  gap: 0.2rem;
-}
-
-.binding-note {
-  margin: 0;
-  max-width: 58ch;
-}
-
-.binding-notice {
-  display: grid;
-  gap: 0.35rem;
-  padding: 1rem;
-  border-radius: 18px;
-  background: rgba(210, 92, 43, 0.08);
-  border: 1px solid rgba(178, 74, 31, 0.18);
-}
-
-.binding-notice strong {
-  color: #8f3c18;
+  gap: 0.45rem;
 }
 
 input,
 textarea {
-  border-radius: 14px;
-  border: 1px solid rgba(16, 32, 51, 0.2);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 0.8rem 0.9rem;
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(16, 32, 51, 0.12);
+  background: rgba(255, 255, 255, 0.98);
+  padding: 0.95rem 1rem;
+  color: inherit;
+}
+
+textarea {
+  min-height: 10rem;
 }
 
 button {
+  width: 100%;
   border: 0;
   border-radius: 999px;
-  padding: 0.8rem 1.2rem;
-  background: linear-gradient(135deg, #d25c2b 0%, #ca8b2d 100%);
-  color: white;
+  padding: 0.95rem 1.1rem;
+  background: linear-gradient(135deg, #0b57d0 0%, #2b7bff 100%);
+  color: #fff;
   cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(11, 87, 208, 0.22);
 }
 
 button:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .button-secondary {
-  background: rgba(16, 32, 51, 0.08);
-  color: #102033;
+  background: rgba(11, 87, 208, 0.1);
+  color: #0b57d0;
+  box-shadow: none;
 }
 
-.token-grid {
+.actions,
+.stacked-actions,
+.action-sheet {
   display: grid;
-  gap: 1.25rem;
-}
-
-.claim-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
-  margin-bottom: 1rem;
 }
 
-.claim-summary article {
+.challenge-card {
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(16, 32, 51, 0.07);
+}
+
+.authenticated-card {
+  background: rgba(227, 240, 255, 0.96);
+}
+
+.token-overview {
   display: grid;
-  gap: 0.35rem;
-  padding: 0.9rem 1rem;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(16, 32, 51, 0.1);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
 }
 
-.claim-summary span {
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
+.token-overview article {
+  padding: 0.9rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(235, 243, 255, 0.88));
+  border: 1px solid rgba(11, 87, 208, 0.08);
+}
+
+.token-overview span {
   text-transform: uppercase;
-  color: #7c4a28;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+  color: #0d63c9;
 }
 
-.claim-summary strong {
-  overflow-wrap: anywhere;
+.token-overview strong {
+  font-size: 1rem;
+}
+
+.token-overview p {
+  margin: 0;
+  color: rgba(16, 32, 51, 0.64);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.token-grid,
+.raw-token-grid {
+  display: grid;
+  gap: 0.9rem;
 }
 
 .token-panel {
-  display: grid;
-  gap: 0.9rem;
-  align-content: start;
-  padding: 1.25rem;
+  padding: 1rem;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(249, 250, 252, 0.86);
   border: 1px solid rgba(16, 32, 51, 0.08);
-}
-
-.token-panel-comparison {
-  grid-column: 1 / -1;
-}
-
-.token-panel h3 {
-  margin: 0;
-}
-
-.muted-copy {
-  margin: 0;
-  color: rgba(16, 32, 51, 0.62);
-  font-size: 0.92rem;
 }
 
 .claims-table-wrap {
   border-radius: 18px;
-  border: 1px solid rgba(16, 32, 51, 0.1);
-  background: rgba(255, 255, 255, 0.82);
-  overflow: hidden;
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  overflow: auto;
 }
 
 .claims-table {
   width: 100%;
+  min-width: 540px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
 .claims-table th,
 .claims-table td {
-  padding: 0.85rem 1rem;
+  padding: 0.8rem 0.9rem;
   text-align: left;
   vertical-align: top;
   border-bottom: 1px solid rgba(16, 32, 51, 0.08);
 }
 
-.claims-table thead th {
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #7c4a28;
-}
-
 .claims-table tbody th {
-  width: 24%;
+  width: 28%;
   font-size: 0.92rem;
   font-weight: 600;
-  color: rgba(16, 32, 51, 0.92);
 }
 
 .claims-table-comparison thead th:nth-child(2),
 .claims-table-comparison thead th:nth-child(3) {
-  width: 38%;
-}
-
-.claims-table td {
-  overflow-wrap: anywhere;
+  width: 36%;
 }
 
 .claims-table tbody tr:nth-child(even) {
@@ -242,7 +422,6 @@ button:disabled {
 
 .claim-primary {
   overflow-wrap: anywhere;
-  line-height: 1.4;
 }
 
 .claim-missing {
@@ -250,26 +429,24 @@ button:disabled {
 }
 
 .claim-secondary {
-  color: rgba(16, 32, 51, 0.62);
-  font-size: 0.88rem;
+  color: rgba(16, 32, 51, 0.6);
+  font-size: 0.86rem;
 }
 
 .claim-structured {
   margin: 0;
-  padding: 0.75rem 0.9rem;
+  padding: 0.75rem 0.85rem;
   border-radius: 14px;
-  background: rgba(16, 32, 51, 0.035);
-  color: #102033;
-  font-size: 0.88rem;
-  line-height: 1.5;
+  background: rgba(16, 32, 51, 0.04);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  font-size: 0.86rem;
 }
 
 .claims-row-compact th,
 .claims-row-compact td {
-  padding-top: 0.72rem;
-  padding-bottom: 0.72rem;
+  padding-top: 0.68rem;
+  padding-bottom: 0.68rem;
 }
 
 .claims-table tbody tr:last-child th,
@@ -277,58 +454,129 @@ button:disabled {
   border-bottom: 0;
 }
 
-.token-raw {
-  border: 1px dashed rgba(16, 32, 51, 0.14);
-  border-radius: 18px;
-  padding: 0.7rem 0.9rem;
-  background: rgba(16, 32, 51, 0.025);
-}
-
-.token-raw summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: rgba(16, 32, 51, 0.72);
-}
-
 .token-raw textarea {
-  margin-top: 0.85rem;
-  width: 100%;
-  background: rgba(255, 255, 255, 0.82);
-  min-height: 10rem;
+  margin-top: 0.8rem;
 }
 
-.raw-token-grid {
+.prompt-backdrop {
+  position: absolute;
+  inset: 0;
   display: grid;
-  gap: 1rem;
+  place-items: end center;
+  padding: 1.25rem;
+  background: rgba(8, 17, 28, 0.28);
+  backdrop-filter: blur(8px);
 }
 
-code {
-  overflow-wrap: anywhere;
+.prompt-sheet {
+  width: 100%;
+  padding: 1.1rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 22px 48px rgba(16, 32, 51, 0.22);
 }
 
-@media (min-width: 900px) {
-  .token-grid {
+.prompt-icon {
+  width: 4rem;
+  height: 4rem;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(11, 87, 208, 0.12), rgba(43, 123, 255, 0.2));
+  color: #0b57d0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.prompt-helper {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  padding: 0.85rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(11, 87, 208, 0.06);
+}
+
+.prompt-helper-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  background: #0b57d0;
+}
+
+@media (min-width: 960px) {
+  .phone-shell {
+    width: min(100%, 1180px);
+  }
+
+  .phone-frame {
+    padding: 0.85rem;
+  }
+
+  .app-shell {
+    grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .hero-card,
+  .status-card,
+  .flow-card {
+    grid-column: 1;
+  }
+
+  .token-card {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+
+  .stacked-actions,
+  .raw-token-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .token-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .claim-summary article:last-child {
+    grid-column: auto;
+  }
+
+  .prompt-backdrop {
+    place-items: center;
+  }
+
+  .prompt-sheet {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 420px) {
+  .shell {
+    padding: 0.5rem;
+  }
+
+  .phone-frame {
+    border-radius: 34px;
+    padding: 0.7rem;
+  }
+
+  .app-shell {
+    border-radius: 28px;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .device-summary,
+  .token-hero,
+  .claim-summary,
+  .token-overview,
+  .status-strip {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .raw-token-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 899px) {
-  .claims-table th,
-  .claims-table td {
-    padding-left: 0.85rem;
-    padding-right: 0.85rem;
-  }
-
-  .claims-table tbody th {
-    width: 38%;
-  }
-
-  .claims-table-comparison thead th:nth-child(2),
-  .claims-table-comparison thead th:nth-child(3) {
-    width: auto;
+  .claims-table {
+    min-width: 500px;
   }
 }
