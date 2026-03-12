@@ -159,13 +159,19 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(bindingNotice).toHaveCount(0)
 
   await page.goto(ADMIN_WEB_URL)
-  await expect(page.getByRole('heading', { name: /demo observability with raw, decoded, decrypted, and explained data/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /browse the full flow here, then open a separate deep-inspection page for raw artifacts/i })).toBeVisible()
   await expect(page.getByText(/demo mode captures all payloads/i)).toBeVisible()
 
   const traceList = page.getByRole('list', { name: 'Trace list' })
   await expect(traceList).toContainText('Finish device login')
 
   await traceList.getByRole('button', { name: /Finish device login/i }).first().click()
+  await expect(page.getByRole('heading', { name: 'Trace browser' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open deep inspection' })).toBeVisible()
+  await page.getByRole('button', { name: 'Open deep inspection' }).click()
+
+  await expect(page).toHaveURL(/#trace\//)
+  await expect(page.getByRole('heading', { name: /deep trace inspection|finish device login/i })).toBeVisible()
   await expect(page.getByText('Span and artifact detail')).toBeVisible()
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })

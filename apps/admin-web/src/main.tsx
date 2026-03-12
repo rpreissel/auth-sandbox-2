@@ -15,6 +15,8 @@ import type {
 import './styles.css'
 
 const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
+const TRACE_EXPLORER_HASH = '#trace-explorer'
+const TRACE_DETAIL_PREFIX = '#trace/'
 
 type ProxyLogRecord = {
   ts?: string
@@ -31,6 +33,10 @@ type ProxyLogRecord = {
   upstream_duration_ms?: string | number
   upstream_latency_ms?: string | number
 }
+
+type Route =
+  | { name: 'overview' }
+  | { name: 'trace-detail'; traceId: string }
 
 function createTraceHeaders() {
   const traceId = crypto.randomUUID()
@@ -63,16 +69,54 @@ async function request<T>(path: string, init?: RequestInit) {
   return response.json() as Promise<T>
 }
 
+function parseRoute(hash: string): Route {
+  if (hash.startsWith(TRACE_DETAIL_PREFIX)) {
+    const traceId = decodeURIComponent(hash.slice(TRACE_DETAIL_PREFIX.length))
+    if (traceId) {
+      return { name: 'trace-detail', traceId }
+    }
+  }
+
+  return { name: 'overview' }
+}
+
+function navigateToRoute(route: Route) {
+  if (route.name === 'trace-detail') {
+    window.location.hash = `${TRACE_DETAIL_PREFIX}${encodeURIComponent(route.traceId)}`
+    return
+  }
+
+  window.location.hash = TRACE_EXPLORER_HASH
+}
+
+async function loadProxyLogs(correlationId: string) {
+  try {
+    const response = await fetch('/caddy-logs/access.json')
+    if (!response.ok) {
+      return []
+    }
+
+    const raw = await response.text()
+    return raw
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line) as ProxyLogRecord)
+      .filter((entry) => entry.correlation_id === correlationId)
+      .slice(-30)
+      .reverse()
+  } catch {
+    return []
+  }
+}
+
 function AdminApp() {
   const [codes, setCodes] = useState<RegistrationCodeRecord[]>([])
   const [devices, setDevices] = useState<DeviceRecord[]>([])
   const [traces, setTraces] = useState<TraceListItem[]>([])
   const [selectedTrace, setSelectedTrace] = useState<TraceDetailResponse | null>(null)
-  const [selectedSpan, setSelectedSpan] = useState<SpanDetailResponse | null>(null)
-  const [selectedArtifact, setSelectedArtifact] = useState<ArtifactDetailResponse | null>(null)
-  const [proxyLogs, setProxyLogs] = useState<ProxyLogRecord[]>([])
   const [traceLoading, setTraceLoading] = useState(false)
   const [form, setForm] = useState({ userId: 'demo-user', displayName: 'Demo User', validForDays: 30 })
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
 
   async function refresh() {
     const [codesResult, devicesResult, tracesResult] = await Promise.all([
@@ -87,6 +131,17 @@ function AdminApp() {
   }
 
   useEffect(() => {
+    function handleHashChange() {
+      setRoute(parseRoute(window.location.hash))
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange)
+    }
+  }, [])
+
+  useEffect(() => {
     void refresh()
   }, [])
 
@@ -99,51 +154,18 @@ function AdminApp() {
     await refresh()
   }
 
-  async function handleSelectTrace(traceId: string) {
+  async function handlePreviewTrace(traceId: string) {
     setTraceLoading(true)
     try {
       const detail = await request<TraceDetailResponse>(`/api/observability/traces/${traceId}`)
       setSelectedTrace(detail)
-      setSelectedSpan(null)
-      setSelectedArtifact(null)
-      await loadProxyLogs(detail.trace.correlationId)
     } finally {
       setTraceLoading(false)
     }
   }
 
-  async function loadProxyLogs(correlationId: string) {
-    try {
-      const response = await fetch('/caddy-logs/access.json')
-      if (!response.ok) {
-        setProxyLogs([])
-        return
-      }
-
-      const raw = await response.text()
-      const matching = raw
-        .split('\n')
-        .filter((line) => line.trim().length > 0)
-        .map((line) => JSON.parse(line) as ProxyLogRecord)
-        .filter((entry) => entry.correlation_id === correlationId)
-        .slice(-30)
-        .reverse()
-
-      setProxyLogs(matching)
-    } catch {
-      setProxyLogs([])
-    }
-  }
-
-  async function handleSelectSpan(spanId: string) {
-    const detail = await request<SpanDetailResponse>(`/api/observability/spans/${spanId}`)
-    setSelectedSpan(detail)
-    setSelectedArtifact(null)
-  }
-
-  async function handleSelectArtifact(artifactId: string) {
-    const detail = await request<ArtifactDetailResponse>(`/api/observability/artifacts/${artifactId}`)
-    setSelectedArtifact(detail)
+  if (route.name === 'trace-detail') {
+    return <TraceInspectorPage traceId={route.traceId} onBack={() => navigateToRoute({ name: 'overview' })} />
   }
 
   return (
@@ -198,39 +220,45 @@ function AdminApp() {
         </div>
       </section>
 
-      <section className="card trace-hero">
+      <section id="trace-explorer" className="card trace-hero">
         <p className="eyebrow">Trace Explorer</p>
-        <h2>Demo observability with raw, decoded, decrypted, and explained data.</h2>
+        <h2>Browse the full flow here, then open a separate deep-inspection page for raw artifacts.</h2>
         <p className="trace-warning">Demo mode captures all payloads, including sensitive values, encrypted blobs, and decoded JWT claims.</p>
       </section>
 
-      <section className="trace-layout">
+      <section className="trace-browser-layout">
         <article className="card trace-column">
           <div className="trace-column-header">
-            <h2>Traces</h2>
+            <div>
+              <h2>Traces</h2>
+              <p className="section-copy">Pick a flow to review its high-level structure before opening the full inspector.</p>
+            </div>
             <button type="button" onClick={() => void refresh()}>Reload</button>
           </div>
           <div className="trace-list" role="list" aria-label="Trace list">
-            {traces.map((trace) => (
-              <button
-                key={trace.traceId}
-                type="button"
-                className="trace-list-item"
-                onClick={() => void handleSelectTrace(trace.traceId)}
-              >
-                <strong>{trace.title}</strong>
-                <span>{trace.traceType}</span>
-                <span>{trace.status}</span>
-                <span>{trace.actors.join(' -> ')}</span>
-              </button>
-            ))}
+            {traces.map((trace) => {
+              const isActive = selectedTrace?.trace.traceId === trace.traceId
+              return (
+                <button
+                  key={trace.traceId}
+                  type="button"
+                  className={`trace-list-item${isActive ? ' is-active' : ''}`}
+                  onClick={() => void handlePreviewTrace(trace.traceId)}
+                >
+                  <strong>{trace.title}</strong>
+                  <span>{trace.traceType}</span>
+                  <span>{trace.status}</span>
+                  <span>{trace.actors.join(' -> ')}</span>
+                </button>
+              )
+            })}
           </div>
         </article>
 
         <article className="card trace-column">
-          <h2>Trace detail</h2>
+          <h2>Trace browser</h2>
           {traceLoading && <p>Loading trace...</p>}
-          {!selectedTrace && !traceLoading && <p>Select a trace to inspect its full process tree.</p>}
+          {!selectedTrace && !traceLoading && <p>Select a trace to browse its summary, actor lanes, and span sequence.</p>}
           {selectedTrace && (
             <div className="trace-detail">
               <div className="trace-summary-grid">
@@ -240,35 +268,135 @@ function AdminApp() {
                 <article><span>Actor lanes</span><strong>{selectedTrace.lanes.map((lane) => lane.actorName).join(', ')}</strong></article>
               </div>
               <p>{selectedTrace.trace.summary}</p>
-              <div className="trace-timeline" role="list" aria-label="Trace spans timeline">
+              <div className="trace-preview-timeline" role="list" aria-label="Trace spans timeline">
                 {selectedTrace.spans.map((span) => (
-                  <button
-                    key={span.spanId}
-                    type="button"
-                    className="trace-span-item"
-                    onClick={() => void handleSelectSpan(span.spanId)}
-                  >
+                  <article key={span.spanId} className="trace-preview-item">
                     <strong>{span.actorName}</strong>
                     <span>{span.operation}</span>
                     <span>{span.kind}</span>
                     <span>{span.status}</span>
-                  </button>
+                  </article>
                 ))}
               </div>
-              <section className="proxy-log-panel">
-                <h3>Proxy hops</h3>
-                {!proxyLogs.length && <p>No matching Caddy proxy log entries loaded for this trace.</p>}
-                <div className="artifact-list" role="list" aria-label="Proxy log list">
-                  {proxyLogs.map((entry, index) => (
-                    <article key={`${entry.ts ?? 'proxy'}-${index}`} className="trace-list-item proxy-log-entry">
-                      <strong>{entry.host ?? 'unknown-host'}</strong>
-                      <span>{entry.request?.method ?? 'GET'} {entry.request?.uri ?? '/'}</span>
-                      <span>upstream: {entry.upstream_host ?? 'static'}</span>
-                      <span>correlation: {entry.correlation_id ?? 'missing'}</span>
-                    </article>
-                  ))}
-                </div>
-              </section>
+              <div className="button-row">
+                <button type="button" onClick={() => navigateToRoute({ name: 'trace-detail', traceId: selectedTrace.trace.traceId })}>
+                  Open deep inspection
+                </button>
+              </div>
+            </div>
+          )}
+        </article>
+      </section>
+    </main>
+  )
+}
+
+function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
+  const [traceDetail, setTraceDetail] = useState<TraceDetailResponse | null>(null)
+  const [selectedSpan, setSelectedSpan] = useState<SpanDetailResponse | null>(null)
+  const [selectedArtifact, setSelectedArtifact] = useState<ArtifactDetailResponse | null>(null)
+  const [proxyLogs, setProxyLogs] = useState<ProxyLogRecord[]>([])
+  const [traceLoading, setTraceLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadTrace() {
+      setTraceLoading(true)
+      setLoadError(null)
+
+      try {
+        const detail = await request<TraceDetailResponse>(`/api/observability/traces/${props.traceId}`)
+        const logs = await loadProxyLogs(detail.trace.correlationId)
+
+        if (cancelled) {
+          return
+        }
+
+        setTraceDetail(detail)
+        setProxyLogs(logs)
+        setSelectedSpan(null)
+        setSelectedArtifact(null)
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'Failed to load trace detail.')
+          setTraceDetail(null)
+          setProxyLogs([])
+          setSelectedSpan(null)
+          setSelectedArtifact(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setTraceLoading(false)
+        }
+      }
+    }
+
+    void loadTrace()
+
+    return () => {
+      cancelled = true
+    }
+  }, [props.traceId])
+
+  async function handleSelectSpan(spanId: string) {
+    const detail = await request<SpanDetailResponse>(`/api/observability/spans/${spanId}`)
+    setSelectedSpan(detail)
+    setSelectedArtifact(null)
+  }
+
+  async function handleSelectArtifact(artifactId: string) {
+    const detail = await request<ArtifactDetailResponse>(`/api/observability/artifacts/${artifactId}`)
+    setSelectedArtifact(detail)
+  }
+
+  return (
+    <main className="shell">
+      <section className="card trace-hero trace-detail-hero">
+        <div className="trace-column-header">
+          <div>
+            <p className="eyebrow">Trace Inspector</p>
+            <h1>{traceDetail?.trace.title ?? 'Deep trace inspection'}</h1>
+          </div>
+          <button type="button" className="secondary-button" onClick={props.onBack}>Back to trace browser</button>
+        </div>
+        <p className="trace-warning">This page focuses on span-level requests, responses, decoded payloads, decrypted challenge data, and proxy hops.</p>
+      </section>
+
+      <section className="trace-inspector-layout">
+        <article className="card trace-column">
+          <h2>Trace detail</h2>
+          {traceLoading && <p>Loading trace...</p>}
+          {loadError && <p>{loadError}</p>}
+          {!traceDetail && !traceLoading && !loadError && <p>Select a trace from the browser page first.</p>}
+          {traceDetail && (
+            <div className="trace-detail">
+              <div className="trace-summary-grid">
+                <article><span>Trace ID</span><strong>{traceDetail.trace.traceId}</strong></article>
+                <article><span>Correlation</span><strong>{traceDetail.trace.correlationId}</strong></article>
+                <article><span>Status</span><strong>{traceDetail.trace.status}</strong></article>
+                <article><span>Actor lanes</span><strong>{traceDetail.lanes.map((lane) => lane.actorName).join(', ')}</strong></article>
+              </div>
+              <p>{traceDetail.trace.summary}</p>
+              <div className="trace-timeline" role="list" aria-label="Trace spans timeline">
+                {traceDetail.spans.map((span) => {
+                  const isActive = selectedSpan?.span.spanId === span.spanId
+                  return (
+                    <button
+                      key={span.spanId}
+                      type="button"
+                      className={`trace-span-item${isActive ? ' is-active' : ''}`}
+                      onClick={() => void handleSelectSpan(span.spanId)}
+                    >
+                      <strong>{span.actorName}</strong>
+                      <span>{span.operation}</span>
+                      <span>{span.kind}</span>
+                      <span>{span.status}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
         </article>
@@ -290,7 +418,7 @@ function AdminApp() {
                   <button
                     key={artifact.artifactId}
                     type="button"
-                    className="trace-list-item artifact-item"
+                    className={`trace-list-item artifact-item${selectedArtifact?.artifact.artifactId === artifact.artifactId ? ' is-active' : ''}`}
                     onClick={() => void handleSelectArtifact(artifact.artifactId)}
                   >
                     <strong>{artifact.name}</strong>
@@ -332,6 +460,22 @@ function AdminApp() {
             </div>
           )}
         </article>
+      </section>
+
+      <section className="card proxy-log-panel">
+        <h2>Proxy hops</h2>
+        <p className="section-copy">Caddy access log entries for the same correlation ID stay on the deep-inspection page with the raw trace data.</p>
+        {!proxyLogs.length && <p>No matching Caddy proxy log entries loaded for this trace.</p>}
+        <div className="artifact-list" role="list" aria-label="Proxy log list">
+          {proxyLogs.map((entry, index) => (
+            <article key={`${entry.ts ?? 'proxy'}-${index}`} className="trace-list-item proxy-log-entry">
+              <strong>{entry.host ?? 'unknown-host'}</strong>
+              <span>{entry.request?.method ?? 'GET'} {entry.request?.uri ?? '/'}</span>
+              <span>upstream: {entry.upstream_host ?? 'static'}</span>
+              <span>correlation: {entry.correlation_id ?? 'missing'}</span>
+            </article>
+          ))}
+        </div>
       </section>
     </main>
   )
