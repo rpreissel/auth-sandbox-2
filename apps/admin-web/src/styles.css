@@ -18,7 +18,7 @@ button {
 }
 
 .shell {
-  width: min(1100px, calc(100vw - 2rem));
+  width: min(1180px, calc(100vw - 2rem));
   margin: 0 auto;
   padding: 2rem 0 4rem;
   display: grid;
@@ -70,9 +70,17 @@ button {
   color: white;
 }
 
-.list-card article {
+.secondary-button {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.list-card article,
+.trace-list-item,
+.trace-span-item {
   padding: 1rem;
   border-radius: 18px;
+  border: 1px solid rgba(14, 34, 52, 0.12);
   background: rgba(14, 34, 52, 0.05);
 }
 
@@ -81,29 +89,52 @@ button {
   color: #f5efe4;
 }
 
+.trace-detail-hero h1,
+.trace-page-hero h1 {
+  color: #f5efe4;
+}
+
 .trace-warning {
   margin: 0;
   color: #ffdca8;
 }
 
+.trace-entry-card {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.trace-browser-shell {
+  align-content: start;
+}
+
 .trace-browser-layout,
 .trace-inspector-layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
   gap: 1rem;
+  align-items: start;
+}
+
+.trace-browser-layout-wide {
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
 }
 
 .trace-column {
   display: grid;
   gap: 1rem;
   align-content: start;
-  min-height: 26rem;
+}
+
+.trace-list-card {
+  position: sticky;
+  top: 1rem;
 }
 
 .trace-column-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
 }
 
@@ -118,6 +149,14 @@ button {
   color: rgba(14, 34, 52, 0.72);
 }
 
+.trace-search {
+  font-weight: 600;
+}
+
+.trace-search input {
+  margin-top: 0.45rem;
+}
+
 .trace-list,
 .trace-preview-timeline,
 .trace-timeline,
@@ -129,40 +168,138 @@ button {
   gap: 0.75rem;
 }
 
+.trace-list {
+  max-height: 70vh;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
 .trace-list-item,
 .trace-span-item {
   width: 100%;
   text-align: left;
-  border: 1px solid rgba(14, 34, 52, 0.12);
   background: rgba(255, 255, 255, 0.95);
   color: #0e2234;
-  border-radius: 18px;
-  padding: 0.95rem;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.3rem;
   cursor: pointer;
 }
 
-.trace-preview-item {
-  border: 1px solid rgba(14, 34, 52, 0.12);
-  background: rgba(255, 255, 255, 0.75);
-  border-radius: 18px;
-  padding: 0.95rem;
+.trace-list-row-header,
+.trace-flow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.trace-list-timestamp {
+  color: rgba(14, 34, 52, 0.72);
+}
+
+.trace-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.trace-chip,
+.trace-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.trace-chip {
+  background: rgba(14, 34, 52, 0.08);
+  color: #0e2234;
+}
+
+.trace-chip-alert {
+  background: rgba(170, 77, 31, 0.12);
+  color: #aa4d1f;
+}
+
+.trace-status-chip {
+  background: rgba(14, 34, 52, 0.12);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trace-status-success {
+  background: rgba(37, 119, 63, 0.14);
+  color: #25773f;
+}
+
+.trace-status-running {
+  background: rgba(179, 124, 16, 0.16);
+  color: #9a6a07;
+}
+
+.trace-status-error {
+  background: rgba(160, 31, 31, 0.14);
+  color: #a01f1f;
+}
+
+.trace-list-row strong,
+.trace-span-item strong,
+.trace-summary-grid strong,
+.explanation-list strong {
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.trace-flow-list {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.9rem;
+}
+
+.trace-flow-item {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.trace-flow-time {
+  padding-top: 0.95rem;
+  color: rgba(14, 34, 52, 0.68);
+  font-size: 0.9rem;
+}
+
+.trace-flow-copy {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(14, 34, 52, 0.12);
+}
+
+.trace-flow-copy strong {
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.trace-browser-detail {
+  gap: 1.25rem;
+}
+
+.trace-browser-story {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.trace-browser-story h3 {
+  margin: 0;
+  font-family: "IBM Plex Serif", Georgia, serif;
 }
 
 .is-active {
   border-color: rgba(170, 77, 31, 0.7);
   box-shadow: 0 0 0 3px rgba(170, 77, 31, 0.14);
-}
-
-.trace-list-item strong,
-.trace-preview-item strong,
-.trace-span-item strong,
-.trace-summary-grid strong,
-.explanation-list strong {
-  font-family: "IBM Plex Serif", Georgia, serif;
 }
 
 .trace-summary-grid {
@@ -191,16 +328,8 @@ button {
 
 .button-row {
   display: flex;
-  justify-content: flex-start;
-}
-
-.secondary-button {
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.trace-detail-hero h1 {
-  color: #f5efe4;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .artifact-viewer {
@@ -243,12 +372,32 @@ button {
 
 @media (max-width: 980px) {
   .trace-browser-layout,
-  .trace-inspector-layout {
+  .trace-inspector-layout,
+  .trace-browser-layout-wide {
     grid-template-columns: 1fr;
   }
 
+  .trace-list-card {
+    position: static;
+    top: auto;
+  }
+
+  .trace-list {
+    max-height: 20rem;
+  }
+
   .trace-column-header {
-    align-items: flex-start;
     flex-direction: column;
+  }
+
+  .trace-list-row-header,
+  .trace-flow-header,
+  .trace-flow-item {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .trace-flow-time {
+    padding-top: 0;
   }
 }

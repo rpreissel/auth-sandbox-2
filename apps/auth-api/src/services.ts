@@ -240,6 +240,8 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
           encryptedKey: challenge.encryptedKey,
           encryptedData: challenge.encryptedData,
           iv: challenge.iv,
+          exp: challengePayload.exp,
+          nonce,
           decrypted: challengePayload
         }, null, 2),
         explanation: 'Encrypted challenge stored with decrypted payload for demo inspection.'

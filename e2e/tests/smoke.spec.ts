@@ -158,16 +158,19 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible()
   await expect(bindingNotice).toHaveCount(0)
 
-  await page.goto(ADMIN_WEB_URL)
-  await expect(page.getByRole('heading', { name: /browse the full flow here, then open a separate deep-inspection page for raw artifacts/i })).toBeVisible()
+  await page.goto(`${ADMIN_WEB_URL}/#trace-browser`)
+  await expect(page.getByRole('heading', { name: /scan flows quickly, keep the selected summary visible, and open deep inspection only when needed/i })).toBeVisible()
   await expect(page.getByText(/demo mode captures all payloads/i)).toBeVisible()
 
   const traceList = page.getByRole('list', { name: 'Trace list' })
   await expect(traceList).toContainText('Finish device login')
+  await expect(traceList).toBeVisible()
 
+  await expect(page.getByRole('heading', { name: 'Selected trace' })).toBeVisible()
   await traceList.getByRole('button', { name: /Finish device login/i }).first().click()
-  await expect(page.getByRole('heading', { name: 'Trace browser' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open deep inspection' })).toBeVisible()
+  await expect(page.getByText(/selected trace stays visible on the right/i)).toBeVisible()
+  await expect(traceList.getByText(/Started .* UTC/i).first()).toBeVisible()
   await page.getByRole('button', { name: 'Open deep inspection' }).click()
 
   await expect(page).toHaveURL(/#trace\//)
@@ -180,6 +183,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await timeline.getByRole('button', { name: /keycloak/i }).first().click()
 
   const artifactList = page.getByRole('list', { name: 'Artifact list' })
+
   await expect(artifactList).toContainText('access_token')
   await artifactList.getByRole('button', { name: /access_token/i }).click()
 

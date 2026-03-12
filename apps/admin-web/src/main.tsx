@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 
@@ -15,7 +15,9 @@ import type {
 import './styles.css'
 
 const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
-const TRACE_EXPLORER_HASH = '#trace-explorer'
+const ADMIN_OVERVIEW_HASH = '#admin'
+const TRACE_BROWSER_HASH = '#trace-browser'
+const LEGACY_TRACE_EXPLORER_HASH = '#trace-explorer'
 const TRACE_DETAIL_PREFIX = '#trace/'
 
 type ProxyLogRecord = {
@@ -36,6 +38,7 @@ type ProxyLogRecord = {
 
 type Route =
   | { name: 'overview' }
+  | { name: 'trace-browser' }
   | { name: 'trace-detail'; traceId: string }
 
 function createTraceHeaders() {
@@ -77,6 +80,10 @@ function parseRoute(hash: string): Route {
     }
   }
 
+  if (hash === TRACE_BROWSER_HASH || hash === LEGACY_TRACE_EXPLORER_HASH) {
+    return { name: 'trace-browser' }
+  }
+
   return { name: 'overview' }
 }
 
@@ -86,7 +93,100 @@ function navigateToRoute(route: Route) {
     return
   }
 
-  window.location.hash = TRACE_EXPLORER_HASH
+  if (route.name === 'trace-browser') {
+    window.location.hash = TRACE_BROWSER_HASH
+    return
+  }
+
+  window.location.hash = ADMIN_OVERVIEW_HASH
+}
+
+function formatTimestamp(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+}
+
+function formatArtifactView(value: unknown, emptyLabel: string) {
+  if (value === undefined) {
+    return emptyLabel
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return JSON.stringify(value, null, 2)
+}
+
+function isChallengeEnvelope(value: unknown) {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'encryptedData' in value &&
+    'encryptedKey' in value &&
+    'iv' in value
+  )
+}
+
+function isEncryptedChallengeArtifact(artifact: ArtifactDetailResponse) {
+  return artifact.artifact.name === 'encrypted_challenge' || isChallengeEnvelope(artifact.views.decoded)
+}
+
+function withEpochComments(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(withEpochComments)
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => {
+        const nextValue = withEpochComments(entry)
+        if (isEpochField(key, entry)) {
+          return [key, `${entry} /* ${formatEpochTimestamp(entry)} */`]
+        }
+
+        return [key, nextValue]
+      })
+    )
+  }
+
+  return value
+}
+
+function isEpochField(key: string, value: unknown) {
+  return (key === 'exp' || key === 'iat') && typeof value === 'number'
+}
+
+function formatEpochTimestamp(value: number) {
+  return formatTimestamp(new Date(value * 1000).toISOString())
+}
+
+function summarizeSpan(span: TraceDetailResponse['spans'][number]) {
+  return [span.actorName, span.kind, span.status].join(' - ')
+}
+
+function formatDuration(value: number | null) {
+  if (value === null) {
+    return 'still running'
+  }
+
+  if (value < 1000) {
+    return `${value} ms`
+  }
+
+  return `${(value / 1000).toFixed(1)} s`
+}
+
+function describeTraceActors(trace: TraceListItem) {
+  return trace.actors.length ? trace.actors.join(' -> ') : 'No actors recorded'
+}
+
+function describeSpanTarget(span: TraceDetailResponse['spans'][number]) {
+  return span.route ?? span.method ?? span.url ?? span.targetName ?? null
 }
 
 async function loadProxyLogs(correlationId: string) {
@@ -115,8 +215,10 @@ function AdminApp() {
   const [traces, setTraces] = useState<TraceListItem[]>([])
   const [selectedTrace, setSelectedTrace] = useState<TraceDetailResponse | null>(null)
   const [traceLoading, setTraceLoading] = useState(false)
+  const [traceQuery, setTraceQuery] = useState('')
   const [form, setForm] = useState({ userId: 'demo-user', displayName: 'Demo User', validForDays: 30 })
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
+  const traceBrowserDetailRef = useRef<HTMLElement | null>(null)
 
   async function refresh() {
     const [codesResult, devicesResult, tracesResult] = await Promise.all([
@@ -159,36 +261,117 @@ function AdminApp() {
     try {
       const detail = await request<TraceDetailResponse>(`/api/observability/traces/${traceId}`)
       setSelectedTrace(detail)
+
+      if (window.matchMedia('(max-width: 980px)').matches) {
+        requestAnimationFrame(() => {
+          traceBrowserDetailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      }
     } finally {
       setTraceLoading(false)
     }
   }
 
+  const filteredTraces = useMemo(() => {
+    const query = traceQuery.trim().toLowerCase()
+    if (!query) {
+      return traces
+    }
+
+    return traces.filter((trace) => {
+      const haystack = [trace.title, trace.traceType, trace.status, trace.actors.join(' ')].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [traceQuery, traces])
+
+  useEffect(() => {
+    if (route.name !== 'trace-browser') {
+      return
+    }
+
+    if (traceLoading || filteredTraces.length === 0) {
+      return
+    }
+
+    const selectedTraceId = selectedTrace?.trace.traceId
+    if (selectedTraceId && filteredTraces.some((trace) => trace.traceId === selectedTraceId)) {
+      return
+    }
+
+    void handlePreviewTrace(filteredTraces[0].traceId)
+  }, [filteredTraces, route, selectedTrace, traceLoading])
+
   if (route.name === 'trace-detail') {
-    return <TraceInspectorPage traceId={route.traceId} onBack={() => navigateToRoute({ name: 'overview' })} />
+    return <TraceInspectorPage traceId={route.traceId} onBack={() => navigateToRoute({ name: 'trace-browser' })} />
   }
 
+  if (route.name === 'trace-browser') {
+    return (
+      <TraceBrowserPage
+        detailRef={traceBrowserDetailRef}
+        filteredTraces={filteredTraces}
+        selectedTrace={selectedTrace}
+        traceLoading={traceLoading}
+        traceQuery={traceQuery}
+        onBack={() => navigateToRoute({ name: 'overview' })}
+        onChangeQuery={setTraceQuery}
+        onOpenDetail={(traceId) => navigateToRoute({ name: 'trace-detail', traceId })}
+        onRefresh={() => void refresh()}
+        onSelectTrace={(traceId) => void handlePreviewTrace(traceId)}
+      />
+    )
+  }
+
+  return (
+    <AdminOverviewPage
+      codes={codes}
+      devices={devices}
+      form={form}
+      onCreate={handleCreate}
+      onOpenTraceBrowser={() => navigateToRoute({ name: 'trace-browser' })}
+      setForm={setForm}
+    />
+  )
+}
+
+function AdminOverviewPage(props: {
+  codes: RegistrationCodeRecord[]
+  devices: DeviceRecord[]
+  form: { userId: string; displayName: string; validForDays: number }
+  onCreate: (event: FormEvent) => Promise<void>
+  onOpenTraceBrowser: () => void
+  setForm: (next: { userId: string; displayName: string; validForDays: number }) => void
+}) {
   return (
     <main className="shell">
       <section className="card hero">
         <p className="eyebrow">Admin Web</p>
-        <h1>Create registration codes and manage devices.</h1>
+        <h1>Create registration codes, inspect devices, and open the dedicated trace browser.</h1>
+        <div className="button-row">
+          <button type="button" onClick={props.onOpenTraceBrowser}>Open trace browser</button>
+        </div>
+      </section>
+
+      <section className="card trace-entry-card">
+        <p className="eyebrow">Trace Explorer</p>
+        <h2>A separate trace browser keeps observability out of the admin CRUD screen.</h2>
+        <p className="section-copy">Open the browser page to scan long trace lists, keep the selected summary visible, and dive into the full inspector only when needed.</p>
       </section>
 
       <section className="card">
         <h2>Create registration code</h2>
-        <form className="grid" onSubmit={handleCreate}>
+        <form className="grid" onSubmit={props.onCreate}>
           <label>
             User ID
-            <input value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} />
+            <input value={props.form.userId} onChange={(event) => props.setForm({ ...props.form, userId: event.target.value })} />
           </label>
           <label>
             Display name
-            <input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
+            <input value={props.form.displayName} onChange={(event) => props.setForm({ ...props.form, displayName: event.target.value })} />
           </label>
           <label>
             Valid for days
-            <input type="number" value={form.validForDays} onChange={(event) => setForm({ ...form, validForDays: Number(event.target.value) })} />
+            <input type="number" value={props.form.validForDays} onChange={(event) => props.setForm({ ...props.form, validForDays: Number(event.target.value) })} />
           </label>
           <button type="submit">Create code</button>
         </form>
@@ -197,7 +380,7 @@ function AdminApp() {
       <section className="card list-card">
         <h2>Registration codes</h2>
         <div className="list">
-          {codes.map((code) => (
+          {props.codes.map((code) => (
             <article key={code.id}>
               <strong>{code.userId}</strong>
               <span>{code.code}</span>
@@ -210,7 +393,7 @@ function AdminApp() {
       <section className="card list-card">
         <h2>Devices</h2>
         <div className="list">
-          {devices.map((device) => (
+          {props.devices.map((device) => (
             <article key={device.id}>
               <strong>{device.userId}</strong>
               <span>{device.deviceName}</span>
@@ -219,73 +402,143 @@ function AdminApp() {
           ))}
         </div>
       </section>
+    </main>
+  )
+}
 
-      <section id="trace-explorer" className="card trace-hero">
-        <p className="eyebrow">Trace Explorer</p>
-        <h2>Browse the full flow here, then open a separate deep-inspection page for raw artifacts.</h2>
+function TraceBrowserPage(props: {
+  detailRef: React.RefObject<HTMLElement | null>
+  filteredTraces: TraceListItem[]
+  selectedTrace: TraceDetailResponse | null
+  traceLoading: boolean
+  traceQuery: string
+  onBack: () => void
+  onChangeQuery: (value: string) => void
+  onOpenDetail: (traceId: string) => void
+  onRefresh: () => void
+  onSelectTrace: (traceId: string) => void
+}) {
+  return (
+    <main className="shell trace-browser-shell">
+      <section className="card trace-hero trace-page-hero">
+        <div className="trace-column-header">
+          <div>
+            <p className="eyebrow">Trace Browser</p>
+            <h1>Scan flows quickly, keep the selected summary visible, and open deep inspection only when needed.</h1>
+          </div>
+          <button type="button" className="secondary-button" onClick={props.onBack}>Back to admin</button>
+        </div>
         <p className="trace-warning">Demo mode captures all payloads, including sensitive values, encrypted blobs, and decoded JWT claims.</p>
       </section>
 
-      <section className="trace-browser-layout">
-        <article className="card trace-column">
+      <section className="trace-browser-layout trace-browser-layout-wide">
+        <aside className="card trace-column trace-list-card">
           <div className="trace-column-header">
             <div>
               <h2>Traces</h2>
-              <p className="section-copy">Pick a flow to review its high-level structure before opening the full inspector.</p>
+              <p className="section-copy">Use search to cut down long lists. The selected trace stays visible on the right.</p>
             </div>
-            <button type="button" onClick={() => void refresh()}>Reload</button>
+            <button type="button" onClick={props.onRefresh}>Reload</button>
           </div>
+          <label className="trace-search">
+            Search traces
+            <input
+              aria-label="Search traces"
+              placeholder="Search title, actor, status"
+              value={props.traceQuery}
+              onChange={(event) => props.onChangeQuery(event.target.value)}
+            />
+          </label>
           <div className="trace-list" role="list" aria-label="Trace list">
-            {traces.map((trace) => {
-              const isActive = selectedTrace?.trace.traceId === trace.traceId
+            {props.filteredTraces.map((trace) => {
+              const isActive = props.selectedTrace?.trace.traceId === trace.traceId
               return (
                 <button
                   key={trace.traceId}
                   type="button"
-                  className={`trace-list-item${isActive ? ' is-active' : ''}`}
-                  onClick={() => void handlePreviewTrace(trace.traceId)}
+                  className={`trace-list-item trace-list-row${isActive ? ' is-active' : ''}`}
+                  onClick={() => props.onSelectTrace(trace.traceId)}
                 >
-                  <strong>{trace.title}</strong>
-                  <span>{trace.traceType}</span>
-                  <span>{trace.status}</span>
-                  <span>{trace.actors.join(' -> ')}</span>
+                  <div className="trace-list-row-header">
+                    <strong>{trace.title}</strong>
+                    <span className={`trace-status-chip trace-status-${trace.status}`}>{trace.status}</span>
+                  </div>
+                  <span className="trace-list-timestamp">Started {formatTimestamp(trace.startedAt)}</span>
+                  <span>{describeTraceActors(trace)}</span>
+                  <div className="trace-chip-row">
+                    <span className="trace-chip">{trace.traceType}</span>
+                    <span className="trace-chip">{trace.spanCount} spans</span>
+                    <span className="trace-chip">{formatDuration(trace.durationMs)}</span>
+                    {trace.errorCount > 0 && <span className="trace-chip trace-chip-alert">{trace.errorCount} errors</span>}
+                  </div>
                 </button>
               )
             })}
+            {!props.filteredTraces.length && <p>No traces match the current search.</p>}
           </div>
-        </article>
+        </aside>
 
-        <article className="card trace-column">
-          <h2>Trace browser</h2>
-          {traceLoading && <p>Loading trace...</p>}
-          {!selectedTrace && !traceLoading && <p>Select a trace to browse its summary, actor lanes, and span sequence.</p>}
-          {selectedTrace && (
-            <div className="trace-detail">
+        <section ref={props.detailRef} className="card trace-column trace-browser-detail-card">
+          <div className="trace-column-header">
+            <div>
+              <h2>Selected trace</h2>
+              <p className="section-copy">Browse the high-level flow here. Open the inspector page for artifacts, proxy hops, and span payloads.</p>
+            </div>
+            {props.selectedTrace && (
+              <button type="button" onClick={() => props.onOpenDetail(props.selectedTrace!.trace.traceId)}>
+                Open deep inspection
+              </button>
+            )}
+          </div>
+          {props.traceLoading && <p>Loading trace...</p>}
+          {!props.selectedTrace && !props.traceLoading && <p>Select a trace from the list to keep its summary and process flow in view.</p>}
+          {props.selectedTrace && (
+            <div className="trace-detail trace-browser-detail">
               <div className="trace-summary-grid">
-                <article><span>Trace ID</span><strong>{selectedTrace.trace.traceId}</strong></article>
-                <article><span>Correlation</span><strong>{selectedTrace.trace.correlationId}</strong></article>
-                <article><span>Status</span><strong>{selectedTrace.trace.status}</strong></article>
-                <article><span>Actor lanes</span><strong>{selectedTrace.lanes.map((lane) => lane.actorName).join(', ')}</strong></article>
+                <article><span>Trace ID</span><strong>{props.selectedTrace.trace.traceId}</strong></article>
+                <article><span>Correlation</span><strong>{props.selectedTrace.trace.correlationId}</strong></article>
+                <article><span>Status</span><strong>{props.selectedTrace.trace.status}</strong></article>
+                <article><span>Started</span><strong>{formatTimestamp(props.selectedTrace.trace.startedAt)}</strong></article>
+                <article><span>Duration</span><strong>{formatDuration(props.selectedTrace.trace.durationMs)}</strong></article>
               </div>
-              <p>{selectedTrace.trace.summary}</p>
-              <div className="trace-preview-timeline" role="list" aria-label="Trace spans timeline">
-                {selectedTrace.spans.map((span) => (
-                  <article key={span.spanId} className="trace-preview-item">
-                    <strong>{span.actorName}</strong>
-                    <span>{span.operation}</span>
-                    <span>{span.kind}</span>
-                    <span>{span.status}</span>
+              <section className="trace-browser-story">
+                <h3>What happened</h3>
+                <p>{props.selectedTrace.trace.summary}</p>
+                <div className="trace-chip-row" aria-label="Actor lanes">
+                  {props.selectedTrace.lanes.map((lane) => (
+                    <span key={`${lane.actorType}-${lane.actorName}`} className="trace-chip">
+                      {lane.actorName}
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <section className="trace-browser-story">
+                <h3>Timeline</h3>
+                <div className="trace-flow-list" role="list" aria-label="Trace spans timeline">
+                {props.selectedTrace.spans.map((span) => (
+                  <article key={span.spanId} className="trace-flow-item">
+                    <div className="trace-flow-time">
+                      <span>{formatTimestamp(span.startedAt)}</span>
+                    </div>
+                    <div className="trace-flow-copy">
+                      <div className="trace-flow-header">
+                        <strong>{span.operation}</strong>
+                        <div className="trace-chip-row">
+                          <span className="trace-chip">{span.actorName}</span>
+                          <span className="trace-chip">{span.kind}</span>
+                          <span className={`trace-status-chip trace-status-${span.status}`}>{span.status}</span>
+                        </div>
+                      </div>
+                      {describeSpanTarget(span) && <span>{describeSpanTarget(span)}</span>}
+                      <span>{formatDuration(span.durationMs)}</span>
+                    </div>
                   </article>
                 ))}
-              </div>
-              <div className="button-row">
-                <button type="button" onClick={() => navigateToRoute({ name: 'trace-detail', traceId: selectedTrace.trace.traceId })}>
-                  Open deep inspection
-                </button>
-              </div>
+                </div>
+              </section>
             </div>
           )}
-        </article>
+        </section>
       </section>
     </main>
   )
@@ -429,19 +682,24 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
               </div>
               {selectedArtifact && (
                 <section className="artifact-viewer" aria-label="Artifact viewer">
+                  {isEncryptedChallengeArtifact(selectedArtifact) && (
+                    <p className="section-copy">
+                      Raw and Decoded show the transport envelope returned to the client. Decrypted shows the reconstructed plaintext challenge payload.
+                    </p>
+                  )}
                   <h3>{selectedArtifact.artifact.name}</h3>
                   <p>{selectedArtifact.artifact.explanation}</p>
                   <div className="artifact-block">
-                    <span>Raw</span>
+                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Raw Envelope' : 'Raw'}</span>
                     <pre>{selectedArtifact.views.raw}</pre>
                   </div>
                   <div className="artifact-block">
-                    <span>Decoded</span>
-                    <pre>{JSON.stringify(selectedArtifact.views.decoded, null, 2)}</pre>
+                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Decoded Envelope' : 'Decoded'}</span>
+                    <pre>{formatArtifactView(selectedArtifact.views.decoded, 'No decoded view available.')}</pre>
                   </div>
                   <div className="artifact-block">
-                    <span>Decrypted</span>
-                    <pre>{JSON.stringify(selectedArtifact.views.decrypted, null, 2)}</pre>
+                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Decrypted Payload' : 'Decrypted'}</span>
+                    <pre>{formatArtifactView(selectedArtifact.views.decrypted, 'No decrypted plaintext available.')}</pre>
                   </div>
                   <div className="artifact-block">
                     <span>Explained</span>

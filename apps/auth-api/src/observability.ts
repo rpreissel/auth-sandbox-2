@@ -731,6 +731,11 @@ export async function getArtifactDetail(artifactId: string): Promise<ArtifactDet
 
   const derivedValue = isRecord(artifact.derived_value) ? artifact.derived_value : null
 
+  const decryptedView = await resolveArtifactDecryptedView(artifact, derivedValue)
+  const preparedRawView = prepareArtifactViewForResponse(parseJson(artifact.raw_value))
+  const preparedDecodedView = prepareArtifactViewForResponse(derivedValue?.decoded ?? derivedValue)
+  const preparedDecryptedView = prepareArtifactViewForResponse(decryptedView)
+
   return {
     artifact: {
       artifactId: artifact.artifact_id,
@@ -743,9 +748,9 @@ export async function getArtifactDetail(artifactId: string): Promise<ArtifactDet
       explanation: artifact.explanation
     },
     views: {
-      raw: artifact.raw_value,
-      decoded: derivedValue?.decoded ?? derivedValue,
-      decrypted: derivedValue && 'decrypted' in derivedValue ? derivedValue.decrypted : null,
+      raw: preparedRawView ? JSON.stringify(preparedRawView, null, 2) : artifact.raw_value,
+      decoded: normalizeArtifactViewValue(preparedDecodedView),
+      decrypted: normalizeArtifactViewValue(preparedDecryptedView),
       explained: fieldsResult.rows.map<FieldExplanation>((field) => ({
         fieldPath: field.field_path,
         label: field.label,
@@ -890,7 +895,7 @@ function decodeArtifact(rawValue: string, encoding?: string | null, contentType?
       fields.push(...explainKnownFields(decoded, 'body'))
     }
     if (decoded && isEncryptedChallenge(decoded)) {
-      derivedValue.decrypted = decoded
+      derivedValue.decrypted = extractDecryptedValue(decoded)
     }
     return {
       derivedValue,
@@ -1002,6 +1007,137 @@ function parseJson(value: string) {
 
 function parsedJsonValue(value: string) {
   return parseJson(value)
+}
+
+function normalizeArtifactViewValue(value: unknown) {
+  return value === null ? undefined : value
+}
+
+function prepareArtifactViewForResponse(value: unknown): unknown {
+  return annotateEpochFields(normalizeChallengeEnvelope(value))
+}
+
+function normalizeChallengeEnvelope(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeChallengeEnvelope)
+  }
+
+  if (!isRecord(value)) {
+    return value
+  }
+
+  const hasCipherFields = isDecryptableChallengeEnvelope(value)
+  const hasExpiresAt = typeof value.expiresAt === 'string'
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== 'decrypted')
+      .map(([key, entry]) => {
+        if (key === 'expiresAt' && hasCipherFields && hasExpiresAt) {
+          const epochSeconds = Math.floor(new Date(value.expiresAt as string).getTime() / 1000)
+          return ['exp', Number.isNaN(epochSeconds) ? value.expiresAt : epochSeconds]
+        }
+
+        return [key, normalizeChallengeEnvelope(entry)]
+      })
+  )
+}
+
+function annotateEpochFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(annotateEpochFields)
+  }
+
+  if (!isRecord(value)) {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => {
+      if ((key === 'exp' || key === 'iat') && typeof entry === 'number') {
+        return [key, `${entry} /* ${formatEpochComment(entry)} */`]
+      }
+
+      return [key, annotateEpochFields(entry)]
+    })
+  )
+}
+
+function formatEpochComment(value: number) {
+  return new Date(value * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
+}
+
+function extractDecryptedValue(value: unknown) {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  if ('decrypted' in value) {
+    return value.decrypted
+  }
+
+  return null
+}
+
+async function resolveArtifactDecryptedView(
+  artifact: { raw_value: string; name: string },
+  derivedValue: JsonObject | null
+) {
+  const embeddedDecrypted = derivedValue && 'decrypted' in derivedValue ? derivedValue.decrypted : null
+  if (embeddedDecrypted !== null && embeddedDecrypted !== undefined && !isDecryptableChallengeEnvelope(embeddedDecrypted)) {
+    return embeddedDecrypted
+  }
+
+  const decodedValue = derivedValue?.decoded
+  const parsedRawValue = parseJson(artifact.raw_value)
+  const challengeEnvelope = isDecryptableChallengeEnvelope(decodedValue)
+    ? decodedValue
+    : isDecryptableChallengeEnvelope(parsedRawValue)
+      ? parsedRawValue
+      : null
+
+  if (!challengeEnvelope) {
+    return embeddedDecrypted
+  }
+
+  const storedChallenge = await queryOne<{
+    nonce: string
+    user_id: string
+    device_id: string
+    expires_at: string
+  }>(
+    `select nonce, user_id, device_id, expires_at
+       from login_challenges
+      where nonce = $1`,
+    [challengeEnvelope.nonce]
+  )
+
+  if (!storedChallenge) {
+    return embeddedDecrypted
+  }
+
+  return {
+    userId: storedChallenge.user_id,
+    nonce: storedChallenge.nonce,
+    exp: Math.floor(new Date(storedChallenge.expires_at).getTime() / 1000),
+    deviceId: storedChallenge.device_id
+  }
+}
+
+function isDecryptableChallengeEnvelope(value: unknown): value is {
+  nonce: string
+  encryptedData?: string
+  encryptedKey?: string
+  iv?: string
+  exp?: number
+  expiresAt?: string
+} {
+  return isRecord(value) && typeof value.nonce === 'string' && (
+    typeof value.encryptedData === 'string' ||
+    typeof value.encryptedKey === 'string' ||
+    typeof value.iv === 'string' ||
+    typeof value.exp === 'number'
+  )
 }
 
 function decodeJwt(token: string) {

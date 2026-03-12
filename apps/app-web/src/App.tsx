@@ -214,6 +214,39 @@ export function App() {
     return nextTrace
   }
 
+  async function sendFlowEvent(
+    flow: { traceId: string; sessionId: string },
+    operation: string,
+    artifacts?: Array<{ name: string; value: unknown; encoding?: string; contentType?: string }>
+  ) {
+    await api.sendClientEvent(
+      {
+        traceId: flow.traceId,
+        traceType: operation.startsWith('device_login') ? 'device_login_finish' : operation,
+        actorName: 'web-client',
+        operation,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+        userId: device?.userId ?? form.userId,
+        deviceId: device?.publicKeyHash ?? null,
+        sessionId: flow.sessionId,
+        artifacts: artifacts?.map((artifact) => ({
+          artifactType: 'event_payload',
+          name: artifact.name,
+          contentType: artifact.contentType ?? 'application/json',
+          encoding: artifact.encoding ?? 'json',
+          direction: 'outbound',
+          rawValue: typeof artifact.value === 'string' ? artifact.value : JSON.stringify(artifact.value, null, 2),
+          explanation: 'Client-side event payload captured by the demo trace explorer.'
+        }))
+      },
+      {
+        traceId: flow.traceId,
+        sessionId: flow.sessionId
+      }
+    )
+  }
+
   async function requestLoginChallenge(nextStatus: string) {
     if (!device) {
       return
@@ -311,6 +344,12 @@ export function App() {
         iv: challenge.iv,
         signature
       }, flow)
+      await sendFlowEvent(flow, 'device_login_finished', [{ name: 'token_bundle', value: {
+        tokenType: result.tokenType,
+        expiresIn: result.expiresIn,
+        scope: result.scope
+      } }])
+      setTraceState(null)
       setTokens(result)
       setChallenge(null)
       setStatus('Signed in')
@@ -323,6 +362,12 @@ export function App() {
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_token_refresh_started', [{ name: 'refresh_token', value: tokens.refreshToken, encoding: 'jwt', contentType: 'application/jwt' }])
       const refreshed = await api.refresh({ refreshToken: tokens.refreshToken }, flow)
+      await sendFlowEvent(flow, 'device_token_refresh_finished', [{ name: 'refresh_result', value: {
+        tokenType: refreshed.tokenType,
+        expiresIn: refreshed.expiresIn,
+        scope: refreshed.scope
+      } }])
+      setTraceState(null)
       setTokens({ ...refreshed, requiredAction: null })
       setStatus('Tokens refreshed')
     })
@@ -333,6 +378,8 @@ export function App() {
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_logout_started', [{ name: 'refresh_token', value: tokens.refreshToken, encoding: 'jwt', contentType: 'application/jwt' }])
       await api.logout({ refreshToken: tokens.refreshToken }, flow)
+      await sendFlowEvent(flow, 'device_logout_finished')
+      setTraceState(null)
       setTokens(null)
       setChallenge(null)
       setStatus('Signed out. This phone is still ready to sign in again.')
