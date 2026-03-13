@@ -146,6 +146,7 @@ textarea {
 .section-label,
 .field-label,
 .claim-summary span,
+.endpoint-summary span,
 .token-hero span,
 .claims-table thead th,
 .prompt-caption {
@@ -159,6 +160,7 @@ textarea {
 .section-label,
 .field-label,
 .claim-summary span,
+.endpoint-summary span,
 .token-hero span,
 .claims-table thead th,
 .prompt-caption {
@@ -218,7 +220,8 @@ textarea {
 
 .device-summary,
 .token-hero,
-.claim-summary {
+.claim-summary,
+.endpoint-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
@@ -226,7 +229,8 @@ textarea {
 
 .device-summary div,
 .token-hero article,
-.claim-summary article {
+.claim-summary article,
+.endpoint-summary article {
   display: grid;
   gap: 0.28rem;
   padding: 0.85rem 0.9rem;
@@ -235,7 +239,8 @@ textarea {
   border: 1px solid rgba(16, 32, 51, 0.06);
 }
 
-.claim-summary article:last-child {
+.claim-summary article:last-child,
+.endpoint-summary article:last-child {
   grid-column: 1 / -1;
 }
 
@@ -571,6 +576,7 @@ button:disabled {
   .device-summary,
   .token-hero,
   .claim-summary,
+  .endpoint-summary,
   .token-overview,
   .status-strip {
     grid-template-columns: minmax(0, 1fr);

@@ -118,6 +118,8 @@ export function App() {
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
+  const userInfo = useMemo<ClaimRecord | null>(() => tokens?.userInfo ?? null, [tokens])
+  const tokenIntrospection = useMemo<ClaimRecord | null>(() => tokens?.tokenIntrospection ?? null, [tokens])
   const sharedTokenClaimKeys = useMemo(() => buildSharedClaimKeys(accessClaims, idClaims), [accessClaims, idClaims])
   const challengeExpiresAt = useMemo(() => (challenge ? formatDateTime(challenge.expiresAt) : null), [challenge])
   const tokenLifetimeLabel = useMemo(() => (tokens ? formatLifetime(tokens.expiresIn) : null), [tokens])
@@ -619,6 +621,8 @@ export function App() {
                       idClaims={idClaims}
                       claimKeys={sharedTokenClaimKeys}
                     />
+                    <JsonPanel title="Userinfo endpoint" payload={userInfo} rawLabel="Userinfo response JSON" />
+                    <JsonPanel title="Introspection endpoint" payload={tokenIntrospection} rawLabel="Introspection response JSON" />
                     <TokenPanel title="Refresh token" token={tokens.refreshToken} rawLabel="Refresh token JWT" claims={null} />
                   </div>
                 </>
@@ -780,6 +784,35 @@ function TokenPanel({ title, token, rawLabel, claims }: { title: string; token: 
       <details className="token-raw">
         <summary>{rawLabel}</summary>
         <textarea value={token} readOnly rows={8} />
+      </details>
+    </article>
+  )
+}
+
+function JsonPanel({ title, payload, rawLabel }: { title: string; payload: ClaimRecord | null; rawLabel: string }) {
+  const summaryItems = title === 'Userinfo endpoint'
+    ? buildUserInfoSummary(payload)
+    : buildIntrospectionSummary(payload)
+
+  return (
+    <article className="token-panel">
+      <h3>{title}</h3>
+      {payload ? (
+        <>
+          <section className="endpoint-summary" aria-label={`${title} summary`}>
+            {summaryItems.map((item) => (
+              <article key={item.label}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </article>
+            ))}
+          </section>
+          <ClaimsTable title={title} claims={payload} />
+        </>
+      ) : <p className="muted-copy">No endpoint response available.</p>}
+      <details className="token-raw">
+        <summary>{rawLabel}</summary>
+        <textarea value={payload ? JSON.stringify(payload, null, 2) : ''} readOnly rows={8} />
       </details>
     </article>
   )
@@ -1030,6 +1063,42 @@ function extractRoles(claims: ClaimRecord | null) {
   return [...roles]
 }
 
+function buildUserInfoSummary(payload: ClaimRecord | null) {
+  const username = readString(payload, 'preferred_username') ?? 'Unavailable'
+  const subject = readString(payload, 'sub') ?? 'Unavailable'
+  const fallbackName = [readString(payload, 'given_name'), readString(payload, 'family_name')].filter(Boolean).join(' ')
+  const fullName = readString(payload, 'name') ?? (fallbackName || 'Unavailable')
+  const emailVerified = readBoolean(payload, 'email_verified')
+
+  return [
+    { label: 'Username', value: username },
+    { label: 'Subject', value: subject },
+    { label: 'Name', value: fullName },
+    { label: 'Email verified', value: emailVerified === null ? 'Unavailable' : emailVerified ? 'Yes' : 'No' }
+  ]
+}
+
+function buildIntrospectionSummary(payload: ClaimRecord | null) {
+  const active = readBoolean(payload, 'active')
+  const username = readString(payload, 'username') ?? readString(payload, 'preferred_username') ?? 'Unavailable'
+  const subject = readString(payload, 'sub') ?? 'Unavailable'
+  const scope = readString(payload, 'scope') ?? 'Unavailable'
+  const expiresAt = formatExpiry(readNumber(payload, 'exp'))
+
+  return [
+    { label: 'Active', value: active === null ? 'Unavailable' : active ? 'Yes' : 'No' },
+    { label: 'Username', value: username },
+    { label: 'Subject', value: subject },
+    { label: 'Expires', value: expiresAt },
+    { label: 'Scope', value: scope }
+  ]
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function readBoolean(claims: ClaimRecord | null, key: string) {
+  const value = claims?.[key]
+  return typeof value === 'boolean' ? value : null
 }

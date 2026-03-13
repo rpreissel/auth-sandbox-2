@@ -130,8 +130,22 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
 
   await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Access and ID tokens' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Userinfo endpoint' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Introspection endpoint' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Refresh token' })).toBeVisible()
   await expect(page.getByLabel('Authenticated token summary')).toContainText('Token type')
+  const userInfoPanel = page.locator('.token-panel').filter({ has: page.getByRole('heading', { name: 'Userinfo endpoint' }) })
+  const introspectionPanel = page.locator('.token-panel').filter({ has: page.getByRole('heading', { name: 'Introspection endpoint' }) })
+  const userInfoSummary = page.getByLabel('Userinfo endpoint summary')
+  const introspectionSummary = page.getByLabel('Introspection endpoint summary')
+  await expect(userInfoSummary).toContainText('Username')
+  await expect(userInfoSummary).toContainText(userId)
+  await expect(introspectionSummary).toContainText('Active')
+  await expect(introspectionSummary).toContainText('Yes')
+  await userInfoPanel.getByText('Userinfo response JSON').click()
+  await expect(userInfoPanel.getByRole('textbox')).toContainText(userId)
+  await introspectionPanel.getByText('Introspection response JSON').click()
+  await expect(introspectionPanel.getByRole('textbox')).toContainText('active')
   await page.getByText('Decoded token details').click()
   const claimSummary = page.getByLabel('Token claim summary')
   const comparisonClaimsTable = page.getByRole('table', { name: 'Access and ID token claims' })
@@ -163,18 +177,18 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByText(/demo mode captures all payloads/i)).toBeVisible()
 
   const traceList = page.getByRole('list', { name: 'Trace list' })
-  await expect(traceList).toContainText('Finish device login')
+  await expect(traceList).toContainText(/device_login_finish|device_login_finished/i)
   await expect(traceList).toBeVisible()
 
   await expect(page.getByRole('heading', { name: 'Selected trace' })).toBeVisible()
-  await traceList.getByRole('button', { name: /Finish device login/i }).first().click()
+  await traceList.getByRole('button', { name: /device_login_finish|device_login_finished/i }).first().click()
   await expect(page.getByRole('button', { name: 'Open deep inspection' })).toBeVisible()
   await expect(page.getByText(/selected trace stays visible on the right/i)).toBeVisible()
   await expect(traceList.getByText(/Started .* UTC/i).first()).toBeVisible()
   await page.getByRole('button', { name: 'Open deep inspection' }).click()
 
   await expect(page).toHaveURL(/#trace\//)
-  await expect(page.getByRole('heading', { name: /deep trace inspection|finish device login/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /deep trace inspection|device_login_finish|device_login_finished/i })).toBeVisible()
   await expect(page.getByText('Span and artifact detail')).toBeVisible()
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
@@ -184,8 +198,8 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
 
   const artifactList = page.getByRole('list', { name: 'Artifact list' })
 
-  await expect(artifactList).toContainText('access_token')
-  await artifactList.getByRole('button', { name: /access_token/i }).click()
+  await expect(artifactList).toContainText('id_token')
+  await artifactList.getByRole('button', { name: /id_token/i }).click()
 
   const artifactViewer = page.getByLabel('Artifact viewer')
   await expect(artifactViewer).toContainText('Decoded')

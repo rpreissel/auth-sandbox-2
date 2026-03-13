@@ -74,6 +74,12 @@ export type LogoutInput = {
 
 export type JwtClaims = Record<string, boolean | number | string | string[] | null | undefined>
 
+export type JsonPrimitive = boolean | number | string | null
+
+export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue | undefined }
+
+export type JsonObject = { [key: string]: JsonValue | undefined }
+
 export type TokenBundle = {
   accessToken: string
   idToken: string
@@ -83,6 +89,8 @@ export type TokenBundle = {
   scope: string
   accessTokenClaims: JwtClaims
   idTokenClaims: JwtClaims
+  userInfo: JsonObject
+  tokenIntrospection: JsonObject
 }
 
 export type FinishLoginResponse = TokenBundle & {

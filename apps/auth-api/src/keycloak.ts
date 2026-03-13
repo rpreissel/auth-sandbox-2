@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { randomBytes, randomUUID, webcrypto } from 'node:crypto'
 
-import type { TokenBundle } from '@auth-sandbox-2/shared-types'
+import type { JsonObject, TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { appConfig, keycloakConfig } from './config.js'
 import { decodeTokenClaims } from './lib/jwt.js'
@@ -16,6 +16,8 @@ type KeycloakTokenResponse = {
   id_token: string
   scope: string
 }
+
+type KeycloakJsonResponse = JsonObject
 
 type CredentialRepresentation = {
   id: string
@@ -177,6 +179,10 @@ function isTokenResponse(value: unknown): value is KeycloakTokenResponse {
 
 function hasJwtField<T extends string>(value: unknown, field: T): value is Record<T, string> {
   return typeof value === 'object' && value !== null && field in value && typeof (value as Record<string, unknown>)[field] === 'string'
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export class KeycloakAdminClient {
@@ -401,7 +407,7 @@ export class KeycloakAuthClient {
       }
     )
 
-    return toTokenBundle(response)
+    return this.toEnrichedTokenBundle(response)
   }
 
   async refresh(refreshToken: string) {
@@ -423,7 +429,7 @@ export class KeycloakAuthClient {
       }
     )
 
-    return toTokenBundle(response)
+    return this.toEnrichedTokenBundle(response)
   }
 
   async logout(refreshToken: string) {
@@ -441,9 +447,52 @@ export class KeycloakAuthClient {
       body
     })
   }
+
+  async getUserInfo(accessToken: string) {
+    const response = await fetchJson<KeycloakJsonResponse>(
+      `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/userinfo`,
+      {
+        headers: {
+          authorization: `Bearer ${accessToken}`
+        }
+      }
+    )
+
+    return response
+  }
+
+  async introspectToken(accessToken: string) {
+    const body = createFormBody({
+      client_id: keycloakConfig.clientId,
+      client_secret: keycloakConfig.clientSecret,
+      token: accessToken
+    })
+
+    const response = await fetchJson<KeycloakJsonResponse>(
+      `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/token/introspect`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded'
+        },
+        body
+      }
+    )
+
+    return response
+  }
+
+  async toEnrichedTokenBundle(tokens: KeycloakTokenResponse) {
+    const [userInfo, tokenIntrospection] = await Promise.all([
+      this.getUserInfo(tokens.access_token),
+      this.introspectToken(tokens.access_token)
+    ])
+
+    return toTokenBundle(tokens, userInfo, tokenIntrospection)
+  }
 }
 
-function toTokenBundle(tokens: KeycloakTokenResponse): TokenBundle {
+function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, tokenIntrospection: JsonObject): TokenBundle {
   return {
     accessToken: tokens.access_token,
     idToken: tokens.id_token,
@@ -452,6 +501,8 @@ function toTokenBundle(tokens: KeycloakTokenResponse): TokenBundle {
     expiresIn: tokens.expires_in,
     scope: tokens.scope,
     accessTokenClaims: decodeTokenClaims(tokens.access_token),
-    idTokenClaims: decodeTokenClaims(tokens.id_token)
+    idTokenClaims: decodeTokenClaims(tokens.id_token),
+    userInfo: isJsonObject(userInfo) ? userInfo : {},
+    tokenIntrospection: isJsonObject(tokenIntrospection) ? tokenIntrospection : {}
   }
 }
