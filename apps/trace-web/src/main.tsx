@@ -11,7 +11,7 @@ import type {
 
 import './styles.css'
 
-const API_BASE = import.meta.env.VITE_TRACE_API_URL ?? 'https://trace.localhost:8443'
+const API_BASE = import.meta.env.VITE_TRACE_API_URL ?? '/trace-api'
 const TRACE_DETAIL_PREFIX = '#trace/'
 
 type ProxyLogRecord = {

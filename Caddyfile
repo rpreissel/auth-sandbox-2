@@ -39,6 +39,9 @@ https://app.localhost:8443 {
   log_append client_name {http.request.header.X-Client-Name}
   log_append method {http.request.method}
   log_append uri {http.request.uri}
+  handle_path /trace-api/* {
+    reverse_proxy trace-api:3001
+  }
   root * /srv/app-web
   file_server
 }
@@ -57,6 +60,9 @@ https://admin.localhost:8443 {
   log_append method {http.request.method}
   log_append uri {http.request.uri}
   redir /trace /trace/ 308
+  handle_path /trace-api/* {
+    reverse_proxy trace-api:3001
+  }
   handle_path /trace/* {
     root * /srv/trace-web
     file_server

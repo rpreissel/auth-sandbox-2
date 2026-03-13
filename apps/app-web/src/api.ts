@@ -16,7 +16,7 @@ import type {
 } from '@auth-sandbox-2/shared-types'
 
 const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
-const TRACE_API_BASE = import.meta.env.VITE_TRACE_API_URL ?? 'https://trace.localhost:8443'
+const TRACE_API_BASE = import.meta.env.VITE_TRACE_API_URL ?? '/trace-api'
 
 export type TraceRequestOptions = {
   traceId?: string
