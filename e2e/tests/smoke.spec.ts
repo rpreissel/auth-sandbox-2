@@ -200,6 +200,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByText(/der ausgewaehlte trace bleibt rechts sichtbar/i)).toBeVisible()
   await expect(traceList.getByText(/Gestartet .*\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
   await expect(traceList.getByText(/erfolgreich|laeuft|fehlerhaft/i).first()).toBeVisible()
+  await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText('Trace-ID')
   await page.getByRole('button', { name: 'Detailinspektion oeffnen' }).click()
 
   await expect(page).toHaveURL(/#trace\//)
@@ -207,6 +208,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByText('Span- und Artefaktdetails')).toBeVisible()
   await expect(page.getByText(/Diese Seite zeigt Requests und Responses je Span/i)).toBeVisible()
   await expect(page.getByText(/erfolgreich|laeuft|fehlerhaft/i).first()).toBeVisible()
+  await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText('Trace-ID')
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(timeline).toContainText('auth-api')

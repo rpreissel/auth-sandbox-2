@@ -221,8 +221,18 @@ function describeTraceActors(trace: TraceListItem) {
   return trace.actors.length ? trace.actors.join(' -> ') : 'Keine Akteure erfasst'
 }
 
-function describeSpanTarget(span: TraceDetailResponse['spans'][number]) {
+function describeSpanTarget(span: TraceDetailResponse['spans'][number] | SpanDetailResponse['span']) {
   return span.route ?? span.method ?? span.url ?? span.targetName ?? null
+}
+
+function compactMetaItems(items: Array<[string, string | null | undefined]>) {
+  return items.reduce<Array<[string, string]>>((result, [label, value]) => {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      result.push([label, value])
+    }
+
+    return result
+  }, [])
 }
 
 async function loadProxyLogs(correlationId: string) {
@@ -530,22 +540,32 @@ function TraceBrowserPage(props: {
           {!props.selectedTrace && !props.traceLoading && <p>Waehle links einen Trace aus, um Zusammenfassung und Ablauf im Blick zu behalten.</p>}
           {props.selectedTrace && (
             <div className="trace-detail trace-browser-detail">
-              <div className="trace-summary-grid">
-                <article><span>Trace ID</span><strong>{props.selectedTrace.trace.traceId}</strong></article>
-                <article><span>Correlation</span><strong>{props.selectedTrace.trace.correlationId}</strong></article>
-                <article><span>Status</span><strong>{formatTraceStatus(props.selectedTrace.trace.status)}</strong></article>
-                <article><span>Gestartet</span><strong>{formatTimestamp(props.selectedTrace.trace.startedAt)}</strong></article>
-                <article><span>Dauer</span><strong>{formatDuration(props.selectedTrace.trace.durationMs)}</strong></article>
-              </div>
               <section className="trace-browser-story">
-                <h3>Was passiert ist</h3>
-                <p>{props.selectedTrace.trace.summary}</p>
-                <div className="trace-chip-row" aria-label="Actor lanes">
-                  {props.selectedTrace.lanes.map((lane) => (
-                    <span key={`${lane.actorType}-${lane.actorName}`} className="trace-chip">
-                      {lane.actorName}
-                    </span>
-                  ))}
+                <div className="trace-spotlight">
+                  <div className="trace-spotlight-header">
+                    <div className="trace-chip-row">
+                      <span className={`trace-status-chip trace-status-${props.selectedTrace.trace.status}`}>{formatTraceStatus(props.selectedTrace.trace.status)}</span>
+                      <span className="trace-chip">{props.selectedTrace.trace.traceType}</span>
+                    </div>
+                    <h3>{props.selectedTrace.trace.title}</h3>
+                  </div>
+                  <p className="trace-summary-lead">{props.selectedTrace.trace.summary ?? 'Keine Zusammenfassung verfuegbar.'}</p>
+                  <div className="trace-fact-list">
+                    <article><span>Gestartet</span><strong>{formatTimestamp(props.selectedTrace.trace.startedAt)}</strong></article>
+                    <article><span>Dauer</span><strong>{formatDuration(props.selectedTrace.trace.durationMs)}</strong></article>
+                    <article><span>Beteiligte</span><strong>{props.selectedTrace.lanes.map((lane) => lane.actorName).join(', ') || 'Keine Akteure erfasst'}</strong></article>
+                  </div>
+                  <div className="trace-support-meta" aria-label="Trace Zusatzmetadaten">
+                    {compactMetaItems([
+                      ['Trace-ID', props.selectedTrace.trace.traceId],
+                      ['Correlation-ID', props.selectedTrace.trace.correlationId],
+                      ['Session', props.selectedTrace.trace.sessionId],
+                      ['Benutzer', props.selectedTrace.trace.userId],
+                      ['Geraet', props.selectedTrace.trace.deviceId]
+                    ]).map(([label, value]) => (
+                      <span key={label}>{label}: {value}</span>
+                    ))}
+                  </div>
                 </div>
               </section>
               <section className="trace-browser-story">
@@ -662,14 +682,32 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
           {!traceDetail && !traceLoading && !loadError && <p>Waehle zuerst im Trace-Browser einen Trace aus.</p>}
           {traceDetail && (
             <div className="trace-detail">
-              <div className="trace-summary-grid">
-                <article><span>Trace ID</span><strong>{traceDetail.trace.traceId}</strong></article>
-                <article><span>Correlation</span><strong>{traceDetail.trace.correlationId}</strong></article>
-                <article><span>Status</span><strong>{formatTraceStatus(traceDetail.trace.status)}</strong></article>
-                <article><span>Gestartet</span><strong>{formatTimestamp(traceDetail.trace.startedAt)}</strong></article>
-                <article><span>Beteiligte</span><strong>{traceDetail.lanes.map((lane) => lane.actorName).join(', ')}</strong></article>
+              <div className="trace-spotlight">
+                <div className="trace-spotlight-header">
+                  <div className="trace-chip-row">
+                    <span className={`trace-status-chip trace-status-${traceDetail.trace.status}`}>{formatTraceStatus(traceDetail.trace.status)}</span>
+                    <span className="trace-chip">{traceDetail.trace.traceType}</span>
+                  </div>
+                  <h3>{traceDetail.trace.title}</h3>
+                </div>
+                <p className="trace-summary-lead">{traceDetail.trace.summary ?? 'Keine Zusammenfassung verfuegbar.'}</p>
+                <div className="trace-fact-list">
+                  <article><span>Gestartet</span><strong>{formatTimestamp(traceDetail.trace.startedAt)}</strong></article>
+                  <article><span>Dauer</span><strong>{formatDuration(traceDetail.trace.durationMs)}</strong></article>
+                  <article><span>Beteiligte</span><strong>{traceDetail.lanes.map((lane) => lane.actorName).join(', ') || 'Keine Akteure erfasst'}</strong></article>
+                </div>
+                <div className="trace-support-meta" aria-label="Trace Zusatzmetadaten">
+                  {compactMetaItems([
+                    ['Trace-ID', traceDetail.trace.traceId],
+                    ['Correlation-ID', traceDetail.trace.correlationId],
+                    ['Session', traceDetail.trace.sessionId],
+                    ['Benutzer', traceDetail.trace.userId],
+                    ['Geraet', traceDetail.trace.deviceId]
+                  ]).map(([label, value]) => (
+                    <span key={label}>{label}: {value}</span>
+                  ))}
+                </div>
               </div>
-              <p>{traceDetail.trace.summary}</p>
               <div className="trace-timeline" role="list" aria-label="Trace spans timeline">
                 {traceDetail.spans.map((span) => {
                   const isActive = selectedSpan?.span.spanId === span.spanId
@@ -698,14 +736,23 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
           {!selectedSpan && <p>Waehle einen Span aus, um Requests, Responses, decodierte JWTs und die verschluesselte Challenge naeher zu pruefen.</p>}
           {selectedSpan && (
             <div className="trace-detail">
-              <div className="trace-summary-grid compact-grid">
-                <article><span>Span</span><strong>{selectedSpan.span.operation}</strong></article>
-                <article><span>Akteur</span><strong>{selectedSpan.span.actorName}</strong></article>
-                <article><span>Kind</span><strong>{selectedSpan.span.kind}</strong></article>
-                <article><span>Status</span><strong>{formatTraceStatus(selectedSpan.span.status)}</strong></article>
-                <article><span>Gestartet</span><strong>{formatTimestamp(selectedSpan.span.startedAt)}</strong></article>
+              <div className="trace-spotlight trace-spotlight-compact">
+                <div className="trace-spotlight-header">
+                  <div className="trace-chip-row">
+                    <span className="trace-chip">{selectedSpan.span.actorName}</span>
+                    <span className="trace-chip">{selectedSpan.span.kind}</span>
+                    <span className={`trace-status-chip trace-status-${selectedSpan.span.status}`}>{formatTraceStatus(selectedSpan.span.status)}</span>
+                  </div>
+                  <h3>{selectedSpan.span.operation}</h3>
+                </div>
+                <div className="trace-fact-list trace-fact-list-compact">
+                  <article><span>Gestartet</span><strong>{formatTimestamp(selectedSpan.span.startedAt)}</strong></article>
+                  <article><span>Dauer</span><strong>{formatDuration(selectedSpan.span.durationMs)}</strong></article>
+                  <article><span>Ziel</span><strong>{describeSpanTarget(selectedSpan.span) ?? 'Kein Ziel erfasst'}</strong></article>
+                  <article><span>Artefakte</span><strong>{String(selectedSpan.artifacts.length)}</strong></article>
+                </div>
+                {selectedSpan.span.notes && <p className="trace-summary-lead trace-summary-lead-compact">{selectedSpan.span.notes}</p>}
               </div>
-              <p>{selectedSpan.span.notes}</p>
               <div className="artifact-list" role="list" aria-label="Artifact list">
                 {selectedSpan.artifacts.map((artifact) => (
                   <button

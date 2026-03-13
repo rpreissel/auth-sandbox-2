@@ -304,6 +304,75 @@ button {
   gap: 0.75rem;
 }
 
+.trace-spotlight {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem 1.15rem;
+  border-radius: 20px;
+  background: rgba(14, 34, 52, 0.06);
+  border: 1px solid rgba(14, 34, 52, 0.08);
+}
+
+.trace-spotlight-compact {
+  gap: 0.85rem;
+}
+
+.trace-spotlight-header {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.trace-spotlight-header h3 {
+  margin: 0;
+  font-family: "IBM Plex Serif", Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.trace-summary-lead {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(14, 34, 52, 0.88);
+}
+
+.trace-summary-lead-compact {
+  font-size: 0.96rem;
+}
+
+.trace-fact-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.trace-fact-list-compact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.trace-fact-list article {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.trace-fact-list span,
+.trace-support-meta {
+  font-size: 0.82rem;
+}
+
+.trace-support-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  color: rgba(14, 34, 52, 0.58);
+}
+
+.trace-support-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .trace-browser-story h3 {
   margin: 0;
   font-family: "IBM Plex Serif", Georgia, serif;
