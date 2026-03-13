@@ -136,7 +136,7 @@ function formatTraceInspectorHeading(trace: TraceDetailResponse['trace'] | null 
 function formatTraceStatus(status: TraceListItem['status']) {
   switch (status) {
     case 'running':
-      return 'laeuft'
+      return 'läuft'
     case 'success':
       return 'erfolgreich'
     case 'error':
@@ -207,7 +207,7 @@ function summarizeSpan(span: TraceDetailResponse['spans'][number]) {
 
 function formatDuration(value: number | null) {
   if (value === null) {
-    return 'laeuft noch'
+    return 'läuft noch'
   }
 
   if (value < 1000) {
@@ -391,17 +391,17 @@ function AdminOverviewPage(props: {
   return (
     <main className="shell">
       <section className="card hero">
-        <p className="eyebrow">Admin-Oberflaeche</p>
-        <h1>Erstelle Registrierungscodes, pruefe Geraete und oeffne den dedizierten Trace-Browser.</h1>
+        <p className="eyebrow">Admin-Oberfläche</p>
+        <h1>Erstelle Registrierungscodes, prüfe Geräte und öffne den dedizierten Trace-Browser.</h1>
         <div className="button-row">
-          <button type="button" onClick={props.onOpenTraceBrowser}>Trace-Browser oeffnen</button>
+          <button type="button" onClick={props.onOpenTraceBrowser}>Trace-Browser öffnen</button>
         </div>
       </section>
 
       <section className="card trace-entry-card">
-        <p className="eyebrow">Trace-Uebersicht</p>
-        <h2>Ein eigener Trace-Browser haelt Observability von der Admin-CRUD-Ansicht getrennt.</h2>
-        <p className="section-copy">Dort kannst du lange Trace-Listen durchsuchen, die ausgewaehlte Zusammenfassung im Blick behalten und nur bei Bedarf in die Detailinspektion wechseln.</p>
+        <p className="eyebrow">Trace-Übersicht</p>
+        <h2>Ein eigener Trace-Browser hält Observability von der Admin-CRUD-Ansicht getrennt.</h2>
+        <p className="section-copy">Dort kannst du lange Trace-Listen durchsuchen, die ausgewählte Zusammenfassung im Blick behalten und nur bei Bedarf in die Detailinspektion wechseln.</p>
       </section>
 
       <section className="card">
@@ -416,7 +416,7 @@ function AdminOverviewPage(props: {
             <input value={props.form.displayName} onChange={(event) => props.setForm({ ...props.form, displayName: event.target.value })} />
           </label>
           <label>
-            Gueltig fuer Tage
+            Gültig für Tage
             <input type="number" value={props.form.validForDays} onChange={(event) => props.setForm({ ...props.form, validForDays: Number(event.target.value) })} />
           </label>
           <button type="submit">Code erstellen</button>
@@ -437,7 +437,7 @@ function AdminOverviewPage(props: {
       </section>
 
       <section className="card list-card">
-        <h2>Geraete</h2>
+        <h2>Geräte</h2>
         <div className="list">
           {props.devices.map((device) => (
             <article key={device.id}>
@@ -470,11 +470,11 @@ function TraceBrowserPage(props: {
         <div className="trace-column-header">
           <div>
             <p className="eyebrow">Trace-Browser</p>
-            <h1>Behalte den ausgewaehlten Trace im Blick und oeffne die Detailinspektion nur dann, wenn du tiefer einsteigen willst.</h1>
+            <h1>Behalte den ausgewählten Trace im Blick und öffne die Detailinspektion nur dann, wenn du tiefer einsteigen willst.</h1>
           </div>
-          <button type="button" className="secondary-button" onClick={props.onBack}>Zurueck zur Admin-Uebersicht</button>
+          <button type="button" className="secondary-button" onClick={props.onBack}>Zurück zur Admin-Übersicht</button>
         </div>
-        <p className="trace-warning">Im Demo-Modus werden alle Payloads erfasst, auch sensible Werte, verschluesselte Bloecke und decodierte JWT-Claims.</p>
+        <p className="trace-warning">Im Demo-Modus werden alle Payloads erfasst, auch sensible Werte, verschlüsselte Blöcke und decodierte JWT-Claims.</p>
       </section>
 
       <section className="trace-browser-layout trace-browser-layout-wide">
@@ -482,7 +482,7 @@ function TraceBrowserPage(props: {
           <div className="trace-column-header">
             <div>
               <h2>Traces</h2>
-              <p className="section-copy">Mit der Suche grenzt du lange Listen ein. Der ausgewaehlte Trace bleibt rechts sichtbar.</p>
+              <p className="section-copy">Mit der Suche grenzt du lange Listen ein. Der ausgewählte Trace bleibt rechts sichtbar.</p>
             </div>
             <button type="button" onClick={props.onRefresh}>Neu laden</button>
           </div>
@@ -527,17 +527,17 @@ function TraceBrowserPage(props: {
         <section ref={props.detailRef} className="card trace-column trace-browser-detail-card">
           <div className="trace-column-header">
             <div>
-              <h2>Ausgewaehlter Trace</h2>
-              <p className="section-copy">Hier siehst du den Ablauf auf hoher Ebene. Oeffne die Inspektionsseite fuer Artefakte, Proxy-Hops und Span-Payloads.</p>
+              <h2>Ausgewählter Trace</h2>
+              <p className="section-copy">Hier siehst du den Ablauf auf hoher Ebene. Öffne die Inspektionsseite für Artefakte, Proxy-Hops und Span-Payloads.</p>
             </div>
             {props.selectedTrace && (
               <button type="button" onClick={() => props.onOpenDetail(props.selectedTrace!.trace.traceId)}>
-                Detailinspektion oeffnen
+                Detailinspektion öffnen
               </button>
             )}
           </div>
           {props.traceLoading && <p>Trace wird geladen...</p>}
-          {!props.selectedTrace && !props.traceLoading && <p>Waehle links einen Trace aus, um Zusammenfassung und Ablauf im Blick zu behalten.</p>}
+          {!props.selectedTrace && !props.traceLoading && <p>Wähle links einen Trace aus, um Zusammenfassung und Ablauf im Blick zu behalten.</p>}
           {props.selectedTrace && (
             <div className="trace-detail trace-browser-detail">
               <section className="trace-browser-story">
@@ -549,7 +549,7 @@ function TraceBrowserPage(props: {
                     </div>
                     <h3>{props.selectedTrace.trace.title}</h3>
                   </div>
-                  <p className="trace-summary-lead">{props.selectedTrace.trace.summary ?? 'Keine Zusammenfassung verfuegbar.'}</p>
+                  <p className="trace-summary-lead">{props.selectedTrace.trace.summary ?? 'Keine Zusammenfassung verfügbar.'}</p>
                   <div className="trace-fact-list">
                     <article><span>Gestartet</span><strong>{formatTimestamp(props.selectedTrace.trace.startedAt)}</strong></article>
                     <article><span>Dauer</span><strong>{formatDuration(props.selectedTrace.trace.durationMs)}</strong></article>
@@ -561,7 +561,7 @@ function TraceBrowserPage(props: {
                       ['Correlation-ID', props.selectedTrace.trace.correlationId],
                       ['Session', props.selectedTrace.trace.sessionId],
                       ['Benutzer', props.selectedTrace.trace.userId],
-                      ['Geraet', props.selectedTrace.trace.deviceId]
+                      ['Gerät', props.selectedTrace.trace.deviceId]
                     ]).map(([label, value]) => (
                       <span key={label}>{label}: {value}</span>
                     ))}
@@ -668,10 +668,10 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
             <p className="eyebrow">Trace-Inspektor</p>
             <h1>{formatTraceInspectorHeading(traceDetail?.trace)}</h1>
           </div>
-          <button type="button" className="secondary-button" onClick={props.onBack}>Zurueck zum Trace-Browser</button>
+          <button type="button" className="secondary-button" onClick={props.onBack}>Zurück zum Trace-Browser</button>
         </div>
         {traceDetail && <p className="section-copy">{traceDetail.trace.title}</p>}
-        <p className="trace-warning">Diese Seite zeigt Requests und Responses je Span, decodierte Payloads, entschluesselte Challenge-Daten und die dazugehoerigen Proxy-Hops.</p>
+        <p className="trace-warning">Diese Seite zeigt Requests und Responses je Span, decodierte Payloads, entschlüsselte Challenge-Daten und die dazugehörigen Proxy-Hops.</p>
       </section>
 
       <section className="trace-inspector-layout">
@@ -679,7 +679,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
           <h2>Trace-Details</h2>
           {traceLoading && <p>Trace wird geladen...</p>}
           {loadError && <p>{loadError}</p>}
-          {!traceDetail && !traceLoading && !loadError && <p>Waehle zuerst im Trace-Browser einen Trace aus.</p>}
+          {!traceDetail && !traceLoading && !loadError && <p>Wähle zuerst im Trace-Browser einen Trace aus.</p>}
           {traceDetail && (
             <div className="trace-detail">
               <div className="trace-spotlight">
@@ -690,7 +690,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                   </div>
                   <h3>{traceDetail.trace.title}</h3>
                 </div>
-                <p className="trace-summary-lead">{traceDetail.trace.summary ?? 'Keine Zusammenfassung verfuegbar.'}</p>
+                <p className="trace-summary-lead">{traceDetail.trace.summary ?? 'Keine Zusammenfassung verfügbar.'}</p>
                 <div className="trace-fact-list">
                   <article><span>Gestartet</span><strong>{formatTimestamp(traceDetail.trace.startedAt)}</strong></article>
                   <article><span>Dauer</span><strong>{formatDuration(traceDetail.trace.durationMs)}</strong></article>
@@ -698,14 +698,14 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                 </div>
                 <div className="trace-support-meta" aria-label="Trace Zusatzmetadaten">
                   {compactMetaItems([
-                    ['Trace-ID', traceDetail.trace.traceId],
-                    ['Correlation-ID', traceDetail.trace.correlationId],
-                    ['Session', traceDetail.trace.sessionId],
-                    ['Benutzer', traceDetail.trace.userId],
-                    ['Geraet', traceDetail.trace.deviceId]
-                  ]).map(([label, value]) => (
-                    <span key={label}>{label}: {value}</span>
-                  ))}
+                      ['Trace-ID', traceDetail.trace.traceId],
+                      ['Correlation-ID', traceDetail.trace.correlationId],
+                      ['Session', traceDetail.trace.sessionId],
+                      ['Benutzer', traceDetail.trace.userId],
+                      ['Gerät', traceDetail.trace.deviceId]
+                    ]).map(([label, value]) => (
+                      <span key={label}>{label}: {value}</span>
+                    ))}
                 </div>
               </div>
               <div className="trace-timeline" role="list" aria-label="Trace spans timeline">
@@ -733,7 +733,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
 
         <article className="card trace-column">
           <h2>Span- und Artefaktdetails</h2>
-          {!selectedSpan && <p>Waehle einen Span aus, um Requests, Responses, decodierte JWTs und die verschluesselte Challenge naeher zu pruefen.</p>}
+          {!selectedSpan && <p>Wähle einen Span aus, um Requests, Responses, decodierte JWTs und die verschlüsselte Challenge näher zu prüfen.</p>}
           {selectedSpan && (
             <div className="trace-detail">
               <div className="trace-spotlight trace-spotlight-compact">
@@ -760,10 +760,10 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                     type="button"
                     className={`trace-list-item artifact-item${selectedArtifact?.artifact.artifactId === artifact.artifactId ? ' is-active' : ''}`}
                     onClick={() => void handleSelectArtifact(artifact.artifactId)}
-                  >
+                    >
                     <strong>{artifact.name}</strong>
                     <span>{artifact.artifactType}</span>
-                    <span>{artifact.summary ?? 'Oeffnen, um Rohdaten und decodierte Ansicht zu pruefen'}</span>
+                    <span>{artifact.summary ?? 'Öffnen, um Rohdaten und decodierte Ansicht zu prüfen'}</span>
                   </button>
                 ))}
               </div>
@@ -771,7 +771,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                 <section className="artifact-viewer" aria-label="Artifact viewer">
                   {isEncryptedChallengeArtifact(selectedArtifact) && (
                     <p className="section-copy">
-                      Rohdaten und Decodiert zeigen das Transport-Envelope, das an den Client zurueckgeht. Entschluesselt zeigt die rekonstruierte Challenge im Klartext.
+                      Rohdaten und Decodiert zeigen das Transport-Envelope, das an den Client zurückgeht. Entschlüsselt zeigt die rekonstruierte Challenge im Klartext.
                     </p>
                   )}
                   <h3>{selectedArtifact.artifact.name}</h3>
@@ -782,14 +782,14 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                   </div>
                   <div className="artifact-block">
                     <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Decodiertes Transport-Envelope' : 'Decodiert'}</span>
-                    <pre>{formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfuegbar.')}</pre>
+                    <pre>{formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfügbar.')}</pre>
                   </div>
                   <div className="artifact-block">
-                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Entschluesselte Payload' : 'Entschluesselt'}</span>
-                    <pre>{formatArtifactView(selectedArtifact.views.decrypted, 'Kein entschluesselter Klartext verfuegbar.')}</pre>
+                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Entschlüsselte Payload' : 'Entschlüsselt'}</span>
+                    <pre>{formatArtifactView(selectedArtifact.views.decrypted, 'Kein entschlüsselter Klartext verfügbar.')}</pre>
                   </div>
                   <div className="artifact-block">
-                    <span>Erlaeutert</span>
+                    <span>Erläutert</span>
                     <div className="explanation-list">
                       {selectedArtifact.views.explained.map((field) => (
                         <article key={field.fieldPath}>
@@ -810,7 +810,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
       <section className="card proxy-log-panel">
         <h2>Proxy-Hops</h2>
         <p className="section-copy">Caddy-Access-Logs mit derselben Correlation-ID bleiben hier zusammen mit den rohen Trace-Daten sichtbar.</p>
-        {!proxyLogs.length && <p>Fuer diesen Trace wurden keine passenden Caddy-Proxy-Logs geladen.</p>}
+        {!proxyLogs.length && <p>Für diesen Trace wurden keine passenden Caddy-Proxy-Logs geladen.</p>}
         <div className="artifact-list" role="list" aria-label="Proxy log list">
           {proxyLogs.map((entry, index) => (
             <article key={`${entry.ts ?? 'proxy'}-${index}`} className="trace-list-item proxy-log-entry">
