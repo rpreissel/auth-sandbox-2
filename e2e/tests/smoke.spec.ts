@@ -47,6 +47,20 @@ test('postgres viewer login is reachable', async ({ page }) => {
   await expect(page.getByRole('textbox').nth(3)).toBeVisible()
 })
 
+test('admin overview is localized in German', async ({ page }) => {
+  await page.goto(`${ADMIN_WEB_URL}/#admin`)
+
+  await expect(page.getByRole('heading', { name: /erstelle registrierungscodes, pruefe geraete/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Trace-Browser oeffnen' })).toBeVisible()
+  await expect(page.getByText('Trace-Uebersicht')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Registrierungscode erstellen' })).toBeVisible()
+  await expect(page.getByText('Anzeigename')).toBeVisible()
+  await expect(page.getByText('Gueltig fuer Tage')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Code erstellen' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Registrierungscodes', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Geraete', exact: true })).toBeVisible()
+})
+
 test('homepage contains key links', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /minimal device-login sandbox/i })).toBeVisible()
@@ -173,27 +187,31 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(bindingNotice).toHaveCount(0)
 
   await page.goto(`${ADMIN_WEB_URL}/#trace-browser`)
-  await expect(page.getByRole('heading', { name: /scan flows quickly, keep the selected summary visible, and open deep inspection only when needed/i })).toBeVisible()
-  await expect(page.getByText(/demo mode captures all payloads/i)).toBeVisible()
+  await expect(page.getByRole('heading', { name: /behalte den ausgewaehlten trace im blick/i })).toBeVisible()
+  await expect(page.getByText(/im demo-modus werden alle payloads erfasst/i)).toBeVisible()
 
   const traceList = page.getByRole('list', { name: 'Trace list' })
   await expect(traceList).toContainText(/device_login_finish|device_login_finished/i)
   await expect(traceList).toBeVisible()
 
-  await expect(page.getByRole('heading', { name: 'Selected trace' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Ausgewaehlter Trace' })).toBeVisible()
   await traceList.getByRole('button', { name: /device_login_finish|device_login_finished/i }).first().click()
-  await expect(page.getByRole('button', { name: 'Open deep inspection' })).toBeVisible()
-  await expect(page.getByText(/selected trace stays visible on the right/i)).toBeVisible()
-  await expect(traceList.getByText(/Started .* UTC/i).first()).toBeVisible()
-  await page.getByRole('button', { name: 'Open deep inspection' }).click()
+  await expect(page.getByRole('button', { name: 'Detailinspektion oeffnen' })).toBeVisible()
+  await expect(page.getByText(/der ausgewaehlte trace bleibt rechts sichtbar/i)).toBeVisible()
+  await expect(traceList.getByText(/Gestartet .*\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
+  await expect(traceList.getByText(/erfolgreich|laeuft|fehlerhaft/i).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Detailinspektion oeffnen' }).click()
 
   await expect(page).toHaveURL(/#trace\//)
-  await expect(page.getByRole('heading', { name: /deep trace inspection|device_login_finish|device_login_finished/i })).toBeVisible()
-  await expect(page.getByText('Span and artifact detail')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
+  await expect(page.getByText('Span- und Artefaktdetails')).toBeVisible()
+  await expect(page.getByText(/Diese Seite zeigt Requests und Responses je Span/i)).toBeVisible()
+  await expect(page.getByText(/erfolgreich|laeuft|fehlerhaft/i).first()).toBeVisible()
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(timeline).toContainText('auth-api')
   await expect(timeline).toContainText('keycloak')
+  await expect(timeline.getByText(/\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
   await timeline.getByRole('button', { name: /keycloak/i }).first().click()
 
   const artifactList = page.getByRole('list', { name: 'Artifact list' })
@@ -202,8 +220,8 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await artifactList.getByRole('button', { name: /id_token/i }).click()
 
   const artifactViewer = page.getByLabel('Artifact viewer')
-  await expect(artifactViewer).toContainText('Decoded')
-  await expect(artifactViewer).toContainText('Explained')
+  await expect(artifactViewer).toContainText('Decodiert')
+  await expect(artifactViewer).toContainText('Erlaeutert')
   await expect(artifactViewer).toContainText('Subject')
   await expect(artifactViewer).toContainText('Audience')
 })
