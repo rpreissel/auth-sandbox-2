@@ -112,8 +112,8 @@ function HomeApp() {
       <section className="grid links">
         <LinkCard title="Homepage" href="https://home.localhost:8443" description="Overview, links, and sequence diagrams." />
         <LinkCard title="App Web" href="https://app.localhost:8443" description="Register a device, log in, inspect tokens and claims." />
-        <LinkCard title="Admin Web" href="https://admin.localhost:8443" description="Create registration codes and inspect devices." />
-        <LinkCard title="Trace Explorer" href="https://admin.localhost:8443/#trace-browser" description="Inspect full demo traces, decoded JWTs, encrypted payloads, and proxy hops." />
+        <LinkCard title="Admin Web" href="https://admin.localhost:8443" description="Create registration codes and inspect existing device bindings." />
+        <LinkCard title="Trace Viewer" href="https://admin.localhost:8443/trace/" description="Inspect full demo traces, decoded JWTs, encrypted payloads, and proxy hops." />
         <LinkCard title="Auth API" href="https://auth.localhost:8443/api/health" description="Fastify backend health endpoint." />
         <LinkCard title="Keycloak" href="https://keycloak.localhost:8443" description="Realm, users, credentials, and admin console." />
         <LinkCard title="DB Viewer" href="https://db.localhost:8443" description="Inspect the shared Postgres database and its auth_api and keycloak schemas." />

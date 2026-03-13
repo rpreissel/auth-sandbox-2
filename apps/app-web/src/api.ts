@@ -16,6 +16,7 @@ import type {
 } from '@auth-sandbox-2/shared-types'
 
 const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
+const TRACE_API_BASE = import.meta.env.VITE_TRACE_API_URL ?? 'https://trace.localhost:8443'
 
 export type TraceRequestOptions = {
   traceId?: string
@@ -56,6 +57,28 @@ async function request<T>(path: string, init?: RequestInit, options?: TraceReque
   return response.json() as Promise<T>
 }
 
+async function traceRequest<T>(path: string, init?: RequestInit, options?: TraceRequestOptions) {
+  const traceHeaders = createTraceHeaders(options)
+  const response = await fetch(`${TRACE_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      'content-type': 'application/json',
+      ...traceHeaders,
+      ...(init?.headers ?? {})
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(await response.text())
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json() as Promise<T>
+}
+
 export const api = {
   registerDevice: (body: RegisterDeviceInput, options?: TraceRequestOptions) => request<RegisterDeviceResponse>('/api/device/register', { method: 'POST', body: JSON.stringify(body) }, options),
   setPassword: (body: SetPasswordInput, options?: TraceRequestOptions) => request<{ passwordSet: true }>('/api/device/set-password', { method: 'POST', body: JSON.stringify(body) }, options),
@@ -63,9 +86,9 @@ export const api = {
   finishLogin: (body: FinishLoginInput, options?: TraceRequestOptions) => request<FinishLoginResponse>('/api/device/login/finish', { method: 'POST', body: JSON.stringify(body) }, options),
   refresh: (body: RefreshTokensInput, options?: TraceRequestOptions) => request<RefreshTokensResponse>('/api/device/token/refresh', { method: 'POST', body: JSON.stringify(body) }, options),
   logout: (body: RefreshTokensInput, options?: TraceRequestOptions) => request<{ logout: true }>('/api/device/logout', { method: 'POST', body: JSON.stringify(body) }, options),
-  listTraces: (params?: URLSearchParams) => request<TraceListResponse>(`/api/observability/traces${params ? `?${params.toString()}` : ''}`),
-  getTrace: (traceId: string) => request<TraceDetailResponse>(`/api/observability/traces/${traceId}`),
-  getSpan: (spanId: string) => request<SpanDetailResponse>(`/api/observability/spans/${spanId}`),
-  getArtifact: (artifactId: string) => request<ArtifactDetailResponse>(`/api/observability/artifacts/${artifactId}`),
-  sendClientEvent: (body: ClientEventInput, options?: TraceRequestOptions) => request<{ traceId: string; spanId: string }>('/api/observability/client-events', { method: 'POST', body: JSON.stringify(body) }, options)
+  listTraces: (params?: URLSearchParams) => traceRequest<TraceListResponse>(`/traces${params ? `?${params.toString()}` : ''}`),
+  getTrace: (traceId: string) => traceRequest<TraceDetailResponse>(`/traces/${traceId}`),
+  getSpan: (spanId: string) => traceRequest<SpanDetailResponse>(`/spans/${spanId}`),
+  getArtifact: (artifactId: string) => traceRequest<ArtifactDetailResponse>(`/artifacts/${artifactId}`),
+  sendClientEvent: (body: ClientEventInput, options?: TraceRequestOptions) => traceRequest<{ traceId: string; spanId: string }>('/client-events', { method: 'POST', body: JSON.stringify(body) }, options)
 }

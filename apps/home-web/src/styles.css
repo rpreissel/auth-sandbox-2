@@ -54,7 +54,7 @@ body {
 }
 
 .links {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .link-card {
@@ -63,6 +63,13 @@ body {
   color: inherit;
   display: grid;
   gap: 0.55rem;
+  align-content: start;
+}
+
+.link-card code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 .panel-copy {

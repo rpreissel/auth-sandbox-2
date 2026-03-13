@@ -2,18 +2,27 @@ import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
 
 const AUTH_API_URL = 'https://auth.localhost:8443'
+const TRACE_API_URL = 'https://trace.localhost:8443'
 const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration'
 const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
+const TRACE_WEB_URL = 'https://admin.localhost:8443/trace/'
+
+type TraceListItem = {
+  traceId: string
+  traceType: string
+  actors: string[]
+}
 
 async function waitForRuntimeReady(request: APIRequestContext) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const [healthResponse, metadataResponse] = await Promise.all([
+    const [healthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
       request.get(`${AUTH_API_URL}/api/health`),
+      request.get(`${TRACE_API_URL}/health`),
       request.get(KEYCLOAK_METADATA_URL)
     ])
 
-    if (healthResponse.ok() && metadataResponse.ok()) {
+    if (healthResponse.ok() && traceHealthResponse.ok() && metadataResponse.ok()) {
       return
     }
 
@@ -23,17 +32,42 @@ async function waitForRuntimeReady(request: APIRequestContext) {
   throw new Error('Runtime did not become ready for E2E tests')
 }
 
+async function waitForUserLoginTrace(request: APIRequestContext, userId: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const params = new URLSearchParams({
+      userId,
+      page: '1',
+      pageSize: '20'
+    })
+    const response = await request.get(`${TRACE_API_URL}/traces?${params.toString()}`)
+
+    if (response.ok()) {
+      const body = await response.json() as { items: TraceListItem[] }
+      const match = body.items.find((trace) => trace.traceType === 'device_login_finish' && trace.actors.includes('web-client'))
+      if (match) {
+        return match
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  throw new Error(`No fresh device_login_finish trace found for ${userId}`)
+}
+
 test.beforeEach(async ({ request }) => {
   await waitForRuntimeReady(request)
 })
 
-test('shared postgres runtime exposes auth and keycloak endpoints', async ({ request }) => {
-  const [healthResponse, metadataResponse] = await Promise.all([
+test('shared postgres runtime exposes auth, trace, and keycloak endpoints', async ({ request }) => {
+  const [healthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
     request.get(`${AUTH_API_URL}/api/health`),
+    request.get(`${TRACE_API_URL}/health`),
     request.get(KEYCLOAK_METADATA_URL)
   ])
 
   expect(healthResponse.ok()).toBeTruthy()
+  expect(traceHealthResponse.ok()).toBeTruthy()
   expect(metadataResponse.ok()).toBeTruthy()
 })
 
@@ -48,21 +82,19 @@ test('postgres viewer login is reachable', async ({ page }) => {
 })
 
 test('admin overview is localized in German', async ({ page }) => {
-  await page.goto(`${ADMIN_WEB_URL}/#admin`)
+  await page.goto(ADMIN_WEB_URL)
 
-  await expect(page.getByRole('heading', { name: /verwalte registrierungscodes, behalte geräte im blick/i })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Trace-Browser öffnen' })).toBeVisible()
-  await expect(page.getByText('Trace-Browser', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /verwalte registrierungscodes und behalte bestehende geraetebindungen im blick/i })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungscode erstellen' })).toBeVisible()
   await expect(page.getByText('Anzeigename')).toBeVisible()
-  await expect(page.getByText('Gültig für Tage')).toBeVisible()
+  await expect(page.getByText('Gueltig fuer Tage')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Code erstellen' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungscodes', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Geräte', exact: true })).toBeVisible()
-  await expect(page.getByLabel('Admin Überblickszahlen')).toContainText('Registrierungscodes')
-  await expect(page.getByLabel('Admin Überblickszahlen')).toContainText('Geräte')
+  await expect(page.getByRole('heading', { name: 'Geraete', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Admin Ueberblickszahlen')).toContainText('Registrierungscodes')
+  await expect(page.getByLabel('Admin Ueberblickszahlen')).toContainText('Geraete')
   await expect(page.getByLabel('Registrierungscodes durchsuchen')).toBeVisible()
-  await expect(page.getByLabel('Geräte durchsuchen')).toBeVisible()
+  await expect(page.getByLabel('Geraete durchsuchen')).toBeVisible()
 })
 
 test('homepage contains key links', async ({ page }) => {
@@ -190,33 +222,29 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible()
   await expect(bindingNotice).toHaveCount(0)
 
-  await page.goto(`${ADMIN_WEB_URL}/#trace-browser`)
-  await expect(page.getByRole('heading', { name: /behalte den ausgewählten trace im blick/i })).toBeVisible()
+  const loginTrace = await waitForUserLoginTrace(request, userId)
+
+  await page.goto(TRACE_WEB_URL)
+  await expect(page.getByRole('heading', { name: /behalte den ausgewaehlten trace im blick und öffne die detailinspektion/i })).toBeVisible()
   await expect(page.getByText(/im demo-modus werden alle payloads erfasst/i)).toBeVisible()
 
   const traceList = page.getByRole('list', { name: 'Trace list' })
   await expect(traceList).toContainText(/device_login_finish|device_login_finished/i)
   await expect(traceList).toBeVisible()
 
-  await expect(page.getByRole('heading', { name: 'Ausgewählter Trace' })).toBeVisible()
-  await traceList.getByRole('button', { name: /device_login_finish|device_login_finished/i }).first().click()
-  await expect(page.getByRole('button', { name: 'Detailinspektion öffnen' })).toBeVisible()
-  await expect(page.getByText(/der ausgewählte trace bleibt rechts sichtbar/i)).toBeVisible()
-  await expect(traceList.getByText(/Gestartet .*\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
-  await expect(traceList.getByText(/erfolgreich|läuft|fehlerhaft/i).first()).toBeVisible()
-  await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText('Trace-ID')
-  await page.getByRole('button', { name: 'Detailinspektion öffnen' }).click()
-
-  await expect(page).toHaveURL(/#trace\//)
+  await page.goto(`${TRACE_WEB_URL}#trace/${loginTrace.traceId}`)
+  await expect(page).toHaveURL(`${TRACE_WEB_URL}#trace/${loginTrace.traceId}`)
   await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
   await expect(page.getByText('Span- und Artefaktdetails')).toBeVisible()
   await expect(page.getByText(/Diese Seite zeigt Requests und Responses je Span/i)).toBeVisible()
   await expect(page.getByText(/erfolgreich|läuft|fehlerhaft/i).first()).toBeVisible()
-  await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText('Trace-ID')
+  await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText(loginTrace.traceId)
+  await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText(userId)
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(timeline).toContainText('auth-api')
   await expect(timeline).toContainText('keycloak')
+  await expect(timeline).toContainText('web-client')
   await expect(timeline.getByText(/\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
   await timeline.getByRole('button', { name: /keycloak/i }).first().click()
 

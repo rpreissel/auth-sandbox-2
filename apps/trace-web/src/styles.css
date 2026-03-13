@@ -32,8 +32,9 @@ button {
   border: 1px solid rgba(14, 34, 52, 0.1);
 }
 
-.hero h1,
-h2 {
+h1,
+h2,
+h3 {
   font-family: "IBM Plex Serif", Georgia, serif;
 }
 
@@ -41,19 +42,6 @@ h2 {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: #aa4d1f;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-label,
-.list,
-.list article {
-  display: grid;
-  gap: 0.5rem;
 }
 
 input {
@@ -75,116 +63,18 @@ button {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-.list-card article,
-.trace-list-item,
-.trace-span-item {
-  padding: 1rem;
-  border-radius: 18px;
-  border: 1px solid rgba(14, 34, 52, 0.12);
-  background: rgba(14, 34, 52, 0.05);
-}
-
 .trace-hero {
   background: linear-gradient(135deg, rgba(14, 34, 52, 0.96), rgba(42, 77, 96, 0.92));
   color: #f5efe4;
 }
 
-.trace-detail-hero h1,
-.trace-page-hero h1 {
+.trace-hero h1 {
   color: #f5efe4;
 }
 
 .trace-warning {
   margin: 0;
   color: #ffdca8;
-}
-
-.trace-entry-card {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.admin-overview-shell {
-  align-content: start;
-}
-
-.admin-overview-grid {
-  display: grid;
-  gap: 1rem;
-  align-items: start;
-}
-
-.admin-hero {
-  display: grid;
-  gap: 1rem;
-}
-
-.admin-trace-card,
-.admin-form-card,
-.admin-list-card {
-  display: grid;
-  gap: 1rem;
-}
-
-.admin-summary-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.admin-summary-chip {
-  min-width: 140px;
-  display: grid;
-  gap: 0.25rem;
-  padding: 0.9rem 1rem;
-  border-radius: 18px;
-  background: rgba(14, 34, 52, 0.06);
-  border: 1px solid rgba(14, 34, 52, 0.08);
-}
-
-.admin-summary-chip span {
-  color: rgba(14, 34, 52, 0.68);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.admin-summary-chip strong,
-.list-card-header strong {
-  font-family: "IBM Plex Serif", Georgia, serif;
-  font-size: 1.4rem;
-}
-
-.admin-list-grid {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.list-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.list-card-header h2,
-.list-card-header p,
-.list-card-header strong {
-  margin: 0;
-}
-
-.admin-list-scroll {
-  max-height: 24rem;
-  overflow: auto;
-  padding-right: 0.2rem;
-}
-
-.admin-list-search {
-  display: grid;
-  gap: 0.45rem;
-  font-weight: 600;
 }
 
 .trace-browser-shell {
@@ -233,19 +123,15 @@ button {
 }
 
 .trace-search {
+  display: grid;
+  gap: 0.45rem;
   font-weight: 600;
 }
 
-.trace-search input {
-  margin-top: 0.45rem;
-}
-
 .trace-list,
-.trace-preview-timeline,
 .trace-timeline,
 .artifact-list,
 .trace-detail,
-.trace-summary-grid,
 .explanation-list {
   display: grid;
   gap: 0.75rem;
@@ -267,6 +153,9 @@ button {
   display: grid;
   gap: 0.3rem;
   cursor: pointer;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(14, 34, 52, 0.12);
 }
 
 .trace-list-row-header,
@@ -320,9 +209,6 @@ button {
   background: rgba(14, 34, 52, 0.12);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  flex: 0 0 auto;
-  text-align: center;
-  white-space: normal;
 }
 
 .trace-status-success {
@@ -338,13 +224,6 @@ button {
 .trace-status-error {
   background: rgba(160, 31, 31, 0.14);
   color: #a01f1f;
-}
-
-.trace-list-row strong,
-.trace-span-item strong,
-.trace-summary-grid strong,
-.explanation-list strong {
-  font-family: "IBM Plex Serif", Georgia, serif;
 }
 
 .trace-flow-list {
@@ -372,10 +251,6 @@ button {
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(14, 34, 52, 0.12);
-}
-
-.trace-flow-copy strong {
-  font-family: "IBM Plex Serif", Georgia, serif;
 }
 
 .trace-browser-detail {
@@ -407,7 +282,6 @@ button {
 
 .trace-spotlight-header h3 {
   margin: 0;
-  font-family: "IBM Plex Serif", Georgia, serif;
   font-size: 1.35rem;
   line-height: 1.2;
 }
@@ -456,44 +330,9 @@ button {
   overflow-wrap: anywhere;
 }
 
-.trace-browser-story h3 {
-  margin: 0;
-  font-family: "IBM Plex Serif", Georgia, serif;
-}
-
 .is-active {
   border-color: rgba(170, 77, 31, 0.7);
   box-shadow: 0 0 0 3px rgba(170, 77, 31, 0.14);
-}
-
-.trace-summary-grid {
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.trace-summary-grid article {
-  background: rgba(14, 34, 52, 0.05);
-  border-radius: 16px;
-  padding: 0.85rem;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.trace-summary-grid span,
-.artifact-block > span {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.78rem;
-  color: #aa4d1f;
-}
-
-.compact-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.button-row {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
 }
 
 .artifact-viewer {
@@ -505,6 +344,13 @@ button {
 .artifact-block {
   display: grid;
   gap: 0.45rem;
+}
+
+.artifact-block > span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: #aa4d1f;
 }
 
 .artifact-block pre {
@@ -535,14 +381,9 @@ button {
 }
 
 @media (max-width: 980px) {
-  .admin-overview-grid,
   .trace-browser-layout,
   .trace-inspector-layout,
   .trace-browser-layout-wide {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-list-grid {
     grid-template-columns: 1fr;
   }
 
@@ -555,14 +396,7 @@ button {
     max-height: 20rem;
   }
 
-  .trace-column-header {
-    flex-direction: column;
-  }
-
-  .list-card-header {
-    flex-direction: column;
-  }
-
+  .trace-column-header,
   .trace-list-row-header,
   .trace-flow-header,
   .trace-flow-item {
