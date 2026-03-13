@@ -262,6 +262,8 @@ function AdminApp() {
   const [selectedTrace, setSelectedTrace] = useState<TraceDetailResponse | null>(null)
   const [traceLoading, setTraceLoading] = useState(false)
   const [traceQuery, setTraceQuery] = useState('')
+  const [codeQuery, setCodeQuery] = useState('')
+  const [deviceQuery, setDeviceQuery] = useState('')
   const [form, setForm] = useState({ userId: 'demo-user', displayName: 'Demo User', validForDays: 30 })
   const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash))
   const traceBrowserDetailRef = useRef<HTMLElement | null>(null)
@@ -330,6 +332,30 @@ function AdminApp() {
     })
   }, [traceQuery, traces])
 
+  const filteredCodes = useMemo(() => {
+    const query = codeQuery.trim().toLowerCase()
+    if (!query) {
+      return codes
+    }
+
+    return codes.filter((code) => {
+      const haystack = [code.userId, code.code, String(code.useCount)].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [codeQuery, codes])
+
+  const filteredDevices = useMemo(() => {
+    const query = deviceQuery.trim().toLowerCase()
+    if (!query) {
+      return devices
+    }
+
+    return devices.filter((device) => {
+      const haystack = [device.userId, device.deviceName, device.publicKeyHash].join(' ').toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [deviceQuery, devices])
+
   useEffect(() => {
     if (route.name !== 'trace-browser') {
       return
@@ -370,11 +396,17 @@ function AdminApp() {
 
   return (
     <AdminOverviewPage
-      codes={codes}
-      devices={devices}
+      codes={filteredCodes}
+      devices={filteredDevices}
+      codeCount={codes.length}
+      deviceCount={devices.length}
+      codeQuery={codeQuery}
+      deviceQuery={deviceQuery}
       form={form}
       onCreate={handleCreate}
       onOpenTraceBrowser={() => navigateToRoute({ name: 'trace-browser' })}
+      setCodeQuery={setCodeQuery}
+      setDeviceQuery={setDeviceQuery}
       setForm={setForm}
     />
   )
@@ -383,30 +415,53 @@ function AdminApp() {
 function AdminOverviewPage(props: {
   codes: RegistrationCodeRecord[]
   devices: DeviceRecord[]
+  codeCount: number
+  deviceCount: number
+  codeQuery: string
+  deviceQuery: string
   form: { userId: string; displayName: string; validForDays: number }
   onCreate: (event: FormEvent) => Promise<void>
   onOpenTraceBrowser: () => void
+  setCodeQuery: (value: string) => void
+  setDeviceQuery: (value: string) => void
   setForm: (next: { userId: string; displayName: string; validForDays: number }) => void
 }) {
   return (
-    <main className="shell">
-      <section className="card hero">
-        <p className="eyebrow">Admin-Oberfläche</p>
-        <h1>Erstelle Registrierungscodes, prüfe Geräte und öffne den dedizierten Trace-Browser.</h1>
-        <div className="button-row">
-          <button type="button" onClick={props.onOpenTraceBrowser}>Trace-Browser öffnen</button>
-        </div>
-      </section>
+    <main className="shell admin-overview-shell">
+      <section className="admin-overview-grid">
+        <section className="card hero admin-hero">
+          <p className="eyebrow">Admin-Oberfläche</p>
+          <h1>Verwalte Registrierungscodes, behalte Geräte im Blick und springe bei Bedarf direkt in den Trace-Browser.</h1>
+          <p className="section-copy">Die Übersicht bündelt die häufigsten Admin-Aufgaben an einem Ort, während der Trace-Browser bewusst separat für die tiefe Analyse bleibt.</p>
+          <div className="admin-summary-row" aria-label="Admin Überblickszahlen">
+            <article className="admin-summary-chip">
+              <span>Registrierungscodes</span>
+              <strong>{props.codeCount}</strong>
+            </article>
+            <article className="admin-summary-chip">
+              <span>Geräte</span>
+              <strong>{props.deviceCount}</strong>
+            </article>
+          </div>
+        </section>
 
-      <section className="card trace-entry-card">
-        <p className="eyebrow">Trace-Übersicht</p>
-        <h2>Ein eigener Trace-Browser hält Observability von der Admin-CRUD-Ansicht getrennt.</h2>
-        <p className="section-copy">Dort kannst du lange Trace-Listen durchsuchen, die ausgewählte Zusammenfassung im Blick behalten und nur bei Bedarf in die Detailinspektion wechseln.</p>
-      </section>
+        <aside className="card trace-entry-card admin-trace-card">
+          <p className="eyebrow">Trace-Browser</p>
+          <h2>Öffne die Diagnoseansicht für lange Listen, ausgewählte Details und Deep Inspection.</h2>
+          <p className="section-copy">Dort kannst du Flows filtern, Spans lesen und Payloads prüfen, ohne die Verwaltungsansicht zu überladen.</p>
+          <div className="button-row">
+            <button type="button" onClick={props.onOpenTraceBrowser}>Trace-Browser öffnen</button>
+          </div>
+        </aside>
 
-      <section className="card">
-        <h2>Registrierungscode erstellen</h2>
-        <form className="grid" onSubmit={props.onCreate}>
+        <section className="card admin-form-card">
+          <div className="list-card-header">
+            <div>
+              <h2>Registrierungscode erstellen</h2>
+              <p className="section-copy">Lege neue Aktivierungscodes an, damit Geräte schnell für den Demo-Flow registriert werden können.</p>
+            </div>
+          </div>
+          <form className="grid" onSubmit={props.onCreate}>
           <label>
             User ID
             <input value={props.form.userId} onChange={(event) => props.setForm({ ...props.form, userId: event.target.value })} />
@@ -421,32 +476,67 @@ function AdminOverviewPage(props: {
           </label>
           <button type="submit">Code erstellen</button>
         </form>
-      </section>
+        </section>
 
-      <section className="card list-card">
-        <h2>Registrierungscodes</h2>
-        <div className="list">
-          {props.codes.map((code) => (
-            <article key={code.id}>
-              <strong>{code.userId}</strong>
-              <span>{code.code}</span>
-              <span>Nutzungen: {code.useCount}</span>
-            </article>
-          ))}
-        </div>
-      </section>
+        <section className="admin-list-grid">
+          <section className="card list-card admin-list-card">
+            <div className="list-card-header">
+              <div>
+                <h2>Registrierungscodes</h2>
+                <p className="section-copy">Aktive Codes für neue Geräte-Registrierungen.</p>
+              </div>
+              <strong>{props.codeCount}</strong>
+            </div>
+            <label className="admin-list-search">
+              Registrierungscodes durchsuchen
+              <input
+                aria-label="Registrierungscodes durchsuchen"
+                placeholder="User ID, Code oder Nutzung suchen"
+                value={props.codeQuery}
+                onChange={(event) => props.setCodeQuery(event.target.value)}
+              />
+            </label>
+            <div className="list admin-list-scroll">
+              {props.codes.map((code) => (
+                <article key={code.id}>
+                  <strong>{code.userId}</strong>
+                  <span>{code.code}</span>
+                  <span>Nutzungen: {code.useCount}</span>
+                </article>
+              ))}
+              {!props.codes.length && <p>{props.codeCount ? 'Keine Registrierungscodes passen zur aktuellen Suche.' : 'Noch keine Registrierungscodes vorhanden.'}</p>}
+            </div>
+          </section>
 
-      <section className="card list-card">
-        <h2>Geräte</h2>
-        <div className="list">
-          {props.devices.map((device) => (
-            <article key={device.id}>
-              <strong>{device.userId}</strong>
-              <span>{device.deviceName}</span>
-              <span>{device.publicKeyHash}</span>
-            </article>
-          ))}
-        </div>
+          <section className="card list-card admin-list-card">
+            <div className="list-card-header">
+              <div>
+                <h2>Geräte</h2>
+                <p className="section-copy">Bereits registrierte Gerätebindungen im Demo-System.</p>
+              </div>
+              <strong>{props.deviceCount}</strong>
+            </div>
+            <label className="admin-list-search">
+              Geräte durchsuchen
+              <input
+                aria-label="Geräte durchsuchen"
+                placeholder="User ID, Gerätename oder Hash suchen"
+                value={props.deviceQuery}
+                onChange={(event) => props.setDeviceQuery(event.target.value)}
+              />
+            </label>
+            <div className="list admin-list-scroll">
+              {props.devices.map((device) => (
+                <article key={device.id}>
+                  <strong>{device.userId}</strong>
+                  <span>{device.deviceName}</span>
+                  <span>{device.publicKeyHash}</span>
+                </article>
+              ))}
+              {!props.devices.length && <p>{props.deviceCount ? 'Keine Geräte passen zur aktuellen Suche.' : 'Noch keine Geräte registriert.'}</p>}
+            </div>
+          </section>
+        </section>
       </section>
     </main>
   )

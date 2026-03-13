@@ -50,15 +50,19 @@ test('postgres viewer login is reachable', async ({ page }) => {
 test('admin overview is localized in German', async ({ page }) => {
   await page.goto(`${ADMIN_WEB_URL}/#admin`)
 
-  await expect(page.getByRole('heading', { name: /erstelle registrierungscodes, prüfe geräte/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /verwalte registrierungscodes, behalte geräte im blick/i })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Trace-Browser öffnen' })).toBeVisible()
-  await expect(page.getByText('Trace-Übersicht')).toBeVisible()
+  await expect(page.getByText('Trace-Browser', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungscode erstellen' })).toBeVisible()
   await expect(page.getByText('Anzeigename')).toBeVisible()
   await expect(page.getByText('Gültig für Tage')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Code erstellen' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungscodes', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Geräte', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Admin Überblickszahlen')).toContainText('Registrierungscodes')
+  await expect(page.getByLabel('Admin Überblickszahlen')).toContainText('Geräte')
+  await expect(page.getByLabel('Registrierungscodes durchsuchen')).toBeVisible()
+  await expect(page.getByLabel('Geräte durchsuchen')).toBeVisible()
 })
 
 test('homepage contains key links', async ({ page }) => {
