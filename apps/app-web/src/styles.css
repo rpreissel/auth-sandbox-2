@@ -129,6 +129,8 @@ textarea {
 .status-card,
 .flow-card,
 .token-card,
+.session-stack,
+.mock-api-shell,
 .binding-stack,
 .challenge-card,
 .token-empty,
@@ -340,18 +342,218 @@ button:disabled {
 }
 
 .mock-api-card {
-  background: linear-gradient(180deg, rgba(235, 245, 255, 0.98), rgba(244, 249, 255, 0.94));
+  background: linear-gradient(180deg, rgba(9, 20, 34, 0.82), rgba(14, 30, 48, 0.9));
+  border: 1px solid rgba(126, 200, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mock-api-console-chrome {
+  display: grid;
+  grid-template-columns: repeat(3, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 16px;
+  background: rgba(5, 14, 24, 0.72);
+  border: 1px solid rgba(126, 200, 255, 0.14);
+}
+
+.mock-api-console-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 50%;
+  background: #4eb6ff;
+  box-shadow: 0 0 12px rgba(78, 182, 255, 0.42);
+}
+
+.mock-api-console-url {
+  margin-left: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(228, 243, 255, 0.76);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mock-api-hero {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.mock-api-badge-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.mock-api-badge-stack span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(78, 182, 255, 0.1);
+  border: 1px solid rgba(126, 200, 255, 0.14);
+  color: #9fd8ff;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.android-tabs-shell {
+  padding: 0.65rem;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top left, rgba(94, 174, 255, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(223, 234, 247, 0.98), rgba(234, 241, 250, 0.95));
+  border: 1px solid rgba(11, 87, 208, 0.08);
+  box-shadow: 0 14px 28px rgba(16, 32, 51, 0.08);
+}
+
+.android-tabs-header {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.35rem 0.55rem;
+}
+
+.android-tabs-header strong {
+  font-family: "IBM Plex Serif", Georgia, serif;
+  font-size: 1rem;
+}
+
+.android-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  padding: 0.2rem 0.34rem 0.34rem;
+  border-radius: 20px;
+  background: rgba(248, 251, 255, 0.75);
+  border: 1px solid rgba(16, 32, 51, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.android-tab {
+  display: grid;
+  justify-items: start;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon label"
+    "track track"
+    "icon title";
+  column-gap: 0.7rem;
+  row-gap: 0.18rem;
+  width: 100%;
+  padding: 0.78rem 0.95rem 0.82rem;
+  border-radius: 18px;
+  background: transparent;
+  color: #4f6075;
+  box-shadow: none;
+  border: 1px solid transparent;
+}
+
+.android-tab[aria-selected="false"] {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.android-tab-active {
+  background: rgba(255, 255, 255, 0.7);
+  color: #0f2137;
+  box-shadow: 0 8px 18px rgba(11, 87, 208, 0.1);
+  border-color: rgba(11, 87, 208, 0.08);
+}
+
+.android-tab-track {
+  grid-area: track;
+  width: 100%;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: rgba(11, 87, 208, 0.08);
+  overflow: hidden;
+}
+
+.android-tab-indicator {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+  transition: width 160ms ease, background 160ms ease;
+}
+
+.android-tab-active .android-tab-indicator {
+  width: 100%;
+  background: linear-gradient(90deg, #0b57d0 0%, #5f9bff 100%);
+}
+
+.android-tab-icon {
+  grid-area: icon;
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(11, 87, 208, 0.08);
+  color: #0b57d0;
+  font-size: 0.95rem;
+}
+
+.android-tab-active .android-tab-icon {
+  background: rgba(11, 87, 208, 0.14);
+}
+
+.android-tab-label,
+.android-tab strong {
+  text-align: left;
+}
+
+.android-tab-label {
+  grid-area: label;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.android-tab strong {
+  grid-area: title;
+  font-size: 1rem;
 }
 
 .mock-api-summary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.mock-api-summary div,
+.mock-api-composer,
+.message-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(126, 200, 255, 0.12);
+}
+
 .mock-api-status {
   margin: 0;
-  color: #0b57d0;
+  color: #9fd8ff;
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.mock-api-actions,
+.mock-api-composer {
+  padding: 0.85rem;
+  border-radius: 18px;
+  border: 1px solid rgba(126, 200, 255, 0.1);
+}
+
+.mock-api-composer textarea {
+  background: rgba(7, 18, 30, 0.76);
+  border-color: rgba(126, 200, 255, 0.18);
+  color: #eef8ff;
+}
+
+.mock-api-composer textarea::placeholder {
+  color: rgba(228, 243, 255, 0.45);
 }
 
 .message-list {
@@ -364,14 +566,14 @@ button:disabled {
   gap: 0.35rem;
   padding: 0.9rem;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(16, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(126, 200, 255, 0.12);
 }
 
 .message-item p {
   margin: 0;
   line-height: 1.5;
-  color: rgba(16, 32, 51, 0.8);
+  color: rgba(228, 243, 255, 0.78);
 }
 
 .message-meta {
@@ -382,7 +584,7 @@ button:disabled {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #0d63c9;
+  color: #7ec8ff;
 }
 
 .token-overview {
@@ -420,6 +622,51 @@ button:disabled {
 .raw-token-grid {
   display: grid;
   gap: 0.9rem;
+}
+
+.session-stack {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.mock-api-shell {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(58, 167, 255, 0.2), transparent 30%),
+    linear-gradient(180deg, rgba(12, 26, 44, 0.98), rgba(18, 39, 64, 0.96));
+  border-color: rgba(110, 192, 255, 0.18);
+  box-shadow: 0 20px 44px rgba(5, 15, 28, 0.34);
+}
+
+.mock-api-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(110, 192, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(110, 192, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+.mock-api-shell .section-label,
+.mock-api-shell .field-label,
+.mock-api-shell .message-meta {
+  color: #7ec8ff;
+}
+
+.mock-api-shell h2,
+.mock-api-shell strong,
+.mock-api-shell .mock-api-status,
+.mock-api-shell .message-item strong {
+  color: #f4fbff;
+}
+
+.mock-api-shell .muted-copy,
+.mock-api-shell .message-item p,
+.mock-api-shell .mock-api-console-url {
+  color: rgba(228, 243, 255, 0.78);
 }
 
 .token-panel {
@@ -576,7 +823,7 @@ button:disabled {
     grid-column: 1;
   }
 
-  .token-card {
+  .session-stack {
     grid-column: 2;
     grid-row: 1 / span 3;
   }
@@ -588,6 +835,10 @@ button:disabled {
 
   .token-overview {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .android-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .claim-summary article:last-child {
@@ -624,7 +875,8 @@ button:disabled {
   .claim-summary,
   .endpoint-summary,
   .token-overview,
-  .status-strip {
+  .status-strip,
+  .android-tabs {
     grid-template-columns: minmax(0, 1fr);
   }
 

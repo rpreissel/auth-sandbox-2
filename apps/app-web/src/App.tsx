@@ -23,6 +23,8 @@ type DeviceState = {
 
 type Step = 'register' | 'password' | 'login' | 'authenticated'
 
+type AuthenticatedTab = 'tokens' | 'mock-api'
+
 type StoredDeviceBinding = {
   userId: string
   deviceName: string
@@ -127,6 +129,7 @@ export function App() {
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
   const [traceState, setTraceState] = useState<TraceState | null>(null)
+  const [activeAuthenticatedTab, setActiveAuthenticatedTab] = useState<AuthenticatedTab>('tokens')
   const [mockApi, setMockApi] = useState<MockApiState>({
     profile: null,
     messages: [],
@@ -171,11 +174,11 @@ export function App() {
           activationCode: ''
         }))
         setStep(stored.passwordRequired ? 'password' : 'login')
-        setStatus('This phone is ready to sign in')
+        setStatus('Dieses Gerät ist bereit zur Anmeldung')
       } catch {
         clearDeviceBinding()
         if (!cancelled) {
-          setStatus('Saved device binding was invalid and has been cleared')
+          setStatus('Gespeicherte Gerätebindung war ungültig und wurde entfernt')
         }
       }
     })()
@@ -192,11 +195,12 @@ export function App() {
     setTokens(null)
     setSecurePrompt(null)
     setTraceState(null)
+    setActiveAuthenticatedTab('tokens')
     setMockApi({
       profile: null,
       messages: [],
       draft: 'A fresh protected note from app-web.',
-      status: 'Waiting for an authenticated session'
+        status: 'Warten auf eine authentifizierte Sitzung'
     })
     setForm({
       ...createInitialForm(),
@@ -212,13 +216,13 @@ export function App() {
         ...current,
         profile: null,
         messages: [],
-        status: device ? 'Sign in to load protected mock data' : 'Waiting for an authenticated session'
+        status: device ? 'Anmelden, um geschützte Mock-Daten zu laden' : 'Warten auf eine authentifizierte Sitzung'
       }))
       return
     }
 
     void runAction(async () => {
-      await syncMockApi('Protected mock API synchronized')
+      await syncMockApi('Geschützte Mock API synchronisiert')
     })
   }, [tokens?.accessToken])
 
@@ -311,7 +315,7 @@ export function App() {
 
     setMockApi((current) => ({
       ...current,
-      status: 'Loading protected mock data...'
+      status: 'Geschützte Mock-Daten werden geladen...'
     }))
 
     const flow = await createFlowTrace('mock_api_sync_started', [{
@@ -323,7 +327,7 @@ export function App() {
     }])
 
     try {
-      setStatus('Loading protected mock data...')
+      setStatus('Geschützte Mock-Daten werden geladen...')
       const [profile, messages] = await Promise.all([
         api.getMockProfile(tokens.accessToken, flow),
         api.listMockMessages(tokens.accessToken, flow)
@@ -340,7 +344,7 @@ export function App() {
         ...current,
         profile,
         messages: messages.items,
-        status: `Loaded ${messages.items.length} protected mock records`
+        status: `${messages.items.length} geschützte Mock-Einträge geladen`
       }))
       setStatus(nextStatus)
     } catch (error) {
@@ -365,9 +369,9 @@ export function App() {
       if (!text) {
         setMockApi((current) => ({
           ...current,
-          status: 'Enter a note before sending it to mock-api'
+          status: 'Gib eine Notiz ein, bevor du sie an mock-api sendest'
         }))
-        setStatus('Enter a note before sending it to mock-api')
+        setStatus('Gib eine Notiz ein, bevor du sie an mock-api sendest')
         return
       }
 
@@ -377,7 +381,7 @@ export function App() {
       }])
 
       try {
-        setStatus('Sending note to protected mock-api...')
+        setStatus('Geschützte Notiz wird an mock-api gesendet...')
         const created = await api.createMockMessage(tokens.accessToken, { text }, flow)
         const messages = await api.listMockMessages(tokens.accessToken, flow)
         await sendFlowEvent(flow, 'mock_api_message_create_finished', [{
@@ -391,9 +395,9 @@ export function App() {
           ...current,
           messages: messages.items,
           draft: '',
-          status: 'mock-api accepted the new protected note'
+          status: 'mock-api hat die neue geschützte Notiz akzeptiert'
         }))
-        setStatus('mock-api accepted the new protected note')
+        setStatus('mock-api hat die neue geschützte Notiz akzeptiert')
       } catch (error) {
         setMockApi((current) => ({
           ...current,
@@ -411,7 +415,7 @@ export function App() {
       return
     }
 
-    setStatus('Requesting encrypted challenge...')
+    setStatus('Verschlüsselte Challenge wird angefordert...')
     const flow = traceState ?? await createFlowTrace('device_login_started', [{ name: 'device_binding', value: { publicKeyHash: device.publicKeyHash, userId: device.userId } }])
     let result: StartLoginResponse
 
@@ -419,7 +423,7 @@ export function App() {
       result = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
-        resetDeviceFlow('Saved device binding was invalid and has been cleared', {
+        resetDeviceFlow('Gespeicherte Gerätebindung war ungültig und wurde entfernt', {
           userId: device.userId,
           deviceName: device.deviceName
         })
@@ -433,19 +437,19 @@ export function App() {
     setStep('login')
     setSecurePrompt({
       kind: 'login',
-      title: 'Verify it\'s you',
-      body: 'Use your screen lock to continue with this device sign-in.',
-      caption: `Challenge ready until ${formatDateTime(result.expiresAt)}`,
-      confirmLabel: 'Use screen lock'
+      title: 'Bestätige deine Identität',
+      body: 'Nutze deine Displaysperre, um diese Geräteanmeldung fortzusetzen.',
+      caption: `Challenge bereit bis ${formatDateTime(result.expiresAt)}`,
+      confirmLabel: 'Displaysperre verwenden'
     })
     setStatus(nextStatus)
   }
 
   async function completeRegister() {
     const flow = await createFlowTrace('device_registration_started', [{ name: 'registration_form', value: form }])
-    setStatus('Preparing secure device key...')
+    setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
     const signingKeys = await createSigningKeys()
-    setStatus('Saving device binding...')
+    setStatus('Gerätebindung wird gespeichert...')
     const result = await api.registerDevice({
       userId: form.userId,
       deviceName: form.deviceName,
@@ -467,22 +471,22 @@ export function App() {
     await persistDeviceBinding(nextDevice, result.passwordRequired)
 
     if (result.passwordRequired) {
-      setStatus('Device binding saved. Create a new Keycloak password to continue.')
+      setStatus('Gerätebindung gespeichert. Lege ein neues Keycloak-Passwort fest, um fortzufahren.')
       setStep('password')
       return
     }
 
-      await requestLoginChallenge('Approve keychain access to finish sign-in')
+      await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff, um die Anmeldung abzuschließen')
   }
 
   async function handleRegister(event: FormEvent) {
     event.preventDefault()
     setSecurePrompt({
       kind: 'register',
-      title: 'Verify it\'s you',
-      body: 'Use your screen lock to save this device binding in Android Keystore.',
-      caption: 'Security check required',
-      confirmLabel: 'Use screen lock'
+      title: 'Bestätige deine Identität',
+      body: 'Nutze deine Displaysperre, um diese Gerätebindung im Android-Keystore zu speichern.',
+      caption: 'Sicherheitsprüfung erforderlich',
+      confirmLabel: 'Displaysperre verwenden'
     })
   }
 
@@ -491,17 +495,17 @@ export function App() {
     if (!device) return
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_password_setup', [{ name: 'password_request', value: { userId: device.userId, password: form.password } }])
-      setStatus('Saving Keycloak password...')
+      setStatus('Keycloak-Passwort wird gespeichert...')
       await api.setPassword({ userId: device.userId, password: form.password }, flow)
       await persistDeviceBinding(device, false)
-      await requestLoginChallenge('Approve keychain access to finish automatic sign-in')
+      await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff, um die automatische Anmeldung abzuschließen')
     })
   }
 
   async function handleStartLogin() {
     if (!device) return
     await runAction(async () => {
-      await requestLoginChallenge('Approve keychain access to sign in')
+      await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff zur Anmeldung')
     })
   }
 
@@ -509,7 +513,7 @@ export function App() {
     if (!device || !challenge) return
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{ name: 'challenge_payload', value: challenge }])
-      setStatus('Using Secure Element...')
+      setStatus('Secure Element wird verwendet...')
       const signature = await signEncryptedData(challenge.encryptedData, device.privateKey)
       const result = await api.finishLogin({
         nonce: challenge.nonce,
@@ -526,7 +530,8 @@ export function App() {
       setTraceState(null)
       setTokens(result)
       setChallenge(null)
-      setStatus('Signed in')
+      setActiveAuthenticatedTab('tokens')
+      setStatus('Angemeldet')
       setStep('authenticated')
     })
   }
@@ -543,7 +548,7 @@ export function App() {
       } }])
       setTraceState(null)
       setTokens({ ...refreshed, requiredAction: null })
-      setStatus('Tokens refreshed')
+      setStatus('Tokens aktualisiert')
     })
   }
 
@@ -556,13 +561,14 @@ export function App() {
       setTraceState(null)
       setTokens(null)
       setChallenge(null)
+      setActiveAuthenticatedTab('tokens')
       setMockApi((current) => ({
         ...current,
         profile: null,
         messages: [],
-        status: 'Sign in to load protected mock data'
+        status: 'Anmelden, um geschützte Mock-Daten zu laden'
       }))
-      setStatus('Signed out. This phone is still ready to sign in again.')
+      setStatus('Abgemeldet. Dieses Gerät ist weiter für eine neue Anmeldung bereit.')
       setStep('login')
     })
   }
@@ -587,11 +593,11 @@ export function App() {
 
   function handleCancelSecurePrompt() {
     setSecurePrompt(null)
-    setStatus('Biometric prompt closed')
+    setStatus('Biometrischer Dialog geschlossen')
   }
 
   function handleRemoveBinding() {
-    resetDeviceFlow('Device binding removed from this phone')
+    resetDeviceFlow('Gerätebindung von diesem Gerät entfernt')
   }
 
   return (
@@ -610,13 +616,13 @@ export function App() {
           <section className="app-shell">
             <header className="hero card hero-card">
               <p className="eyebrow">Android Device Pass</p>
-              <h1>{tokens ? 'Session tokens' : device ? 'This phone is ready' : 'Set up this phone'}</h1>
+              <h1>{tokens ? 'Aktive Sitzung' : device ? 'Dieses Telefon ist bereit' : 'Dieses Telefon einrichten'}</h1>
               <p className="lede">
               {tokens
-                  ? 'Your Keycloak session is live on this phone.'
+                  ? 'Deine Keycloak-Sitzung ist auf diesem Gerät aktiv.'
                   : device
-                    ? 'Use the saved device binding to sign in again with Android security.'
-                    : 'Enter your activation code and save this phone in Android Keystore.'}
+                    ? 'Nutze die gespeicherte Gerätebindung, um dich mit Android-Sicherheit erneut anzumelden.'
+                    : 'Gib deinen Aktivierungscode ein und speichere dieses Telefon im Android-Keystore.'}
               </p>
             </header>
 
@@ -624,17 +630,17 @@ export function App() {
               <p className="section-label">Status</p>
               <strong>{status}</strong>
               <div className="status-strip" aria-label="Android security status">
-                <span className="status-pill">Keystore ready</span>
-                <span className="status-pill">Device bound</span>
+                <span className="status-pill">Keystore bereit</span>
+                <span className="status-pill">Gerät gebunden</span>
               </div>
               <p className="muted-copy">
                 {tokens
-                  ? `Session active for ${tokenLifetimeLabel ?? 'a limited time'}.`
+                  ? `Sitzung aktiv für ${tokenLifetimeLabel ?? 'begrenzte Zeit'}.`
                   : challengeExpiresAt
-                    ? `Secure login request ready until ${challengeExpiresAt}.`
-                    : device
-                      ? 'The device binding is saved on this phone.'
-                      : 'No device binding is saved yet.'}
+                     ? `Sichere Anmeldeanfrage bereit bis ${challengeExpiresAt}.`
+                     : device
+                       ? 'Die Gerätebindung ist auf diesem Telefon gespeichert.'
+                       : 'Noch keine Gerätebindung gespeichert.'}
               </p>
             </section>
 
@@ -643,28 +649,28 @@ export function App() {
                 <>
                   <div className="section-heading simple-heading">
                     <div>
-                      <p className="section-label">Registration</p>
-                      <h2>Set up device sign-in</h2>
+                      <p className="section-label">Registrierung</p>
+                      <h2>Geräteanmeldung einrichten</h2>
                     </div>
                   </div>
                   <div className="android-intro">
-                    <strong>Use the activation code from your admin flow.</strong>
-                    <p className="muted-copy">After setup, Android security keeps the device binding ready for one-tap sign-in.</p>
+                    <strong>Nutze den Aktivierungscode aus deinem Admin-Flow.</strong>
+                    <p className="muted-copy">Nach der Einrichtung hält Android-Sicherheit die Gerätebindung für die Anmeldung per Tippen bereit.</p>
                   </div>
                   <form className="grid form-stack" onSubmit={handleRegister}>
                     <label>
-                      <span className="field-label">User ID</span>
+                      <span className="field-label">Benutzer-ID</span>
                       <input value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} disabled={busy} />
                     </label>
                     <label>
-                      <span className="field-label">Device name</span>
+                      <span className="field-label">Gerätename</span>
                       <input value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                     </label>
                     <label>
-                      <span className="field-label">Activation code</span>
+                      <span className="field-label">Aktivierungscode</span>
                       <input value={form.activationCode} onChange={(event) => setForm({ ...form, activationCode: event.target.value })} disabled={busy} />
                     </label>
-                    <button type="submit" disabled={busy}>Continue</button>
+                    <button type="submit" disabled={busy}>Weiter</button>
                   </form>
                 </>
               )}
@@ -673,17 +679,17 @@ export function App() {
                 <>
                   <div className="section-heading simple-heading">
                     <div>
-                      <p className="section-label">Password</p>
-                      <h2>Create your new password</h2>
+                      <p className="section-label">Passwort</p>
+                      <h2>Neues Passwort erstellen</h2>
                     </div>
                   </div>
-                  <p className="muted-copy">This account needs a fresh Keycloak password before Android can finish sign-in.</p>
+                  <p className="muted-copy">Dieses Konto braucht ein neues Keycloak-Passwort, bevor Android die Anmeldung abschließen kann.</p>
                   <form className="grid form-stack" onSubmit={handlePassword}>
                     <label>
-                      <span className="field-label">New password</span>
+                      <span className="field-label">Neues Passwort</span>
                       <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={busy} />
                     </label>
-                    <button type="submit" disabled={busy}>Save password</button>
+                    <button type="submit" disabled={busy}>Passwort speichern</button>
                   </form>
                 </>
               )}
@@ -692,41 +698,41 @@ export function App() {
                 <>
                   <div className="section-heading simple-heading">
                     <div>
-                      <p className="section-label">Login</p>
-                      <h2>Sign in with saved device</h2>
+                      <p className="section-label">Anmeldung</p>
+                      <h2>Mit gespeichertem Gerät anmelden</h2>
                     </div>
                   </div>
                   <div className="challenge-card">
-                    <p className="section-label">Android security</p>
-                    <strong>{challenge ? 'Ready for verification' : 'Saved device sign-in is ready'}</strong>
+                    <p className="section-label">Android-Sicherheit</p>
+                    <strong>{challenge ? 'Bereit zur Bestätigung' : 'Gespeicherte Geräteanmeldung ist bereit'}</strong>
                     <p className="muted-copy">
                       {challenge
-                        ? 'Verify with your screen lock to finish sign-in.'
-                        : 'The app requests a challenge and then opens one Android verification prompt.'}
+                         ? 'Bestätige dich mit der Displaysperre, um die Anmeldung abzuschließen.'
+                         : 'Die App fordert eine Challenge an und öffnet danach genau einen Android-Bestätigungsdialog.'}
                     </p>
                   </div>
                   <div className="binding-stack">
                     <div className="device-summary" aria-label="Saved device summary">
                       <div>
-                        <span className="field-label">Account</span>
+                        <span className="field-label">Konto</span>
                         <strong>{device.userId}</strong>
                       </div>
                       <div>
-                        <span className="field-label">Device</span>
+                        <span className="field-label">Gerät</span>
                         <strong>{device.deviceName}</strong>
                       </div>
                     </div>
                     <div className="binding-notice" role="note" aria-label="Local device binding notice">
-                      <strong>Saved on this phone</strong>
-                      <p className="binding-note">The private key stays on this device so sign-in still works after logout or reload.</p>
+                      <strong>Auf diesem Telefon gespeichert</strong>
+                      <p className="binding-note">Der private Schlüssel bleibt auf diesem Gerät, damit die Anmeldung auch nach Abmeldung oder Neuladen weiter funktioniert.</p>
                     </div>
                     <details className="device-details">
-                      <summary>Device details</summary>
+                      <summary>Gerätedetails</summary>
                       <p>{device.publicKeyHash}</p>
                     </details>
                     <div className="actions stacked-actions">
-                      <button type="button" onClick={handleStartLogin} disabled={busy}>Continue with device</button>
-                      <button type="button" className="button-secondary" onClick={handleRemoveBinding} disabled={busy}>Remove device binding</button>
+                      <button type="button" onClick={handleStartLogin} disabled={busy}>Mit Gerät fortfahren</button>
+                      <button type="button" className="button-secondary" onClick={handleRemoveBinding} disabled={busy}>Gerätebindung entfernen</button>
                     </div>
                   </div>
                 </>
@@ -736,112 +742,89 @@ export function App() {
                 <>
                   <div className="section-heading simple-heading">
                     <div>
-                      <p className="section-label">Signed in</p>
+                      <p className="section-label">Angemeldet</p>
                       <h2>{device.deviceName}</h2>
                     </div>
                   </div>
                   <section className="token-overview" aria-label="Token overview cards">
                     <article>
-                      <span>Access</span>
-                      <strong>Granted</strong>
-                      <p>API access for this device session.</p>
+                        <span>Zugriff</span>
+                        <strong>Erteilt</strong>
+                        <p>API-Zugriff für diese Gerätesitzung.</p>
                     </article>
                     <article>
-                      <span>ID</span>
-                      <strong>Ready</strong>
-                      <p>User identity for the signed-in session.</p>
+                        <span>ID</span>
+                        <strong>Bereit</strong>
+                        <p>Identitätsdaten für die aktive Sitzung.</p>
                     </article>
                     <article>
-                      <span>Refresh</span>
-                      <strong>Stored</strong>
-                      <p>Use refresh to get a fresh token set.</p>
+                        <span>Refresh</span>
+                        <strong>Gespeichert</strong>
+                        <p>Hole bei Bedarf ein frisches Token-Set.</p>
                     </article>
                   </section>
                   <div className="challenge-card authenticated-card">
-                    <p className="section-label">Android device</p>
-                    <strong>Signed in and ready</strong>
-                    <p className="muted-copy">Refresh gets a fresh token bundle. Sign out keeps the device binding so device login stays one tap away.</p>
+                    <p className="section-label">Android-Gerät</p>
+                    <strong>Angemeldet und bereit</strong>
+                    <p className="muted-copy">Aktualisieren holt ein neues Token-Bündel. Abmelden behält die Gerätebindung, damit Device Login weiter schnell verfügbar bleibt.</p>
                   </div>
                   <div className="actions stacked-actions">
-                    <button type="button" onClick={handleRefresh} disabled={busy}>Refresh tokens</button>
-                    <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Sign out</button>
+                    <button type="button" onClick={handleRefresh} disabled={busy}>Tokens aktualisieren</button>
+                    <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Abmelden</button>
                   </div>
-                  <section className="challenge-card mock-api-card" aria-label="Protected mock API panel">
-                    <p className="section-label">Mock API</p>
-                    <strong>OIDC token protected demo endpoints</strong>
-                    <p className="muted-copy">The app calls `mock-api` with the current access token. The backend validates JWKS signatures and the `mock-api` audience before serving data.</p>
-                    <div className="device-summary mock-api-summary">
-                      <div>
-                        <span className="field-label">Audience</span>
-                        <strong>{mockApi.profile?.audience.join(', ') ?? 'Not loaded'}</strong>
-                      </div>
-                      <div>
-                        <span className="field-label">Username</span>
-                        <strong>{mockApi.profile?.username ?? 'Not loaded'}</strong>
-                      </div>
-                      <div>
-                        <span className="field-label">Client</span>
-                        <strong>{mockApi.profile?.clientId ?? 'Not loaded'}</strong>
-                      </div>
-                      <div>
-                        <span className="field-label">Scope</span>
-                        <strong>{mockApi.profile?.scope.join(', ') ?? 'Not loaded'}</strong>
-                      </div>
-                    </div>
-                    <p className="mock-api-status">{mockApi.status}</p>
-                    <div className="actions stacked-actions">
-                      <button type="button" onClick={() => void runAction(async () => { await syncMockApi('Protected mock API synchronized') })} disabled={busy}>Reload mock API</button>
-                    </div>
-                    <form className="grid form-stack" onSubmit={handleCreateMockMessage}>
-                      <label>
-                        <span className="field-label">New protected note</span>
-                        <textarea value={mockApi.draft} onChange={(event) => setMockApi((current) => ({ ...current, draft: event.target.value }))} disabled={busy} rows={4} />
-                      </label>
-                      <button type="submit" disabled={busy}>Post note to mock-api</button>
-                    </form>
-                    <div className="message-list" aria-label="Protected mock API messages">
-                      {mockApi.messages.map((message) => (
-                        <article key={message.id} className="message-item">
-                          <div className="message-meta">
-                            <span>{message.category}</span>
-                            <span>{formatDateTime(message.createdAt)}</span>
-                          </div>
-                          <strong>{message.authorUserId}</strong>
-                          <p>{message.text}</p>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
                 </>
               )}
             </section>
 
-            <section className="card token-card">
-              <div className="section-heading simple-heading">
-                <div>
-                  <p className="section-label">Session details</p>
-                  <h2>Tokens</h2>
-                </div>
-              </div>
-
-              {!tokens && <TokenEmptyState hasDevice={Boolean(device)} hasChallenge={Boolean(challenge)} />}
+            <section className="session-stack">
+              {!tokens && (
+                <section className="card token-card">
+                  <div className="section-heading simple-heading">
+                    <div>
+                      <p className="section-label">Sitzungsdetails</p>
+                      <h2>Sitzungstokens</h2>
+                    </div>
+                  </div>
+                  <TokenEmptyState hasDevice={Boolean(device)} hasChallenge={Boolean(challenge)} />
+                </section>
+              )}
 
               {tokens && (
                 <>
-                  <TokenHero tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
-                  <ClaimHighlights accessClaims={accessClaims} idClaims={idClaims} />
-                  <div className="token-grid">
-                    <TokenComparisonPanel
-                      accessToken={tokens.accessToken}
-                      accessClaims={accessClaims}
-                      idToken={tokens.idToken}
-                      idClaims={idClaims}
-                      claimKeys={sharedTokenClaimKeys}
+                  <AuthenticatedTabs activeTab={activeAuthenticatedTab} onChange={setActiveAuthenticatedTab} />
+
+                  {activeAuthenticatedTab === 'tokens' ? (
+                    <section className="card token-card" id="authenticated-panel-tokens">
+                      <div className="section-heading simple-heading">
+                        <div>
+                          <p className="section-label">Sitzungsdetails</p>
+                          <h2>Sitzungstokens</h2>
+                        </div>
+                      </div>
+                      <TokenHero tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
+                      <ClaimHighlights accessClaims={accessClaims} idClaims={idClaims} />
+                      <div className="token-grid">
+                        <TokenComparisonPanel
+                          accessToken={tokens.accessToken}
+                          accessClaims={accessClaims}
+                          idToken={tokens.idToken}
+                          idClaims={idClaims}
+                          claimKeys={sharedTokenClaimKeys}
+                        />
+                        <JsonPanel title="Userinfo-Endpunkt" payload={userInfo} rawLabel="Userinfo Antwort JSON" />
+                        <JsonPanel title="Introspection-Endpunkt" payload={tokenIntrospection} rawLabel="Introspection Antwort JSON" />
+                        <TokenPanel title="Refresh-Token" token={tokens.refreshToken} rawLabel="Refresh-Token JWT" claims={null} />
+                      </div>
+                    </section>
+                  ) : (
+                    <MockApiPanel
+                      mockApi={mockApi}
+                      busy={busy}
+                      onReload={() => void runAction(async () => { await syncMockApi('Protected mock API synchronized') })}
+                      onSubmit={handleCreateMockMessage}
+                      onDraftChange={(draft) => setMockApi((current) => ({ ...current, draft }))}
                     />
-                    <JsonPanel title="Userinfo endpoint" payload={userInfo} rawLabel="Userinfo response JSON" />
-                    <JsonPanel title="Introspection endpoint" payload={tokenIntrospection} rawLabel="Introspection response JSON" />
-                    <TokenPanel title="Refresh token" token={tokens.refreshToken} rawLabel="Refresh token JWT" claims={null} />
-                  </div>
+                  )}
                 </>
               )}
             </section>
@@ -865,17 +848,143 @@ function TokenEmptyState({ hasDevice, hasChallenge }: { hasDevice: boolean; hasC
   return (
     <section className="token-empty" aria-label="Token wallet empty state">
       <div>
-        <p className="section-label">Locked</p>
-        <h3>Tokens appear here after device login.</h3>
+        <p className="section-label">Gesperrt</p>
+        <h3>Tokens erscheinen hier nach der Geräteanmeldung.</h3>
       </div>
       <p className="muted-copy">
         {hasChallenge
-          ? 'Confirm the secure login prompt to unlock the token screen.'
+          ? 'Bestätige den sicheren Anmeldedialog, um den Token-Bereich zu entsperren.'
           : hasDevice
-            ? 'This phone already has a saved device binding.'
-            : 'Bind this phone first with an activation code.'}
+            ? 'Dieses Telefon hat bereits eine gespeicherte Gerätebindung.'
+            : 'Verbinde dieses Telefon zuerst mit einem Aktivierungscode.'}
       </p>
-      <p>No Keycloak tokens yet.</p>
+      <p>Noch keine Keycloak-Tokens.</p>
+    </section>
+  )
+}
+
+function AuthenticatedTabs(props: {
+  activeTab: AuthenticatedTab
+  onChange: (tab: AuthenticatedTab) => void
+}) {
+  return (
+    <section className="card android-tabs-shell">
+      <div className="android-tabs-header">
+        <p className="section-label">Android Ansicht</p>
+        <strong>Zwischen Sitzung und API wechseln</strong>
+      </div>
+      <div className="android-tabs" role="tablist" aria-label="Authentifizierte Bereiche">
+        <button
+          type="button"
+          role="tab"
+          id="authenticated-tab-tokens"
+          className={props.activeTab === 'tokens' ? 'android-tab android-tab-active' : 'android-tab'}
+          aria-selected={props.activeTab === 'tokens'}
+          aria-controls="authenticated-panel-tokens"
+          onClick={() => props.onChange('tokens')}
+        >
+          <span className="android-tab-track" aria-hidden="true">
+            <span className="android-tab-indicator" />
+          </span>
+          <span className="android-tab-icon" aria-hidden="true">◒</span>
+          <span className="android-tab-label">Token</span>
+          <strong>Sitzung</strong>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="authenticated-tab-mock-api"
+          className={props.activeTab === 'mock-api' ? 'android-tab android-tab-active' : 'android-tab'}
+          aria-selected={props.activeTab === 'mock-api'}
+          aria-controls="authenticated-panel-mock-api"
+          onClick={() => props.onChange('mock-api')}
+        >
+          <span className="android-tab-track" aria-hidden="true">
+            <span className="android-tab-indicator" />
+          </span>
+          <span className="android-tab-icon" aria-hidden="true">◎</span>
+          <span className="android-tab-label">Mock API</span>
+          <strong>Demo API</strong>
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function MockApiPanel(props: {
+  mockApi: MockApiState
+  busy: boolean
+  onReload: () => void
+  onSubmit: (event: FormEvent) => void
+  onDraftChange: (draft: string) => void
+}) {
+  return (
+    <section className="card mock-api-shell" aria-label="Protected mock API panel" id="authenticated-panel-mock-api">
+      <div className="section-heading simple-heading">
+        <div>
+          <p className="section-label">Mock API</p>
+          <h2>Geschützte Daten</h2>
+        </div>
+      </div>
+      <div className="mock-api-console-chrome" aria-hidden="true">
+        <span className="mock-api-console-dot" />
+        <span className="mock-api-console-dot" />
+        <span className="mock-api-console-dot" />
+        <span className="mock-api-console-url">POST /api/mock/messages</span>
+      </div>
+      <section className="challenge-card mock-api-card">
+        <div className="mock-api-hero">
+          <div>
+            <strong>OIDC-geschützte Demo-Endpunkte</strong>
+            <p className="muted-copy">Die App ruft `mock-api` mit dem aktuellen Access-Token auf. Das Backend prüft JWKS-Signaturen und die Audience `mock-api`, bevor Daten ausgeliefert werden.</p>
+          </div>
+          <div className="mock-api-badge-stack" aria-hidden="true">
+            <span>Bearer-Token</span>
+            <span>JWKS geprüft</span>
+          </div>
+        </div>
+        <div className="device-summary mock-api-summary">
+          <div>
+            <span className="field-label">Audience</span>
+            <strong>{props.mockApi.profile?.audience.join(', ') ?? 'Not loaded'}</strong>
+          </div>
+          <div>
+            <span className="field-label">Benutzername</span>
+            <strong>{props.mockApi.profile?.username ?? 'Not loaded'}</strong>
+          </div>
+          <div>
+            <span className="field-label">Client</span>
+            <strong>{props.mockApi.profile?.clientId ?? 'Not loaded'}</strong>
+          </div>
+          <div>
+            <span className="field-label">Berechtigungen</span>
+            <strong>{props.mockApi.profile?.scope.join(', ') ?? 'Not loaded'}</strong>
+          </div>
+        </div>
+        <p className="mock-api-status">{props.mockApi.status}</p>
+        <div className="actions mock-api-actions">
+          <button type="button" onClick={props.onReload} disabled={props.busy}>Mock API neu laden</button>
+        </div>
+        <form className="grid form-stack mock-api-composer" onSubmit={props.onSubmit}>
+          <label>
+            <span className="field-label">Neue geschützte Notiz</span>
+            <textarea value={props.mockApi.draft} onChange={(event) => props.onDraftChange(event.target.value)} disabled={props.busy} rows={4} />
+          </label>
+          <button type="submit" disabled={props.busy}>Notiz an Mock API senden</button>
+        </form>
+        <div className="message-list" aria-label="Protected mock API messages">
+          {props.mockApi.messages.map((message) => (
+            <article key={message.id} className="message-item">
+              <div className="message-meta">
+                <span>{message.category}</span>
+                <span>{formatDateTime(message.createdAt)}</span>
+              </div>
+              <strong>{message.authorUserId}</strong>
+              <p>{message.text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
     </section>
   )
 }
@@ -890,18 +999,18 @@ function SecureElementPrompt(props: {
     <div className="prompt-backdrop">
       <section className="prompt-sheet" aria-label="Secure element prompt">
         <div className="prompt-icon" aria-hidden="true">◎</div>
-        <p className="section-label">Android Security</p>
+        <p className="section-label">Android-Sicherheit</p>
         <h3>{props.prompt.title}</h3>
         <p className="muted-copy">{props.prompt.body}</p>
         <p className="prompt-caption">{props.prompt.caption}</p>
         <div className="prompt-helper">
           <span className="prompt-helper-dot" aria-hidden="true" />
-          <p>Use fingerprint, face unlock, or device PIN from Android system security.</p>
+          <p>Nutze Fingerabdruck, Face Unlock oder die Geräte-PIN aus der Android-Systemsicherheit.</p>
         </div>
 
         <div className="actions stacked-actions">
           <button type="button" onClick={props.onConfirm} disabled={props.busy}>{props.prompt.confirmLabel}</button>
-          <button type="button" className="button-secondary" onClick={props.onCancel} disabled={props.busy}>Cancel</button>
+          <button type="button" className="button-secondary" onClick={props.onCancel} disabled={props.busy}>Abbrechen</button>
         </div>
       </section>
     </div>
@@ -912,48 +1021,48 @@ function TokenHero({ tokens, tokenLifetimeLabel }: { tokens: FinishLoginResponse
   return (
     <section className="token-hero" aria-label="Authenticated token summary">
       <article>
-        <span>Token type</span>
+        <span>Token-Typ</span>
         <strong>{tokens.tokenType}</strong>
       </article>
       <article>
         <span>Scope</span>
-        <strong>{tokens.scope || 'Unavailable'}</strong>
+        <strong>{tokens.scope || 'Nicht verfügbar'}</strong>
       </article>
       <article>
-        <span>Expires in</span>
-        <strong>{tokenLifetimeLabel ?? `${tokens.expiresIn} seconds`}</strong>
+        <span>Läuft ab in</span>
+        <strong>{tokenLifetimeLabel ?? `${tokens.expiresIn} Sekunden`}</strong>
       </article>
     </section>
   )
 }
 
 function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord | null; idClaims: ClaimRecord | null }) {
-  const username = readString(accessClaims, 'preferred_username') ?? readString(idClaims, 'preferred_username') ?? 'Unavailable'
+  const username = readString(accessClaims, 'preferred_username') ?? readString(idClaims, 'preferred_username') ?? 'Nicht verfügbar'
   const userId = readString(accessClaims, 'userId') ?? readString(idClaims, 'userId') ?? username
-  const subject = readString(accessClaims, 'sub') ?? readString(idClaims, 'sub') ?? 'Unavailable'
+  const subject = readString(accessClaims, 'sub') ?? readString(idClaims, 'sub') ?? 'Nicht verfügbar'
   const expiresAt = formatExpiry(readNumber(accessClaims, 'exp') ?? readNumber(idClaims, 'exp'))
   const roles = extractRoles(accessClaims)
 
   return (
     <section className="claim-summary" aria-label="Token claim summary">
       <article>
-        <span>User ID</span>
+        <span>Benutzer-ID</span>
         <strong>{userId}</strong>
       </article>
       <article>
-        <span>Username</span>
+        <span>Benutzername</span>
         <strong>{username}</strong>
       </article>
       <article>
-        <span>Session ID</span>
+        <span>Sitzungs-ID</span>
         <strong>{subject}</strong>
       </article>
       <article>
-        <span>Roles</span>
-        <strong>{roles.length ? roles.join(', ') : 'No roles'}</strong>
+        <span>Rollen</span>
+        <strong>{roles.length ? roles.join(', ') : 'Keine Rollen'}</strong>
       </article>
       <article>
-        <span>Ends</span>
+        <span>Endet</span>
         <strong>{expiresAt}</strong>
       </article>
     </section>
@@ -969,24 +1078,24 @@ function TokenComparisonPanel(props: {
 }) {
   return (
     <article className="token-panel token-panel-comparison">
-      <h3>Access and ID tokens</h3>
-      <p className="muted-copy">Live JWT values for the active Android session. Open decoded details for the full claim view.</p>
+      <h3>Access- und ID-Token</h3>
+      <p className="muted-copy">Live-JWT-Werte der aktiven Android-Sitzung. Öffne die dekodierten Details für die vollständige Claim-Ansicht.</p>
       <div className="raw-token-grid">
         <details className="token-raw" open>
-          <summary>Access token JWT</summary>
+          <summary>Access-Token JWT</summary>
           <textarea value={props.accessToken} readOnly rows={8} />
         </details>
         <details className="token-raw" open>
-          <summary>ID token JWT</summary>
+          <summary>ID-Token JWT</summary>
           <textarea value={props.idToken} readOnly rows={8} />
         </details>
       </div>
       <details className="token-details">
-        <summary>Decoded token details</summary>
+        <summary>Dekodierte Token-Details</summary>
         {props.accessClaims && props.idClaims ? (
           <TokenComparisonTable accessClaims={props.accessClaims} idClaims={props.idClaims} claimKeys={props.claimKeys} />
         ) : (
-          <p className="muted-copy">Decoded claims are unavailable.</p>
+          <p className="muted-copy">Dekodierte Claims sind nicht verfügbar.</p>
         )}
       </details>
     </article>
@@ -997,7 +1106,7 @@ function TokenPanel({ title, token, rawLabel, claims }: { title: string; token: 
   return (
     <article className="token-panel">
       <h3>{title}</h3>
-      {claims ? <ClaimsTable title={title} claims={claims} /> : <p className="muted-copy">No decoded claims available for this token.</p>}
+      {claims ? <ClaimsTable title={title} claims={claims} /> : <p className="muted-copy">Keine dekodierten Claims für dieses Token verfügbar.</p>}
       <details className="token-raw">
         <summary>{rawLabel}</summary>
         <textarea value={token} readOnly rows={8} />
@@ -1007,7 +1116,7 @@ function TokenPanel({ title, token, rawLabel, claims }: { title: string; token: 
 }
 
 function JsonPanel({ title, payload, rawLabel }: { title: string; payload: ClaimRecord | null; rawLabel: string }) {
-  const summaryItems = title === 'Userinfo endpoint'
+  const summaryItems = title === 'Userinfo-Endpunkt'
     ? buildUserInfoSummary(payload)
     : buildIntrospectionSummary(payload)
 
@@ -1026,7 +1135,7 @@ function JsonPanel({ title, payload, rawLabel }: { title: string; payload: Claim
           </section>
           <ClaimsTable title={title} claims={payload} />
         </>
-      ) : <p className="muted-copy">No endpoint response available.</p>}
+      ) : <p className="muted-copy">Keine Endpunkt-Antwort verfügbar.</p>}
       <details className="token-raw">
         <summary>{rawLabel}</summary>
         <textarea value={payload ? JSON.stringify(payload, null, 2) : ''} readOnly rows={8} />
@@ -1044,12 +1153,12 @@ function TokenComparisonTable({ accessClaims, idClaims, claimKeys }: { accessCla
 
   return (
     <div className="claims-table-wrap">
-      <table className="claims-table claims-table-comparison" aria-label="Access and ID token claims">
+      <table className="claims-table claims-table-comparison" aria-label="Access- und ID-Token Claims">
         <thead>
           <tr>
             <th scope="col">Claim</th>
-            <th scope="col">Access token</th>
-            <th scope="col">ID token</th>
+            <th scope="col">Access-Token</th>
+            <th scope="col">ID-Token</th>
           </tr>
         </thead>
         <tbody>
@@ -1222,7 +1331,7 @@ function compareClaimKeys(left: string, right: string) {
 
 function formatExpiry(exp: number | null) {
   if (!exp) {
-    return 'Unavailable'
+    return 'Nicht verfügbar'
   }
 
   return new Date(exp * 1000).toLocaleString()
@@ -1281,32 +1390,32 @@ function extractRoles(claims: ClaimRecord | null) {
 }
 
 function buildUserInfoSummary(payload: ClaimRecord | null) {
-  const username = readString(payload, 'preferred_username') ?? 'Unavailable'
-  const subject = readString(payload, 'sub') ?? 'Unavailable'
+  const username = readString(payload, 'preferred_username') ?? 'Nicht verfügbar'
+  const subject = readString(payload, 'sub') ?? 'Nicht verfügbar'
   const fallbackName = [readString(payload, 'given_name'), readString(payload, 'family_name')].filter(Boolean).join(' ')
-  const fullName = readString(payload, 'name') ?? (fallbackName || 'Unavailable')
+  const fullName = readString(payload, 'name') ?? (fallbackName || 'Nicht verfügbar')
   const emailVerified = readBoolean(payload, 'email_verified')
 
   return [
-    { label: 'Username', value: username },
-    { label: 'Subject', value: subject },
+    { label: 'Benutzername', value: username },
+    { label: 'Subjekt', value: subject },
     { label: 'Name', value: fullName },
-    { label: 'Email verified', value: emailVerified === null ? 'Unavailable' : emailVerified ? 'Yes' : 'No' }
+    { label: 'E-Mail bestätigt', value: emailVerified === null ? 'Nicht verfügbar' : emailVerified ? 'Ja' : 'Nein' }
   ]
 }
 
 function buildIntrospectionSummary(payload: ClaimRecord | null) {
   const active = readBoolean(payload, 'active')
-  const username = readString(payload, 'username') ?? readString(payload, 'preferred_username') ?? 'Unavailable'
-  const subject = readString(payload, 'sub') ?? 'Unavailable'
-  const scope = readString(payload, 'scope') ?? 'Unavailable'
+  const username = readString(payload, 'username') ?? readString(payload, 'preferred_username') ?? 'Nicht verfügbar'
+  const subject = readString(payload, 'sub') ?? 'Nicht verfügbar'
+  const scope = readString(payload, 'scope') ?? 'Nicht verfügbar'
   const expiresAt = formatExpiry(readNumber(payload, 'exp'))
 
   return [
-    { label: 'Active', value: active === null ? 'Unavailable' : active ? 'Yes' : 'No' },
-    { label: 'Username', value: username },
-    { label: 'Subject', value: subject },
-    { label: 'Expires', value: expiresAt },
+    { label: 'Aktiv', value: active === null ? 'Nicht verfügbar' : active ? 'Ja' : 'Nein' },
+    { label: 'Benutzername', value: username },
+    { label: 'Subjekt', value: subject },
+    { label: 'Läuft ab', value: expiresAt },
     { label: 'Scope', value: scope }
   ]
 }
