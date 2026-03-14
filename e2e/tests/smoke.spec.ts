@@ -288,3 +288,56 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(artifactViewer).toContainText('Subject')
   await expect(artifactViewer).toContainText('Audience')
 })
+
+test('missing saved device binding is cleared instead of failing with a server error', async ({ page, request }) => {
+  const userId = `e2e-missing-device-${Date.now()}`
+  const deviceName = 'Missing Device Test'
+  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-codes`, {
+    data: {
+      userId,
+      displayName: 'Missing Device User',
+      validForDays: 30
+    }
+  })
+
+  expect(registrationResponse.ok()).toBeTruthy()
+  const registration = await registrationResponse.json()
+
+  await page.goto('https://app.localhost:8443')
+  await page.getByLabel('User ID').fill(userId)
+  await page.getByLabel('Device name').fill(deviceName)
+  await page.getByLabel('Activation code').fill(registration.code)
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await expect(page.getByLabel('Secure element prompt')).toBeVisible()
+  await page.getByRole('button', { name: 'Use screen lock' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Create your new password' })).toBeVisible()
+  await page.getByLabel('New password').fill('ChangeMe123!')
+  await page.getByRole('button', { name: 'Save password' }).click()
+
+  await expect(page.getByLabel('Secure element prompt')).toBeVisible()
+  await page.getByRole('button', { name: 'Use screen lock' }).click()
+  await expect(page.getByRole('heading', { name: deviceName })).toBeVisible()
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Sign in with saved device' })).toBeVisible()
+
+  const devicesResponse = await request.get(`${AUTH_API_URL}/api/admin/devices`)
+  expect(devicesResponse.ok()).toBeTruthy()
+  const devices = await devicesResponse.json() as Array<{ id: string; userId: string; deviceName: string }>
+  const device = devices.find((item) => item.userId === userId && item.deviceName === deviceName)
+
+  expect(device).toBeTruthy()
+
+  const deleteResponse = await request.delete(`${AUTH_API_URL}/api/admin/devices/${device?.id}`)
+  expect(deleteResponse.status()).toBe(204)
+
+  await page.getByRole('button', { name: 'Continue with device' }).click()
+  await expect(page.getByText('Saved device binding was invalid and has been cleared')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Set up this phone' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Set up device sign-in' })).toBeVisible()
+
+  const storedBinding = await page.evaluate(() => window.localStorage.getItem('auth-sandbox-2.device-binding'))
+  expect(storedBinding).toBeNull()
+})

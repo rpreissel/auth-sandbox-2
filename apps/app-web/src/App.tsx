@@ -8,7 +8,7 @@ import type {
   StartLoginResponse
 } from '@auth-sandbox-2/shared-types'
 
-import { api } from './api'
+import { ApiError, api } from './api'
 import { createSigningKeys, exportPrivateKey, importPrivateKey, signEncryptedData } from './crypto'
 
 type ClaimRecord = Record<string, unknown>
@@ -184,6 +184,27 @@ export function App() {
       cancelled = true
     }
   }, [])
+
+  function resetDeviceFlow(statusMessage: string, nextForm?: Partial<ReturnType<typeof createInitialForm>>) {
+    clearDeviceBinding()
+    setDevice(null)
+    setChallenge(null)
+    setTokens(null)
+    setSecurePrompt(null)
+    setTraceState(null)
+    setMockApi({
+      profile: null,
+      messages: [],
+      draft: 'A fresh protected note from app-web.',
+      status: 'Waiting for an authenticated session'
+    })
+    setForm({
+      ...createInitialForm(),
+      ...nextForm
+    })
+    setStatus(statusMessage)
+    setStep('register')
+  }
 
   useEffect(() => {
     if (!tokens) {
@@ -392,7 +413,22 @@ export function App() {
 
     setStatus('Requesting encrypted challenge...')
     const flow = traceState ?? await createFlowTrace('device_login_started', [{ name: 'device_binding', value: { publicKeyHash: device.publicKeyHash, userId: device.userId } }])
-    const result = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
+    let result: StartLoginResponse
+
+    try {
+      result = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        resetDeviceFlow('Saved device binding was invalid and has been cleared', {
+          userId: device.userId,
+          deviceName: device.deviceName
+        })
+        return
+      }
+
+      throw error
+    }
+
     setChallenge(result)
     setStep('login')
     setSecurePrompt({
@@ -555,20 +591,7 @@ export function App() {
   }
 
   function handleRemoveBinding() {
-    clearDeviceBinding()
-    setDevice(null)
-    setChallenge(null)
-    setTokens(null)
-    setSecurePrompt(null)
-    setMockApi({
-      profile: null,
-      messages: [],
-      draft: 'A fresh protected note from app-web.',
-      status: 'Waiting for an authenticated session'
-    })
-    setForm(createInitialForm())
-    setStatus('Device binding removed from this phone')
-    setStep('register')
+    resetDeviceFlow('Device binding removed from this phone')
   }
 
   return (

@@ -25,6 +25,12 @@ import type { ChallengeRow, DeviceRow, RegistrationCodeRow } from './types.js'
 const adminClient = new KeycloakAdminClient()
 const authClient = new KeycloakAuthClient()
 
+function notFound(message: string) {
+  const error = new Error(message) as Error & { statusCode: number }
+  error.statusCode = 404
+  return error
+}
+
 function mapRegistrationCode(row: RegistrationCodeRow): RegistrationCodeRecord {
   return {
     id: row.id,
@@ -213,7 +219,7 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
       const result = await pool.query<DeviceRow>('select * from devices where public_key_hash = $1 and active = true', [input.publicKeyHash])
       const device = result.rows[0]
       if (!device) {
-        throw new Error('Unknown device')
+        throw notFound('Unknown device')
       }
 
       const nonce = randomUUID()

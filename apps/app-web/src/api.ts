@@ -29,6 +29,31 @@ export type TraceRequestOptions = {
   parentSpanId?: string | null
 }
 
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+async function toApiError(response: Response) {
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    const body = await response.json() as { message?: unknown }
+    const message = typeof body.message === 'string' && body.message.length > 0
+      ? body.message
+      : `Request failed with status ${response.status}`
+    return new ApiError(response.status, message)
+  }
+
+  const text = await response.text()
+  return new ApiError(response.status, text || `Request failed with status ${response.status}`)
+}
+
 function createTraceHeaders(options?: TraceRequestOptions) {
   const traceId = options?.traceId ?? crypto.randomUUID()
   return {
@@ -52,7 +77,7 @@ async function request<T>(path: string, init?: RequestInit, options?: TraceReque
   })
 
   if (!response.ok) {
-    throw new Error(await response.text())
+    throw await toApiError(response)
   }
 
   if (response.status === 204) {
@@ -74,7 +99,7 @@ async function traceRequest<T>(path: string, init?: RequestInit, options?: Trace
   })
 
   if (!response.ok) {
-    throw new Error(await response.text())
+    throw await toApiError(response)
   }
 
   if (response.status === 204) {
@@ -97,7 +122,7 @@ async function mockRequest<T>(path: string, accessToken: string, init?: RequestI
   })
 
   if (!response.ok) {
-    throw new Error(await response.text())
+    throw await toApiError(response)
   }
 
   if (response.status === 204) {
