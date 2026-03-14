@@ -429,9 +429,9 @@ button:disabled {
   gap: 0.45rem;
   padding: 0.2rem 0.34rem 0.34rem;
   border-radius: 20px;
-  background: rgba(248, 251, 255, 0.75);
-  border: 1px solid rgba(16, 32, 51, 0.07);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  background: linear-gradient(180deg, rgba(233, 241, 250, 0.96), rgba(221, 232, 245, 0.92));
+  border: 1px solid rgba(16, 32, 51, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .android-tab {
@@ -440,36 +440,57 @@ button:disabled {
   grid-template-columns: auto 1fr;
   grid-template-areas:
     "icon label"
-    "track track"
-    "icon title";
+    "icon title"
+    "track track";
   column-gap: 0.7rem;
   row-gap: 0.18rem;
   width: 100%;
   padding: 0.78rem 0.95rem 0.82rem;
   border-radius: 18px;
-  background: transparent;
-  color: #4f6075;
-  box-shadow: none;
-  border: 1px solid transparent;
+  background: linear-gradient(180deg, rgba(243, 248, 253, 0.98), rgba(233, 240, 248, 0.95));
+  color: #22364d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(134, 158, 186, 0.28);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .android-tab[aria-selected="false"] {
-  background: rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(239, 245, 251, 0.94), rgba(229, 237, 246, 0.9));
+  border-color: rgba(134, 158, 186, 0.24);
 }
 
 .android-tab-active {
-  background: rgba(255, 255, 255, 0.7);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 249, 255, 0.97));
   color: #0f2137;
-  box-shadow: 0 8px 18px rgba(11, 87, 208, 0.1);
-  border-color: rgba(11, 87, 208, 0.08);
+  box-shadow:
+    0 10px 20px rgba(11, 87, 208, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(11, 87, 208, 0.18);
+}
+
+.android-tab:hover {
+  border-color: rgba(11, 87, 208, 0.18);
+}
+
+.android-tab:focus-visible {
+  outline: none;
+  border-color: rgba(11, 87, 208, 0.38);
+  box-shadow:
+    0 0 0 3px rgba(11, 87, 208, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .android-tab-track {
   grid-area: track;
   width: 100%;
-  height: 0.34rem;
+  height: 0.24rem;
+  margin-top: 0.24rem;
   border-radius: 999px;
-  background: rgba(11, 87, 208, 0.08);
+  background: rgba(106, 132, 163, 0.16);
   overflow: hidden;
 }
 
@@ -495,13 +516,13 @@ button:disabled {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: rgba(11, 87, 208, 0.08);
+  background: rgba(11, 87, 208, 0.12);
   color: #0b57d0;
   font-size: 0.95rem;
 }
 
 .android-tab-active .android-tab-icon {
-  background: rgba(11, 87, 208, 0.14);
+  background: rgba(11, 87, 208, 0.18);
 }
 
 .android-tab-label,
@@ -511,14 +532,21 @@ button:disabled {
 
 .android-tab-label {
   grid-area: label;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: #5a6d82;
+  position: relative;
+  z-index: 1;
 }
 
 .android-tab strong {
   grid-area: title;
-  font-size: 1rem;
+  font-size: 0.98rem;
+  line-height: 1.2;
+  color: #102033;
+  position: relative;
+  z-index: 1;
 }
 
 .mock-api-summary {
