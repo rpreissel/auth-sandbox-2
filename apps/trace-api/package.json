@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --outfile=dist/server.js",
+    "build": "pnpm --filter @auth-sandbox-2/backend-core build && esbuild src/server.ts --bundle --platform=node --format=esm --packages=external --external:@auth-sandbox-2/backend-core --external:@auth-sandbox-2/shared-types --outfile=dist/server.js",
     "start": "node dist/server.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --eval \"console.log('trace-api: no tests')\"",

@@ -8,7 +8,7 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "pnpm exec esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js",
+    "build": "pnpm exec esbuild src/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/index.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --eval \"console.log('backend-core: no tests')\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",

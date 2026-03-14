@@ -7,8 +7,5 @@
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": [
-    "src/**/*.ts",
-    "../../packages/shared-types/src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts", "../../packages/shared-types/src/**/*.ts"]
 }
