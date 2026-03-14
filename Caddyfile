@@ -42,6 +42,9 @@ https://app.localhost:8443 {
   handle_path /trace-api/* {
     reverse_proxy trace-api:3001
   }
+  handle_path /mock-api/* {
+    reverse_proxy mock-api:3002
+  }
   root * /srv/app-web
   file_server
 }
@@ -111,6 +114,25 @@ https://trace.localhost:8443 {
   log_append upstream_duration_ms {rp.upstream.duration_ms}
   log_append upstream_latency_ms {rp.upstream.latency_ms}
   reverse_proxy trace-api:3001
+}
+
+http://mock.localhost:8088 {
+  redir https://mock.localhost:8443{uri}
+}
+
+https://mock.localhost:8443 {
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host mock.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
+  log_append upstream_host {rp.upstream.host}
+  log_append upstream_duration_ms {rp.upstream.duration_ms}
+  log_append upstream_latency_ms {rp.upstream.latency_ms}
+  reverse_proxy mock-api:3002
 }
 
 http://keycloak.localhost:8088 {

@@ -25,7 +25,8 @@ while true; do
     -var="keycloak_admin_password=${KEYCLOAK_ADMIN_PASSWORD}" \
     -var="realm_name=${KEYCLOAK_REALM}" \
     -var="app_client_secret=${KEYCLOAK_CLIENT_SECRET}" \
-    -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}"; then
+    -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}" \
+    -var="mock_api_audience=${MOCK_API_AUDIENCE:-mock-api}"; then
     echo "keycloak config applied successfully"
     exit 0
   fi

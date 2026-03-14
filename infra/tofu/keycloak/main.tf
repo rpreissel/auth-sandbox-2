@@ -105,6 +105,24 @@ resource "keycloak_openid_client_scope" "profile_scope" {
   include_in_token_scope = true
 }
 
+resource "keycloak_openid_client_scope" "mock_api_scope" {
+  realm_id               = keycloak_realm.realm.id
+  name                   = "mock-api-access"
+  description            = "Audience scope for mock-api"
+  include_in_token_scope = true
+}
+
+resource "keycloak_openid_audience_protocol_mapper" "mock_api_audience" {
+  realm_id        = keycloak_realm.realm.id
+  client_scope_id = keycloak_openid_client_scope.mock_api_scope.id
+  name            = "mock-api-audience"
+
+  add_to_access_token = true
+  add_to_id_token     = false
+
+  included_custom_audience = var.mock_api_audience
+}
+
 resource "keycloak_openid_client" "app_web" {
   realm_id                     = keycloak_realm.realm.id
   client_id                    = "app-web"
@@ -128,7 +146,8 @@ resource "keycloak_openid_client_default_scopes" "app_default_scopes" {
   default_scopes = [
     "profile",
     "email",
-    keycloak_openid_client_scope.profile_scope.name
+    keycloak_openid_client_scope.profile_scope.name,
+    keycloak_openid_client_scope.mock_api_scope.name
   ]
 }
 

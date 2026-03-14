@@ -23,6 +23,7 @@ Explicitly out of scope:
 
 - `auth-api` - Node.js + TypeScript + Fastify
 - `app-web` - React + TypeScript device flow UI
+- `mock-api` - Fastify demo REST API protected by Keycloak JWKS and audience validation
 - `admin-web` - React + TypeScript admin UI
 - `home-web` - React + TypeScript landing page
 - `keycloak` - IAM and credential authority
@@ -36,6 +37,7 @@ Explicitly out of scope:
 - `https://app.localhost:8443` - device app
 - `https://admin.localhost:8443` - admin app
 - `https://auth.localhost:8443/api/health` - auth API health
+- `https://mock.localhost:8443/health` - mock API health
 - `https://keycloak.localhost:8443` - Keycloak
 - `https://db.localhost:8443` - Adminer Postgres viewer
 
@@ -49,8 +51,9 @@ Explicitly out of scope:
 6. Device app requests an encrypted challenge from `auth-api`.
 7. Device app signs the encrypted payload and sends it back.
 8. Keycloak validates the custom device credential and issues OIDC tokens.
-9. App shows access token, ID token, refresh token, and decoded claims.
-10. App can refresh tokens and log out.
+9. App uses the access token to call `mock-api`, which verifies the token with Keycloak JWKS and the expected audience.
+10. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
+11. App can refresh tokens and log out.
 
 ## Architecture notes
 
@@ -65,6 +68,7 @@ Explicitly out of scope:
 
 - `apps/auth-api` - backend API, DB migrations, Keycloak integration
 - `apps/app-web` - device registration, login, claims, refresh, logout
+- `apps/mock-api` - OIDC/JWKS protected mock REST endpoints for app-web
 - `apps/admin-web` - registration code and device admin UI
 - `apps/home-web` - landing page with links and flow diagram
 - `packages/shared-types` - shared request and response types
@@ -125,6 +129,7 @@ Use the `auth_api` and `keycloak` schemas to inspect app data separately inside 
 ```bash
 pnpm --filter auth-api test
 pnpm --filter auth-api build
+pnpm --filter mock-api build
 pnpm --filter app-web build
 pnpm --filter admin-web build
 pnpm --filter home-web build

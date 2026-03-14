@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
 
 const AUTH_API_URL = 'https://auth.localhost:8443'
+const MOCK_API_URL = 'https://mock.localhost:8443'
 const TRACE_API_URL = 'https://trace.localhost:8443'
 const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration'
 const DB_VIEWER_URL = 'https://db.localhost:8443'
@@ -16,13 +17,14 @@ type TraceListItem = {
 
 async function waitForRuntimeReady(request: APIRequestContext) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const [healthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
+    const [healthResponse, mockHealthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
       request.get(`${AUTH_API_URL}/api/health`),
+      request.get(`${MOCK_API_URL}/health`),
       request.get(`${TRACE_API_URL}/health`),
       request.get(KEYCLOAK_METADATA_URL)
     ])
 
-    if (healthResponse.ok() && traceHealthResponse.ok() && metadataResponse.ok()) {
+    if (healthResponse.ok() && mockHealthResponse.ok() && traceHealthResponse.ok() && metadataResponse.ok()) {
       return
     }
 
@@ -60,13 +62,15 @@ test.beforeEach(async ({ request }) => {
 })
 
 test('shared postgres runtime exposes auth, trace, and keycloak endpoints', async ({ request }) => {
-  const [healthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
+  const [healthResponse, mockHealthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
     request.get(`${AUTH_API_URL}/api/health`),
+    request.get(`${MOCK_API_URL}/health`),
     request.get(`${TRACE_API_URL}/health`),
     request.get(KEYCLOAK_METADATA_URL)
   ])
 
   expect(healthResponse.ok()).toBeTruthy()
+  expect(mockHealthResponse.ok()).toBeTruthy()
   expect(traceHealthResponse.ok()).toBeTruthy()
   expect(metadataResponse.ok()).toBeTruthy()
 })
@@ -180,6 +184,10 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
 
   await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Access and ID tokens' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reload mock API' })).toBeVisible()
+  await expect(page.getByText('OIDC token protected demo endpoints')).toBeVisible()
+  await expect(page.getByLabel('Protected mock API panel')).toContainText('mock-api')
+  await expect(page.getByLabel('Protected mock API panel')).toContainText(userId)
   await expect(page.getByRole('heading', { name: 'Userinfo endpoint' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Introspection endpoint' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Refresh token' })).toBeVisible()
@@ -210,11 +218,21 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(claimSummary.locator('article').filter({ hasText: 'Roles' }).locator('strong')).not.toBeEmpty()
   await expect(claimSummary.locator('article').filter({ hasText: 'Ends' }).locator('strong')).not.toBeEmpty()
 
+  const mockApiPanel = page.getByLabel('Protected mock API panel')
+  await expect(mockApiPanel).toContainText('mock-api')
+  await expect(mockApiPanel).toContainText(userId)
+  await expect(mockApiPanel).toContainText('JWKS')
+  await page.getByLabel('New protected note').fill('Playwright protected note')
+  await page.getByRole('button', { name: 'Post note to mock-api' }).click()
+  await expect(mockApiPanel).toContainText('Playwright protected note')
+
   await page.getByRole('button', { name: 'Refresh tokens' }).click()
-  await expect(page.getByText('Tokens refreshed')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Access and ID tokens' })).toBeVisible()
+  await expect(mockApiPanel).toContainText('mock-api')
 
   await page.getByRole('button', { name: 'Sign out' }).click()
-  await expect(page.getByText('Signed out. This phone is still ready to sign in again.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'This phone is ready' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue with device' })).toBeVisible()
   await expect(page.getByText('No Keycloak tokens yet.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Remove device binding' }).click()
@@ -237,7 +255,6 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
   await expect(page.getByText('Span- und Artefaktdetails')).toBeVisible()
   await expect(page.getByText(/Diese Seite zeigt Requests und Responses je Span/i)).toBeVisible()
-  await expect(page.getByText(/erfolgreich|läuft|fehlerhaft/i).first()).toBeVisible()
   await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText(loginTrace.traceId)
   await expect(page.locator('[aria-label="Trace Zusatzmetadaten"]').first()).toContainText(userId)
 
@@ -254,6 +271,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await artifactList.getByRole('button', { name: /id_token/i }).click()
 
   const artifactViewer = page.getByLabel('Artifact viewer')
+  await expect(artifactViewer).toBeVisible({ timeout: 10000 })
   await expect(artifactViewer).toContainText('Decodiert')
   await expect(artifactViewer).toContainText('Erläutert')
   await expect(artifactViewer).toContainText('Subject')

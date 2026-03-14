@@ -58,6 +58,7 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-change-me}
       KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-auth-api-admin}
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
+      MOCK_API_AUDIENCE: ${MOCK_API_AUDIENCE:-mock-api}
       TOFU_STATE_DIR: ${TOFU_STATE_DIR:-/state}
     depends_on:
       keycloak:
@@ -125,6 +126,28 @@ services:
       keycloak-config:
         condition: service_started
 
+  mock-api:
+    build:
+      context: .
+      dockerfile: apps/mock-api/Dockerfile
+    environment:
+      MOCK_API_HOST: 0.0.0.0
+      MOCK_API_PORT: 3002
+      MOCK_API_PUBLIC_URL: https://mock.localhost:8443
+      MOCK_API_AUDIENCE: mock-api
+      DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
+      DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
+      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443
+      CI: 'true'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak-config:
+        condition: service_started
+
   adminer:
     image: docker.io/library/adminer:4.8.1-standalone
     environment:
@@ -150,6 +173,7 @@ services:
       - ./runtime/caddy-logs:/var/log/caddy
     depends_on:
       - auth-api
+      - mock-api
       - trace-api
       - adminer
       - keycloak

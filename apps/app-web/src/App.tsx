@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
-import type { FinishLoginResponse, StartLoginResponse } from '@auth-sandbox-2/shared-types'
+import type {
+  FinishLoginResponse,
+  MockApiMessageRecord,
+  MockApiProfileResponse,
+  StartLoginResponse
+} from '@auth-sandbox-2/shared-types'
 
 import { api } from './api'
 import { createSigningKeys, exportPrivateKey, importPrivateKey, signEncryptedData } from './crypto'
@@ -30,6 +35,13 @@ type StoredDeviceBinding = {
 type TraceState = {
   traceId: string
   sessionId: string
+}
+
+type MockApiState = {
+  profile: MockApiProfileResponse | null
+  messages: MockApiMessageRecord[]
+  draft: string
+  status: string
 }
 
 type ClaimRow = {
@@ -115,6 +127,12 @@ export function App() {
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
   const [traceState, setTraceState] = useState<TraceState | null>(null)
+  const [mockApi, setMockApi] = useState<MockApiState>({
+    profile: null,
+    messages: [],
+    draft: 'A fresh protected note from app-web.',
+    status: 'Waiting for an authenticated session'
+  })
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -166,6 +184,22 @@ export function App() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!tokens) {
+      setMockApi((current) => ({
+        ...current,
+        profile: null,
+        messages: [],
+        status: device ? 'Sign in to load protected mock data' : 'Waiting for an authenticated session'
+      }))
+      return
+    }
+
+    void runAction(async () => {
+      await syncMockApi('Protected mock API synchronized')
+    })
+  }, [tokens?.accessToken])
 
   async function runAction(action: () => Promise<void>) {
     setBusy(true)
@@ -247,6 +281,108 @@ export function App() {
         sessionId: flow.sessionId
       }
     )
+  }
+
+  async function syncMockApi(nextStatus: string) {
+    if (!tokens) {
+      return
+    }
+
+    setMockApi((current) => ({
+      ...current,
+      status: 'Loading protected mock data...'
+    }))
+
+    const flow = await createFlowTrace('mock_api_sync_started', [{
+      name: 'mock_api_request',
+      value: {
+        audience: 'mock-api',
+        operation: 'profile_and_messages'
+      }
+    }])
+
+    try {
+      setStatus('Loading protected mock data...')
+      const [profile, messages] = await Promise.all([
+        api.getMockProfile(tokens.accessToken, flow),
+        api.listMockMessages(tokens.accessToken, flow)
+      ])
+      await sendFlowEvent(flow, 'mock_api_sync_finished', [{
+        name: 'mock_api_result',
+        value: {
+          audience: profile.audience,
+          messageCount: messages.items.length,
+          username: profile.username
+        }
+      }])
+      setMockApi((current) => ({
+        ...current,
+        profile,
+        messages: messages.items,
+        status: `Loaded ${messages.items.length} protected mock records`
+      }))
+      setStatus(nextStatus)
+    } catch (error) {
+      setMockApi((current) => ({
+        ...current,
+        status: readErrorMessage(error)
+      }))
+      throw error
+    } finally {
+      setTraceState(null)
+    }
+  }
+
+  async function handleCreateMockMessage(event: FormEvent) {
+    event.preventDefault()
+    if (!tokens) {
+      return
+    }
+
+    await runAction(async () => {
+      const text = mockApi.draft.trim()
+      if (!text) {
+        setMockApi((current) => ({
+          ...current,
+          status: 'Enter a note before sending it to mock-api'
+        }))
+        setStatus('Enter a note before sending it to mock-api')
+        return
+      }
+
+      const flow = await createFlowTrace('mock_api_message_create_started', [{
+        name: 'mock_api_message',
+        value: { text }
+      }])
+
+      try {
+        setStatus('Sending note to protected mock-api...')
+        const created = await api.createMockMessage(tokens.accessToken, { text }, flow)
+        const messages = await api.listMockMessages(tokens.accessToken, flow)
+        await sendFlowEvent(flow, 'mock_api_message_create_finished', [{
+          name: 'mock_api_message_result',
+          value: {
+            id: created.item.id,
+            messageCount: messages.items.length
+          }
+        }])
+        setMockApi((current) => ({
+          ...current,
+          messages: messages.items,
+          draft: '',
+          status: 'mock-api accepted the new protected note'
+        }))
+        setStatus('mock-api accepted the new protected note')
+      } catch (error) {
+        setMockApi((current) => ({
+          ...current,
+          status: readErrorMessage(error)
+        }))
+        throw error
+      } finally {
+        setTraceState(null)
+      }
+    })
   }
 
   async function requestLoginChallenge(nextStatus: string) {
@@ -384,6 +520,12 @@ export function App() {
       setTraceState(null)
       setTokens(null)
       setChallenge(null)
+      setMockApi((current) => ({
+        ...current,
+        profile: null,
+        messages: [],
+        status: 'Sign in to load protected mock data'
+      }))
       setStatus('Signed out. This phone is still ready to sign in again.')
       setStep('login')
     })
@@ -418,6 +560,12 @@ export function App() {
     setChallenge(null)
     setTokens(null)
     setSecurePrompt(null)
+    setMockApi({
+      profile: null,
+      messages: [],
+      draft: 'A fresh protected note from app-web.',
+      status: 'Waiting for an authenticated session'
+    })
     setForm(createInitialForm())
     setStatus('Device binding removed from this phone')
     setStep('register')
@@ -595,6 +743,52 @@ export function App() {
                     <button type="button" onClick={handleRefresh} disabled={busy}>Refresh tokens</button>
                     <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Sign out</button>
                   </div>
+                  <section className="challenge-card mock-api-card" aria-label="Protected mock API panel">
+                    <p className="section-label">Mock API</p>
+                    <strong>OIDC token protected demo endpoints</strong>
+                    <p className="muted-copy">The app calls `mock-api` with the current access token. The backend validates JWKS signatures and the `mock-api` audience before serving data.</p>
+                    <div className="device-summary mock-api-summary">
+                      <div>
+                        <span className="field-label">Audience</span>
+                        <strong>{mockApi.profile?.audience.join(', ') ?? 'Not loaded'}</strong>
+                      </div>
+                      <div>
+                        <span className="field-label">Username</span>
+                        <strong>{mockApi.profile?.username ?? 'Not loaded'}</strong>
+                      </div>
+                      <div>
+                        <span className="field-label">Client</span>
+                        <strong>{mockApi.profile?.clientId ?? 'Not loaded'}</strong>
+                      </div>
+                      <div>
+                        <span className="field-label">Scope</span>
+                        <strong>{mockApi.profile?.scope.join(', ') ?? 'Not loaded'}</strong>
+                      </div>
+                    </div>
+                    <p className="mock-api-status">{mockApi.status}</p>
+                    <div className="actions stacked-actions">
+                      <button type="button" onClick={() => void runAction(async () => { await syncMockApi('Protected mock API synchronized') })} disabled={busy}>Reload mock API</button>
+                    </div>
+                    <form className="grid form-stack" onSubmit={handleCreateMockMessage}>
+                      <label>
+                        <span className="field-label">New protected note</span>
+                        <textarea value={mockApi.draft} onChange={(event) => setMockApi((current) => ({ ...current, draft: event.target.value }))} disabled={busy} rows={4} />
+                      </label>
+                      <button type="submit" disabled={busy}>Post note to mock-api</button>
+                    </form>
+                    <div className="message-list" aria-label="Protected mock API messages">
+                      {mockApi.messages.map((message) => (
+                        <article key={message.id} className="message-item">
+                          <div className="message-meta">
+                            <span>{message.category}</span>
+                            <span>{formatDateTime(message.createdAt)}</span>
+                          </div>
+                          <strong>{message.authorUserId}</strong>
+                          <p>{message.text}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
                 </>
               )}
             </section>

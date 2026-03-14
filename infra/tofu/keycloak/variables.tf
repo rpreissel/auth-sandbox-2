@@ -30,3 +30,8 @@ variable "admin_client_secret" {
   type      = string
   sensitive = true
 }
+
+variable "mock_api_audience" {
+  type    = string
+  default = "mock-api"
+}

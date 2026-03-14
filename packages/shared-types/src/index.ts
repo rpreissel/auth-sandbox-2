@@ -281,3 +281,40 @@ export type ClientEventInput = {
   sessionId?: string | null
   artifacts?: ClientEventArtifactInput[]
 }
+
+export type MockApiTraceEnvelope = {
+  traceId: string | null
+  correlationId: string | null
+}
+
+export type MockApiProfileResponse = MockApiTraceEnvelope & {
+  subject: string
+  userId: string
+  username: string
+  audience: string[]
+  scope: string[]
+  issuer: string
+  clientId: string | null
+  issuedAt: IsoDateTime | null
+  expiresAt: IsoDateTime | null
+}
+
+export type MockApiMessageRecord = {
+  id: string
+  text: string
+  authorUserId: string
+  createdAt: IsoDateTime
+  category: 'seed' | 'note'
+}
+
+export type MockApiMessagesResponse = MockApiTraceEnvelope & {
+  items: MockApiMessageRecord[]
+}
+
+export type MockApiCreateMessageInput = {
+  text: string
+}
+
+export type MockApiCreateMessageResponse = MockApiTraceEnvelope & {
+  item: MockApiMessageRecord
+}

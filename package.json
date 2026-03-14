@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.32.0",
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --parallel --filter @auth-sandbox-2/auth-api --filter @auth-sandbox-2/trace-api --filter @auth-sandbox-2/app-web --filter @auth-sandbox-2/admin-web --filter @auth-sandbox-2/trace-web --filter @auth-sandbox-2/home-web dev",
+    "dev": "pnpm --parallel --filter @auth-sandbox-2/auth-api --filter @auth-sandbox-2/mock-api --filter @auth-sandbox-2/trace-api --filter @auth-sandbox-2/app-web --filter @auth-sandbox-2/admin-web --filter @auth-sandbox-2/trace-web --filter @auth-sandbox-2/home-web dev",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

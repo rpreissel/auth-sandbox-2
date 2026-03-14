@@ -3,6 +3,10 @@ import type {
   ClientEventInput,
   FinishLoginInput,
   FinishLoginResponse,
+  MockApiCreateMessageInput,
+  MockApiCreateMessageResponse,
+  MockApiMessagesResponse,
+  MockApiProfileResponse,
   RefreshTokensInput,
   RefreshTokensResponse,
   RegisterDeviceInput,
@@ -17,6 +21,7 @@ import type {
 
 const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
 const TRACE_API_BASE = import.meta.env.VITE_TRACE_API_URL ?? '/trace-api'
+const MOCK_API_BASE = import.meta.env.VITE_MOCK_API_URL ?? '/mock-api'
 
 export type TraceRequestOptions = {
   traceId?: string
@@ -79,6 +84,29 @@ async function traceRequest<T>(path: string, init?: RequestInit, options?: Trace
   return response.json() as Promise<T>
 }
 
+async function mockRequest<T>(path: string, accessToken: string, init?: RequestInit, options?: TraceRequestOptions) {
+  const traceHeaders = createTraceHeaders(options)
+  const response = await fetch(`${MOCK_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${accessToken}`,
+      ...traceHeaders,
+      ...(init?.headers ?? {})
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error(await response.text())
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json() as Promise<T>
+}
+
 export const api = {
   registerDevice: (body: RegisterDeviceInput, options?: TraceRequestOptions) => request<RegisterDeviceResponse>('/api/device/register', { method: 'POST', body: JSON.stringify(body) }, options),
   setPassword: (body: SetPasswordInput, options?: TraceRequestOptions) => request<{ passwordSet: true }>('/api/device/set-password', { method: 'POST', body: JSON.stringify(body) }, options),
@@ -90,5 +118,8 @@ export const api = {
   getTrace: (traceId: string) => traceRequest<TraceDetailResponse>(`/traces/${traceId}`),
   getSpan: (spanId: string) => traceRequest<SpanDetailResponse>(`/spans/${spanId}`),
   getArtifact: (artifactId: string) => traceRequest<ArtifactDetailResponse>(`/artifacts/${artifactId}`),
-  sendClientEvent: (body: ClientEventInput, options?: TraceRequestOptions) => traceRequest<{ traceId: string; spanId: string }>('/client-events', { method: 'POST', body: JSON.stringify(body) }, options)
+  sendClientEvent: (body: ClientEventInput, options?: TraceRequestOptions) => traceRequest<{ traceId: string; spanId: string }>('/client-events', { method: 'POST', body: JSON.stringify(body) }, options),
+  getMockProfile: (accessToken: string, options?: TraceRequestOptions) => mockRequest<MockApiProfileResponse>('/api/mock/profile', accessToken, undefined, options),
+  listMockMessages: (accessToken: string, options?: TraceRequestOptions) => mockRequest<MockApiMessagesResponse>('/api/mock/messages', accessToken, undefined, options),
+  createMockMessage: (accessToken: string, body: MockApiCreateMessageInput, options?: TraceRequestOptions) => mockRequest<MockApiCreateMessageResponse>('/api/mock/messages', accessToken, { method: 'POST', body: JSON.stringify(body) }, options)
 }

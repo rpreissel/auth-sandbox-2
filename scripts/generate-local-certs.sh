@@ -35,6 +35,9 @@ DNS.2 = app.localhost
 DNS.3 = admin.localhost
 DNS.4 = auth.localhost
 DNS.5 = keycloak.localhost
+DNS.6 = trace.localhost
+DNS.7 = mock.localhost
+DNS.8 = db.localhost
 EOF
 
 openssl x509 -req -in "${SERVER_CSR}" -CA "${CA_CERT}" -CAkey "${CA_KEY}" \

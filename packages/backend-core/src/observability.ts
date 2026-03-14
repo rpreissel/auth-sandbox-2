@@ -101,7 +101,10 @@ type TraceListFilters = {
 type QueryParamValue = string | number
 
 const traceStorage = new AsyncLocalStorage<TraceContext>()
-const serviceName = 'auth-api'
+
+function getServiceName() {
+  return process.env.OBSERVABILITY_SERVICE_NAME ?? 'auth-api'
+}
 
 export function getTraceContext() {
   return traceStorage.getStore() ?? null
@@ -778,7 +781,7 @@ export function createRequestLifecycle(args: {
     parentSpanId: args.parentSpanId ?? null,
     kind: 'http_in',
     actorType: 'backend',
-    actorName: serviceName,
+    actorName: getServiceName(),
     operation: `${args.method} ${args.route ?? args.url}`,
     method: args.method,
     url: args.url,
@@ -1303,7 +1306,7 @@ export async function withRequestTrace<T>(args: {
     traceId: trace.traceId,
     correlationId: trace.correlationId,
     spanId: lifecycle.spanId,
-    actorName: serviceName,
+    actorName: getServiceName(),
     actorType: 'backend',
     userId: args.userId ?? null,
     deviceId: args.deviceId ?? null,
