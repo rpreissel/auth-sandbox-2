@@ -1,36 +1,29 @@
 {
-  "name": "@auth-sandbox-2/auth-api",
+  "name": "@auth-sandbox-2/trace-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "pnpm --filter @auth-sandbox-2/backend-core build && tsc -p tsconfig.json",
-    "start": "node dist/apps/auth-api/src/server.js",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=esm --outfile=dist/server.js",
+    "start": "node dist/server.js",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "node --eval \"console.log('trace-api: no tests')\"",
     "typecheck": "pnpm --filter @auth-sandbox-2/backend-core typecheck && tsc -p tsconfig.json --noEmit",
-    "format:check": "node --eval \"console.log('auth-api: format check skipped')\""
+    "format:check": "node --eval \"console.log('trace-api: format check skipped')\""
   },
   "dependencies": {
     "@auth-sandbox-2/backend-core": "workspace:*",
     "@auth-sandbox-2/shared-types": "workspace:*",
     "@fastify/cors": "^11.1.0",
     "@fastify/sensible": "^6.0.3",
-    "dotenv": "^17.2.2",
     "fastify": "^5.6.1",
-    "jose": "^6.1.0",
-    "pg-format": "^1.0.4",
-    "pg": "^8.16.3",
-    "pino": "^9.9.5",
-    "pino-pretty": "^13.1.2",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
-    "@types/pg": "^8.15.5",
+    "esbuild": "^0.25.10",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "typescript": "^5.9.2"
   }
 }

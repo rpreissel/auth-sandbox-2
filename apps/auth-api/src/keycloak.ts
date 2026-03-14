@@ -1,11 +1,10 @@
 import { Buffer } from 'node:buffer'
 import { randomBytes, randomUUID, webcrypto } from 'node:crypto'
 
+import { appConfig, buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
 import type { JsonObject, TokenBundle } from '@auth-sandbox-2/shared-types'
 
-import { appConfig, keycloakConfig } from './config.js'
 import { decodeTokenClaims } from './lib/jwt.js'
-import { buildTraceHeaders, recordArtifact, recordHttpExchange, runWithSpan } from './observability.js'
 
 type KeycloakTokenResponse = {
   access_token: string

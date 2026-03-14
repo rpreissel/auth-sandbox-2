@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import { appConfig, logger, pool, recordArtifact, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
   CreateRegistrationCodeInput,
   DeviceRecord,
@@ -16,13 +17,9 @@ import type {
   StartLoginResponse
 } from '@auth-sandbox-2/shared-types'
 
-import { appConfig } from './config.js'
-import { pool, withTransaction } from './db.js'
 import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
 import { generateActivationCode } from './lib/password.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
-import { logger } from './logger.js'
-import { recordArtifact, runWithSpan } from './observability.js'
 import type { ChallengeRow, DeviceRow, RegistrationCodeRow } from './types.js'
 
 const adminClient = new KeycloakAdminClient()

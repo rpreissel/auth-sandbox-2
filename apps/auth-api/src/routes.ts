@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import {
   withRequestTrace
-} from './observability.js'
+} from '@auth-sandbox-2/backend-core'
 import {
   createRegistrationCode,
   deleteDevice,

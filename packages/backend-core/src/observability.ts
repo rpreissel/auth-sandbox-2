@@ -1100,17 +1100,7 @@ async function resolveArtifactDecryptedView(
     return embeddedDecrypted
   }
 
-  const storedChallenge = await queryOne<{
-    nonce: string
-    user_id: string
-    device_id: string
-    expires_at: string
-  }>(
-    `select nonce, user_id, device_id, expires_at
-       from login_challenges
-      where nonce = $1`,
-    [challengeEnvelope.nonce]
-  )
+  const storedChallenge = await queryLoginChallenge(challengeEnvelope.nonce)
 
   if (!storedChallenge) {
     return embeddedDecrypted
@@ -1121,6 +1111,25 @@ async function resolveArtifactDecryptedView(
     nonce: storedChallenge.nonce,
     exp: Math.floor(new Date(storedChallenge.expires_at).getTime() / 1000),
     deviceId: storedChallenge.device_id
+  }
+}
+
+async function queryLoginChallenge(nonce: string) {
+  try {
+    return await queryOne<{
+      nonce: string
+      user_id: string
+      device_id: string
+      expires_at: string
+    }>(
+      `select nonce, user_id, device_id, expires_at
+         from login_challenges
+        where nonce = $1`,
+      [nonce]
+    )
+  } catch (error) {
+    logger.debug({ error, nonce }, 'Skipping login_challenges lookup while preparing trace artifact view')
+    return null
   }
 }
 

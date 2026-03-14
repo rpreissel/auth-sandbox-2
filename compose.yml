@@ -98,8 +98,7 @@ services:
   trace-api:
     build:
       context: .
-      dockerfile: apps/auth-api/Dockerfile
-    command: ["node", "apps/auth-api/dist/apps/auth-api/src/trace-server.js"]
+      dockerfile: apps/trace-api/Dockerfile
     environment:
       AUTH_API_HOST: 0.0.0.0
       AUTH_API_PORT: 3000

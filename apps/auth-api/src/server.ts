@@ -2,10 +2,8 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import sensible from '@fastify/sensible'
 
-import { appConfig } from './config.js'
-import { runMigrations } from './migrate.js'
+import { appConfig, logger, runMigrations } from '@auth-sandbox-2/backend-core'
 import { registerRoutes } from './routes.js'
-import { logger } from './logger.js'
 
 const app = Fastify({
   loggerInstance: logger
@@ -17,7 +15,7 @@ await app.register(cors, {
   credentials: true
 })
 await registerRoutes(app)
-await runMigrations()
+await runMigrations(['apps/auth-api/migrations', 'packages/backend-core/migrations'])
 
 app.get('/blank', async (_request, reply) => {
   reply.type('text/html').send('<!doctype html><title>blank</title>blank')

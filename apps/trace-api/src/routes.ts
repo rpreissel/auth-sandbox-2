@@ -8,7 +8,7 @@ import {
   getTraceDetail,
   ingestClientEvent,
   listTraces
-} from './observability.js'
+} from '@auth-sandbox-2/backend-core'
 
 const observabilityTraceListSchema = z.object({
   status: z.string().optional(),

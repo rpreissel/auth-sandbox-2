@@ -13,6 +13,9 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
+      "@auth-sandbox-2/backend-core": [
+        "packages/backend-core/src/index.ts"
+      ],
       "@auth-sandbox-2/shared-types": [
         "packages/shared-types/src/index.ts"
       ]

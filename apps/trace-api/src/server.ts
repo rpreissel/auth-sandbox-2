@@ -2,10 +2,8 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import sensible from '@fastify/sensible'
 
-import { appConfig } from './config.js'
-import { runMigrations } from './migrate.js'
-import { logger } from './logger.js'
-import { registerTraceRoutes } from './trace-routes.js'
+import { appConfig, logger, runMigrations } from '@auth-sandbox-2/backend-core'
+import { registerTraceRoutes } from './routes.js'
 
 const host = process.env.TRACE_API_HOST ?? appConfig.host
 const port = Number(process.env.TRACE_API_PORT ?? 3001)
