@@ -35,8 +35,10 @@ bash scripts/trust-local-ca-macos.sh
 This creates a persistent local CA plus one SAN certificate for `home.localhost`, `app.localhost`, `admin.localhost`, `auth.localhost`, and `keycloak.localhost` in `local-certs/`.
 
 ```bash
-podman-compose up -d
+podman compose up -d
 ```
+
+Postgres gets extra shutdown time from `compose.yml` so normal `podman compose down` or restart cycles do not cut off long checkpoints. If an older local volume already fails with `invalid checkpoint record`, repair or reset that volume before bringing the stack back up.
 
 This starts:
 
@@ -50,7 +52,7 @@ This starts:
 ## Verify services
 
 ```bash
-podman-compose ps
+podman compose ps
 curl -k https://auth.localhost:8443/api/health
 curl -k https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration
 curl -k https://db.localhost:8443

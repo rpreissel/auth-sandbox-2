@@ -1,6 +1,7 @@
 services:
   postgres:
     image: docker.io/library/postgres:17-alpine
+    stop_grace_period: 5m
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-auth_sandbox_2}
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}

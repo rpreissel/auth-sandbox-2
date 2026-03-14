@@ -20,3 +20,4 @@ local-certs/
 *.tfstate.*
 .opencode/
 runtime/caddy-logs/*.json
+runtime/*.tgz

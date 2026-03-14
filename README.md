@@ -98,8 +98,10 @@ This sets up a fixed local CA and server certificate for all `*.localhost` hosts
 4. Start the runtime stack:
 
 ```bash
-podman-compose up -d
+podman compose up -d
 ```
+
+Postgres has an extended shutdown grace period in `compose.yml` because Podman can otherwise interrupt long checkpoints and corrupt the local WAL during `down`/restart cycles. If an older local volume already fails with `invalid checkpoint record`, repair or reset that volume before starting the stack again.
 
 5. Check the main health endpoint:
 
