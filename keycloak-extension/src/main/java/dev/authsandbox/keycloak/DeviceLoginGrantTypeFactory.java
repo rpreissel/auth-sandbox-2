@@ -9,7 +9,7 @@ import org.keycloak.protocol.oidc.grants.OAuth2GrantTypeFactory;
 public class DeviceLoginGrantTypeFactory implements OAuth2GrantTypeFactory {
 
     public static final String GRANT_TYPE = "urn:auth-sandbox-2:params:oauth:grant-type:device-login";
-    public static final String GRANT_SHORTCUT = "dlg";
+    public static final String GRANT_SHORTCUT = "dl";
 
     @Override
     public String getId() {
