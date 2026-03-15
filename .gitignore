@@ -21,3 +21,6 @@ local-certs/
 .opencode/
 runtime/caddy-logs/*.json
 runtime/*.tgz
+keycloak-extension/target/
+*.class
+*.jar
