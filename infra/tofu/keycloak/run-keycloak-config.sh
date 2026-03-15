@@ -25,7 +25,11 @@ apply_config() {
     -var="keycloak_admin_password=${KEYCLOAK_ADMIN_PASSWORD}" \
     -var="realm_name=${KEYCLOAK_REALM}" \
     -var="app_client_secret=${KEYCLOAK_CLIENT_SECRET}" \
+    -var="browser_client_id=${KEYCLOAK_BROWSER_CLIENT_ID:-browser-app}" \
+    -var="browser_client_secret=${KEYCLOAK_BROWSER_CLIENT_SECRET:-change-me-browser}" \
     -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}" \
+    -var="internal_redeem_client_id=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}" \
+    -var="internal_redeem_client_secret=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}" \
     -var="mock_api_audience=${MOCK_API_AUDIENCE:-mock-api}" \
     "$@"
 }

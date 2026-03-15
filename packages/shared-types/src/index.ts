@@ -39,6 +39,111 @@ export type RegisterDeviceResponse = {
   passwordRequired: boolean
 }
 
+export type AssuranceFlowPurpose = 'registration' | 'account_upgrade' | 'step_up'
+
+export type AssuranceFlowStatus =
+  | 'started'
+  | 'method_in_progress'
+  | 'method_verified'
+  | 'finalizable'
+  | 'finalized'
+  | 'failed'
+  | 'expired'
+
+export type AssuranceFlowMethod = 'code' | 'sms'
+
+export type AssuranceFlowNextAction = 'start_method' | 'complete_method' | 'finalize' | null
+
+export type AssuranceFlowMethodSummary = {
+  kind: AssuranceFlowMethod
+  state: string
+  maskedTarget?: string | null
+  devCode?: string | null
+}
+
+export type AssuranceFlowResultSummary = {
+  assurance: string[]
+}
+
+export type AssuranceFlowFinalization =
+  | {
+    kind: 'registration_result'
+    userId: string
+    passwordSetupRequired: boolean
+  }
+  | {
+    kind: 'assurance_handle'
+    assuranceHandle: string
+    expiresAt: IsoDateTime
+  }
+  | {
+    kind: 'result_code'
+    resultCode: string
+    expiresAt: IsoDateTime
+  }
+
+export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser'
+
+export type CreateFlowInput = {
+  purpose: AssuranceFlowPurpose
+  requestedAcr?: string
+  targetAssurance?: string
+  deviceId?: string
+  userHint?: string
+  prospectiveUserId?: string
+  context?: JsonObject
+}
+
+export type AssuranceFlowRecord = {
+  flowId: string
+  purpose: AssuranceFlowPurpose
+  status: AssuranceFlowStatus
+  currentMethod: string | null
+  requestedAcr: string | null
+  targetAssurance: string | null
+  expiresAt: IsoDateTime
+  createdAt: IsoDateTime
+  nextAction: AssuranceFlowNextAction
+  method: AssuranceFlowMethodSummary | null
+  result: AssuranceFlowResultSummary | null
+  finalization: AssuranceFlowFinalization | null
+}
+
+export type PublicAssuranceFlowRecord = AssuranceFlowRecord & {
+  flowToken: string
+}
+
+export type CreateFlowResponse = PublicAssuranceFlowRecord
+
+export type GetFlowResponse = PublicAssuranceFlowRecord
+
+export type StartFlowMethodInput = {
+  payload?: JsonObject
+}
+
+export type StartFlowMethodResponse = PublicAssuranceFlowRecord
+
+export type CompleteFlowMethodInput = {
+  payload?: JsonObject
+}
+
+export type CompleteFlowMethodResponse = PublicAssuranceFlowRecord
+
+export type FinalizeFlowInput = {
+  channel?: FinalizeFlowChannel
+}
+
+export type FinalizeFlowResponse = PublicAssuranceFlowRecord
+
+export type RedeemFlowArtifactResponse = {
+  flowId: string
+  userId: string
+  purpose: AssuranceFlowPurpose
+  achievedAcr: string | null
+  amr: string[]
+  authTime: IsoDateTime
+}
+
 export type SetPasswordInput = {
   userId: string
   password: string

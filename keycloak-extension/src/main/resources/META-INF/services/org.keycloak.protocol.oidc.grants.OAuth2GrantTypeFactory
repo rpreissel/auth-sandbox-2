@@ -1,1 +1,2 @@
 dev.authsandbox.keycloak.DeviceLoginGrantTypeFactory
+dev.authsandbox.keycloak.AssuranceHandleGrantTypeFactory

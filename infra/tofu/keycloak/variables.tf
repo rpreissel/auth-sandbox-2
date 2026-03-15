@@ -21,12 +21,32 @@ variable "app_client_secret" {
   sensitive = true
 }
 
+variable "browser_client_id" {
+  type    = string
+  default = "browser-app"
+}
+
+variable "browser_client_secret" {
+  type      = string
+  sensitive = true
+}
+
 variable "admin_client_id" {
   type    = string
   default = "auth-api-admin"
 }
 
 variable "admin_client_secret" {
+  type      = string
+  sensitive = true
+}
+
+variable "internal_redeem_client_id" {
+  type    = string
+  default = "auth-api-internal-redeem"
+}
+
+variable "internal_redeem_client_secret" {
   type      = string
   sensitive = true
 }

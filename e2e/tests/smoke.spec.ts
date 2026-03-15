@@ -5,6 +5,7 @@ const AUTH_API_URL = 'https://auth.localhost:8443'
 const MOCK_API_URL = 'https://mock.localhost:8443'
 const TRACE_API_URL = 'https://trace.localhost:8443'
 const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration'
+const KEYCLOAK_TOKEN_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect/token'
 const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_WEB_URL = 'https://admin.localhost:8443/trace/'
@@ -59,6 +60,20 @@ async function waitForTrace(request: APIRequestContext, userId: string, traceTyp
   }
 
   throw new Error(`No fresh ${traceType} trace found for ${userId}`)
+}
+
+async function getInternalRedeemAccessToken(request: APIRequestContext) {
+  const response = await request.post(KEYCLOAK_TOKEN_URL, {
+    form: {
+      grant_type: 'client_credentials',
+      client_id: 'auth-api-internal-redeem',
+      client_secret: 'change-me-internal-redeem'
+    }
+  })
+
+  expect(response.ok()).toBeTruthy()
+  const body = await response.json() as { access_token: string }
+  return body.access_token
 }
 
 test.beforeEach(async ({ request }) => {
@@ -303,6 +318,148 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(artifactViewer).toContainText('Erläutert')
   await expect(artifactViewer).toContainText('Subject')
   await expect(artifactViewer).toContainText('Audience')
+})
+
+test('generic registration and step-up flow APIs support create, method lifecycle, finalize, and redeem', async ({ request }) => {
+  const userId = `e2e-flow-${Date.now()}`
+  const flowPublicKey = `-----BEGIN PUBLIC KEY-----\n${Buffer.from(`flow-test-public-key-${userId}`).toString('base64')}\n-----END PUBLIC KEY-----`
+  const withFlowToken = (flowToken: string) => ({
+    'x-flow-token': flowToken
+  })
+
+  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-codes`, {
+    data: {
+      userId,
+      displayName: 'Flow User',
+      validForDays: 30
+    }
+  })
+
+  expect(registrationResponse.ok()).toBeTruthy()
+  const registration = await registrationResponse.json() as { code: string }
+
+  const createRegistrationFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+    data: {
+      purpose: 'registration',
+      userHint: userId,
+      prospectiveUserId: userId,
+      context: {
+        activationCode: registration.code,
+        deviceName: 'Flow Device',
+        publicKey: flowPublicKey
+      }
+    }
+  })
+
+  expect(createRegistrationFlow.status()).toBe(201)
+  const registrationFlow = await createRegistrationFlow.json() as { flowId: string; flowToken: string; nextAction: string; status: string }
+  expect(registrationFlow.status).toBe('started')
+  expect(registrationFlow.nextAction).toBe('start_method')
+
+  const missingTokenGet = await request.get(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}`)
+  expect(missingTokenGet.status()).toBe(401)
+
+  const startCode = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/methods/code/start`, {
+    headers: withFlowToken(registrationFlow.flowToken),
+    data: {
+      payload: {}
+    }
+  })
+  expect(startCode.ok()).toBeTruthy()
+  const startedCode = await startCode.json() as { method: { devCode: string | null }; status: string }
+  expect(startedCode.status).toBe('method_in_progress')
+  expect(startedCode.method?.devCode).toBe(registration.code)
+
+  const completeCode = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/methods/code/complete`, {
+    headers: withFlowToken(registrationFlow.flowToken),
+    data: {
+      payload: {
+        code: registration.code
+      }
+    }
+  })
+  expect(completeCode.ok()).toBeTruthy()
+  const completedCode = await completeCode.json() as { status: string; nextAction: string }
+  expect(completedCode.status).toBe('finalizable')
+  expect(completedCode.nextAction).toBe('finalize')
+
+  const finalizeRegistration = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/finalize`, {
+    headers: withFlowToken(registrationFlow.flowToken),
+    data: {
+      channel: 'registration'
+    }
+  })
+  expect(finalizeRegistration.ok()).toBeTruthy()
+  const finalizedRegistration = await finalizeRegistration.json() as { finalization: { kind: string; userId: string } }
+  expect(finalizedRegistration.finalization.kind).toBe('registration_result')
+  expect(finalizedRegistration.finalization.userId).toBe(userId)
+
+  const createStepUpFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+    data: {
+      purpose: 'step_up',
+      userHint: userId,
+      prospectiveUserId: userId,
+      requestedAcr: 'urn:auth-sandbox-2:acr:sms'
+    }
+  })
+  expect(createStepUpFlow.status()).toBe(201)
+  const stepUpFlow = await createStepUpFlow.json() as { flowId: string; flowToken: string }
+
+  const startSms = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/methods/sms/start`, {
+    headers: withFlowToken(stepUpFlow.flowToken),
+    data: {
+      payload: {
+        target: '+49123456789'
+      }
+    }
+  })
+  expect(startSms.ok()).toBeTruthy()
+  const startedSms = await startSms.json() as { method: { devCode: string | null; maskedTarget: string | null } }
+  expect(startedSms.method.maskedTarget).toContain('+49')
+  expect(startedSms.method.devCode).not.toBeNull()
+
+  const completeSms = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/methods/sms/complete`, {
+    headers: withFlowToken(stepUpFlow.flowToken),
+    data: {
+      payload: {
+        code: startedSms.method.devCode
+      }
+    }
+  })
+  expect(completeSms.ok()).toBeTruthy()
+
+  const finalizeBrowser = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/finalize`, {
+    headers: withFlowToken(stepUpFlow.flowToken),
+    data: {
+      channel: 'browser'
+    }
+  })
+  expect(finalizeBrowser.ok()).toBeTruthy()
+  const finalizedBrowser = await finalizeBrowser.json() as { finalization: { kind: string; resultCode: string } }
+  expect(finalizedBrowser.finalization.kind).toBe('result_code')
+
+  const unauthorizedRedeemResultCode = await request.post(`${AUTH_API_URL}/api/internal/flows/redeem`, {
+    data: {
+      code: finalizedBrowser.finalization.resultCode,
+      kind: 'result_code'
+    }
+  })
+  expect(unauthorizedRedeemResultCode.status()).toBe(401)
+
+  const internalRedeemAccessToken = await getInternalRedeemAccessToken(request)
+  const redeemResultCode = await request.post(`${AUTH_API_URL}/api/internal/flows/redeem`, {
+    headers: {
+      authorization: `Bearer ${internalRedeemAccessToken}`
+    },
+    data: {
+      code: finalizedBrowser.finalization.resultCode,
+      kind: 'result_code'
+    }
+  })
+  expect(redeemResultCode.ok()).toBeTruthy()
+  const redeemedResult = await redeemResultCode.json() as { userId: string; achievedAcr: string | null }
+  expect(redeemedResult.userId).toBe(userId)
+  expect(redeemedResult.achievedAcr).toBe('urn:auth-sandbox-2:acr:sms')
 })
 
 test('missing saved device binding is cleared instead of failing with a server error', async ({ page, request }) => {

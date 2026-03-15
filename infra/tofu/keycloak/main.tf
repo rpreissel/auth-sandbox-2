@@ -98,6 +98,20 @@ resource "keycloak_openid_client_scope" "mock_api_scope" {
   include_in_token_scope = true
 }
 
+resource "keycloak_authentication_flow" "browser_step_up_flow" {
+  realm_id    = keycloak_realm.realm.id
+  alias       = "browser-step-up-flow"
+  description = "Browser step-up flow using result_code redeem"
+}
+
+resource "keycloak_authentication_execution" "browser_step_up_result_code" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
+  authenticator     = "result-code-authenticator"
+  requirement       = "REQUIRED"
+  priority          = 10
+}
+
 resource "keycloak_openid_audience_protocol_mapper" "mock_api_audience" {
   realm_id        = keycloak_realm.realm.id
   client_scope_id = keycloak_openid_client_scope.mock_api_scope.id
@@ -122,6 +136,34 @@ resource "keycloak_openid_client" "app_web" {
   client_secret                = var.app_client_secret
 }
 
+resource "keycloak_openid_client" "browser_app" {
+  realm_id                     = keycloak_realm.realm.id
+  client_id                    = var.browser_client_id
+  name                         = var.browser_client_id
+  access_type                  = "CONFIDENTIAL"
+  standard_flow_enabled        = true
+  direct_access_grants_enabled = false
+  service_accounts_enabled     = false
+  valid_redirect_uris          = ["https://app.localhost:8443/*", "https://admin.localhost:8443/*"]
+  web_origins                  = ["https://app.localhost:8443", "https://admin.localhost:8443"]
+  client_secret                = var.browser_client_secret
+
+  authentication_flow_binding_overrides {
+    browser_id = keycloak_authentication_flow.browser_step_up_flow.id
+  }
+}
+
+resource "keycloak_openid_client_default_scopes" "browser_default_scopes" {
+  realm_id  = keycloak_realm.realm.id
+  client_id = keycloak_openid_client.browser_app.id
+  default_scopes = [
+    "profile",
+    "email",
+    keycloak_openid_client_scope.profile_scope.name,
+    keycloak_openid_client_scope.mock_api_scope.name
+  ]
+}
+
 resource "keycloak_openid_client_default_scopes" "app_default_scopes" {
   realm_id  = keycloak_realm.realm.id
   client_id = keycloak_openid_client.app_web.id
@@ -142,6 +184,17 @@ resource "keycloak_openid_client" "auth_api_admin" {
   standard_flow_enabled        = false
   direct_access_grants_enabled = false
   client_secret                = var.admin_client_secret
+}
+
+resource "keycloak_openid_client" "internal_redeem" {
+  realm_id                     = keycloak_realm.realm.id
+  client_id                    = var.internal_redeem_client_id
+  name                         = var.internal_redeem_client_id
+  access_type                  = "CONFIDENTIAL"
+  service_accounts_enabled     = true
+  standard_flow_enabled        = false
+  direct_access_grants_enabled = false
+  client_secret                = var.internal_redeem_client_secret
 }
 
 data "keycloak_openid_client" "realm_management" {

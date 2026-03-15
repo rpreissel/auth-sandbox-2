@@ -65,6 +65,14 @@ Explicitly out of scope:
 - The remaining custom Keycloak logic lives in `keycloak-extension`.
 - Frontends are built statically and served by Caddy.
 
+## Flow endpoint protection
+
+- `POST /api/flows` remains the public flow-creation entrypoint.
+- Follow-up public flow routes require the `x-flow-token` header returned by `POST /api/flows`.
+- The flow token is HMAC-signed by `auth-api`, bound to one `flowId`, and expires with the flow record.
+- `POST /api/internal/flows/redeem` requires a Keycloak bearer token from the dedicated service-account client `auth-api-internal-redeem`.
+- Redeem artifacts remain single-use, kind-checked, and expiry-checked even after bearer-token validation.
+
 ## Important paths
 
 - `apps/auth-api` - backend API, DB migrations, Keycloak integration

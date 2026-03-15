@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { appConfig, logger, pool, recordArtifact, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
+  CreateFlowInput,
   CreateRegistrationCodeInput,
   DeviceRecord,
   FinishLoginInput,
@@ -17,6 +18,13 @@ import type {
   StartLoginResponse
 } from '@auth-sandbox-2/shared-types'
 
+import {
+  completePublicAssuranceFlowMethod,
+  createPublicAssuranceFlow,
+  finalizePublicAssuranceFlow,
+  registerDeviceViaFlow,
+  startPublicAssuranceFlowMethod
+} from './assurance-flows.js'
 import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
 import { generateActivationCode } from './lib/password.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
@@ -122,70 +130,7 @@ export async function registerDevice(input: RegisterDeviceInput): Promise<Regist
       userId: input.userId,
       notes: 'Register device service operation.'
     },
-    async (spanId) => withTransaction(async (client) => {
-      const codeResult = await client.query<RegistrationCodeRow>(
-        'select * from registration_codes where user_id = $1 and code = $2',
-        [input.userId, input.activationCode]
-      )
-      const registrationCode = codeResult.rows[0]
-      if (!registrationCode) {
-        throw new Error('Invalid registration code')
-      }
-      if (new Date(registrationCode.expires_at).getTime() < Date.now()) {
-        throw new Error('Registration code expired')
-      }
-
-      const duplicate = await client.query(
-        'select 1 from devices where user_id = $1 and device_name = $2',
-        [input.userId, input.deviceName]
-      )
-      if (duplicate.rowCount) {
-        throw new Error('Device name already exists for this user')
-      }
-
-      const publicKeyHash = hashPublicKey(input.publicKey)
-      const keycloakUserId = await adminClient.ensureUser(input.userId, registrationCode.display_name ?? undefined)
-      const encryptionKeys = generateEncryptionKeyPair()
-      await recordArtifact({
-        spanId,
-        artifactType: 'crypto_material',
-        name: 'generated_device_encryption_keys',
-        contentType: 'application/json',
-        encoding: 'json',
-        direction: 'internal',
-        rawValue: JSON.stringify({
-          publicKeyPem: encryptionKeys.publicKeyPem,
-          privateKeyPem: encryptionKeys.privateKeyPem
-        }, null, 2),
-        explanation: 'Generated device encryption key pair kept for demo observability.'
-      })
-      const credentialId = await adminClient.createDeviceCredential({
-        userId: input.userId,
-        deviceName: input.deviceName,
-        publicKey: input.publicKey,
-        publicKeyHash,
-        encPrivKey: encryptionKeys.privateKeyPem
-      })
-
-      const deviceResult = await client.query<DeviceRow>(
-        `insert into devices (user_id, device_name, public_key, public_key_hash, enc_pub_key, keycloak_user_id, keycloak_credential_id)
-         values ($1, $2, $3, $4, $5, $6, $7)
-         returning *`,
-        [input.userId, input.deviceName, input.publicKey, publicKeyHash, encryptionKeys.publicKeyPem, keycloakUserId, credentialId]
-      )
-
-      await client.query('update registration_codes set use_count = use_count + 1 where id = $1', [registrationCode.id])
-      const passwordRequired = !(await adminClient.hasPassword(input.userId))
-
-      logger.info({ userId: input.userId, deviceName: input.deviceName }, 'Registered device')
-
-      return {
-        deviceId: deviceResult.rows[0].id,
-        deviceName: input.deviceName,
-        publicKeyHash,
-        passwordRequired
-      }
-    })
+    async () => registerDeviceViaFlow(input)
   )
 }
 
@@ -348,4 +293,66 @@ export async function logout(input: RefreshTokensInput): Promise<LogoutResponse>
       return { logout: true }
     }
   )
+}
+
+export async function startBrowserStepUpFlow(input: {
+  userId: string
+  phoneNumber: string
+  requestedAcr?: string
+}) {
+  const created = await createPublicAssuranceFlow({
+    purpose: 'step_up',
+    userHint: input.userId,
+    prospectiveUserId: input.userId,
+    requestedAcr: input.requestedAcr ?? 'urn:auth-sandbox-2:acr:sms',
+    context: {
+      phoneNumber: input.phoneNumber
+    }
+  } satisfies CreateFlowInput)
+  await startPublicAssuranceFlowMethod(created.flowId, 'sms', {
+    payload: {
+      target: input.phoneNumber
+    }
+  })
+  const started = await completePublicAssuranceFlowMethod(created.flowId, 'sms', {
+    payload: {
+      code: created.method?.devCode ?? '000000'
+    }
+  })
+  return finalizePublicAssuranceFlow(started.flowId, 'browser')
+}
+
+export async function completeMobileStepUp(input: {
+  userId: string
+  phoneNumber: string
+  refreshToken?: string
+}) {
+  const created = await createPublicAssuranceFlow({
+    purpose: 'step_up',
+    userHint: input.userId,
+    prospectiveUserId: input.userId,
+    requestedAcr: 'urn:auth-sandbox-2:acr:sms',
+    context: {
+      phoneNumber: input.phoneNumber
+    }
+  })
+  const started = await startPublicAssuranceFlowMethod(created.flowId, 'sms', {
+    payload: {
+      target: input.phoneNumber
+    }
+  })
+  const completed = await completePublicAssuranceFlowMethod(started.flowId, 'sms', {
+    payload: {
+      code: started.method?.devCode ?? '000000'
+    }
+  })
+  const finalized = await finalizePublicAssuranceFlow(completed.flowId, 'mobile')
+  if (!finalized.finalization || finalized.finalization.kind !== 'assurance_handle') {
+    throw new Error('Mobile step-up flow did not yield an assurance handle')
+  }
+  const tokens = await authClient.authenticateWithAssuranceHandle(finalized.finalization.assuranceHandle, input.refreshToken)
+  return {
+    flow: finalized,
+    tokens
+  }
 }

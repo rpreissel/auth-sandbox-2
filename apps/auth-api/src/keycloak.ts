@@ -410,6 +410,30 @@ export class KeycloakAuthClient {
     })
   }
 
+  async authenticateWithAssuranceHandle(assuranceHandle: string, refreshToken?: string) {
+    const body = createFormBody({
+      grant_type: 'urn:auth-sandbox-2:params:oauth:grant-type:assurance-handle',
+      client_id: keycloakConfig.clientId,
+      client_secret: keycloakConfig.clientSecret,
+      scope: 'openid profile email offline_access',
+      assurance_handle: assuranceHandle,
+      ...(refreshToken ? { refresh_token: refreshToken } : {})
+    })
+
+    const response = await fetchJson<KeycloakTokenResponse>(
+      `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded'
+        },
+        body
+      }
+    )
+
+    return this.toEnrichedTokenBundle(response)
+  }
+
   async getUserInfo(accessToken: string) {
     const response = await fetchJson<KeycloakJsonResponse>(
       `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/userinfo`,

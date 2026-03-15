@@ -16,10 +16,15 @@ const envSchema = z.object({
   KEYCLOAK_REALM: z.string().default('auth-sandbox-2'),
   KEYCLOAK_CLIENT_ID: z.string().default('app-web'),
   KEYCLOAK_CLIENT_SECRET: z.string().default('change-me'),
+  KEYCLOAK_BROWSER_CLIENT_ID: z.string().default('browser-app'),
+  KEYCLOAK_BROWSER_CLIENT_SECRET: z.string().default('change-me-browser'),
   KEYCLOAK_ADMIN_CLIENT_ID: z.string().default('auth-api-admin'),
   KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().default('change-me-admin'),
+  KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID: z.string().default('auth-api-internal-redeem'),
+  KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET: z.string().default('change-me-internal-redeem'),
   KEYCLOAK_ADMIN_USERNAME: z.string().default('admin'),
   KEYCLOAK_ADMIN_PASSWORD: z.string().default('admin'),
+  AUTH_API_FLOW_TOKEN_SECRET: z.string().min(16).default('change-me-flow-token-secret'),
   CORS_ORIGIN: z.string().default('https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().default(300)
 })
@@ -38,6 +43,7 @@ export const appConfig = {
   traceApiInternalUrl: env.TRACE_API_INTERNAL_URL,
   observabilityWriteMode: env.OBSERVABILITY_WRITE_MODE ?? defaultObservabilityWriteMode,
   challengeTtlSeconds: env.CHALLENGE_TTL_SECONDS,
+  flowTokenSecret: env.AUTH_API_FLOW_TOKEN_SECRET,
   corsOrigins: env.CORS_ORIGIN.split(',').map((value) => value.trim())
 }
 
@@ -47,8 +53,12 @@ export const keycloakConfig = {
   realm: env.KEYCLOAK_REALM,
   clientId: env.KEYCLOAK_CLIENT_ID,
   clientSecret: env.KEYCLOAK_CLIENT_SECRET,
+  browserClientId: env.KEYCLOAK_BROWSER_CLIENT_ID,
+  browserClientSecret: env.KEYCLOAK_BROWSER_CLIENT_SECRET,
   adminClientId: env.KEYCLOAK_ADMIN_CLIENT_ID,
   adminClientSecret: env.KEYCLOAK_ADMIN_CLIENT_SECRET,
+  internalRedeemClientId: env.KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID,
+  internalRedeemClientSecret: env.KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET,
   adminUsername: env.KEYCLOAK_ADMIN_USERNAME,
   adminPassword: env.KEYCLOAK_ADMIN_PASSWORD
 }

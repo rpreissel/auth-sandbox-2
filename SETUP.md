@@ -92,4 +92,6 @@ pnpm --filter @auth-sandbox-2/e2e test
 - Keycloak user creation is backend-driven, and `username == userId`.
 - Device credentials are created through the custom realm resource endpoint at `/realms/{realm}/device-credentials`.
 - Device login is completed through a custom OAuth grant at the Keycloak token endpoint using `grant_type=urn:auth-sandbox-2:params:oauth:grant-type:device-login`.
+- Generic flow follow-up endpoints require the `x-flow-token` returned from `POST /api/flows`.
+- Internal flow artifact redeem now uses the dedicated Keycloak service-account client `auth-api-internal-redeem`.
 - Adminer connects to the shared `auth_sandbox_2` database; inspect `auth_api` and `keycloak` as separate schemas.

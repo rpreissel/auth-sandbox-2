@@ -20,6 +20,7 @@ local-certs/
 *.tfstate.*
 .opencode/
 runtime/caddy-logs/*.json
+runtime/caddy-logs/*.json.gz
 runtime/*.tgz
 keycloak-extension/target/
 *.class
