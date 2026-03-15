@@ -84,20 +84,6 @@ resource "keycloak_realm_user_profile" "realm_profile" {
   }
 }
 
-resource "keycloak_authentication_flow" "device_login_flow" {
-  realm_id    = keycloak_realm.realm.id
-  alias       = "device-login-flow"
-  description = "Browser flow for device login_token exchange"
-  provider_id = "basic-flow"
-}
-
-resource "keycloak_authentication_execution" "device_login_token" {
-  realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.device_login_flow.alias
-  authenticator     = "device-login-token"
-  requirement       = "REQUIRED"
-}
-
 resource "keycloak_openid_client_scope" "profile_scope" {
   realm_id               = keycloak_realm.realm.id
   name                   = "auth-sandbox-profile"
@@ -128,16 +114,12 @@ resource "keycloak_openid_client" "app_web" {
   client_id                    = "app-web"
   name                         = "app-web"
   access_type                  = "CONFIDENTIAL"
-  standard_flow_enabled        = true
+  standard_flow_enabled        = false
   direct_access_grants_enabled = false
   service_accounts_enabled     = false
-  valid_redirect_uris          = ["https://app.localhost:8443/*", "https://auth.localhost:8443/blank"]
+  valid_redirect_uris          = ["https://app.localhost:8443/*"]
   web_origins                  = ["+"]
   client_secret                = var.app_client_secret
-
-  authentication_flow_binding_overrides {
-    browser_id = keycloak_authentication_flow.device_login_flow.id
-  }
 }
 
 resource "keycloak_openid_client_default_scopes" "app_default_scopes" {

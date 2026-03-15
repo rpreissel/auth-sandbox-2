@@ -1,7 +1,6 @@
 import { Buffer } from 'node:buffer'
-import { randomBytes, randomUUID, webcrypto } from 'node:crypto'
 
-import { appConfig, buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
+import { buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
 import type { JsonObject, TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { decodeTokenClaims } from './lib/jwt.js'
@@ -351,48 +350,12 @@ export class KeycloakAdminClient {
 
 export class KeycloakAuthClient {
   async authenticate(loginToken: string) {
-    const codeVerifier = randomBytes(32).toString('base64url')
-    const digest = await webcrypto.subtle.digest('SHA-256', Buffer.from(codeVerifier))
-    const codeChallenge = Buffer.from(digest).toString('base64url')
-    const state = randomUUID()
-
-    const authUrl = new URL(`${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/auth`)
-    authUrl.searchParams.set('response_type', 'code')
-    authUrl.searchParams.set('client_id', keycloakConfig.clientId)
-    authUrl.searchParams.set('redirect_uri', `${appConfig.publicUrl}/blank`)
-    authUrl.searchParams.set('scope', 'openid profile email offline_access')
-    authUrl.searchParams.set('state', state)
-    authUrl.searchParams.set('code_challenge', codeChallenge)
-    authUrl.searchParams.set('code_challenge_method', 'S256')
-    authUrl.searchParams.set('login_token', loginToken)
-
-    const response = await fetch(authUrl, { redirect: 'manual' })
-    const location = response.headers.get('location')
-    if (!location) {
-      throw new Error(`Missing Keycloak redirect location: ${response.status}`)
-    }
-
-    const redirected = new URL(location)
-    if (redirected.searchParams.get('state') !== state) {
-      throw new Error('Keycloak state mismatch')
-    }
-
-    const code = redirected.searchParams.get('code')
-    if (!code) {
-      throw new Error(`Missing code from Keycloak redirect: ${location}`)
-    }
-
-    return this.exchangeAuthorizationCode(code, codeVerifier)
-  }
-
-  async exchangeAuthorizationCode(code: string, codeVerifier: string) {
     const body = createFormBody({
-      grant_type: 'authorization_code',
+      grant_type: 'urn:auth-sandbox-2:params:oauth:grant-type:device-login',
       client_id: keycloakConfig.clientId,
       client_secret: keycloakConfig.clientSecret,
-      redirect_uri: `${appConfig.publicUrl}/blank`,
-      code,
-      code_verifier: codeVerifier
+      scope: 'openid profile email offline_access',
+      login_token: loginToken
     })
 
     const response = await fetchJson<KeycloakTokenResponse>(

@@ -50,7 +50,7 @@ Explicitly out of scope:
 5. If not, the app submits an initial password and the backend sets it via the Keycloak Admin API.
 6. Device app requests an encrypted challenge from `auth-api`.
 7. Device app signs the encrypted payload and sends it back.
-8. Keycloak validates the custom device credential and issues OIDC tokens.
+8. `auth-api` exchanges the signed challenge at the Keycloak token endpoint with a custom OAuth grant, and Keycloak validates the custom device credential before issuing OIDC tokens.
 9. App uses the access token to call `mock-api`, which verifies the token with Keycloak JWKS and the expected audience.
 10. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
 11. App can refresh tokens and log out.
@@ -61,6 +61,7 @@ Explicitly out of scope:
 - The encrypted challenge remains mandatory in the login flow.
 - No Keycloak Required Actions are used for this password flow.
 - Keycloak configuration is managed through OpenTofu in `infra/tofu/keycloak`.
+- The device login token exchange now uses a custom OAuth grant at `/protocol/openid-connect/token` instead of a browser redirect flow.
 - The remaining custom Keycloak logic lives in `keycloak-extension`.
 - Frontends are built statically and served by Caddy.
 

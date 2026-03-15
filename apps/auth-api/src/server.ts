@@ -17,10 +17,6 @@ await app.register(cors, {
 await registerRoutes(app)
 await runMigrations(['apps/auth-api/migrations', 'packages/backend-core/migrations'])
 
-app.get('/blank', async (_request, reply) => {
-  reply.type('text/html').send('<!doctype html><title>blank</title>blank')
-})
-
 const shutdown = async () => {
   await app.close()
 }

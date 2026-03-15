@@ -91,5 +91,5 @@ pnpm --filter @auth-sandbox-2/e2e test
 
 - Keycloak user creation is backend-driven, and `username == userId`.
 - Device credentials are created through the custom realm resource endpoint at `/realms/{realm}/device-credentials`.
-- The Keycloak browser flow is intentionally minimal and uses a single `device-login-token` authenticator execution.
+- Device login is completed through a custom OAuth grant at the Keycloak token endpoint using `grant_type=urn:auth-sandbox-2:params:oauth:grant-type:device-login`.
 - Adminer connects to the shared `auth_sandbox_2` database; inspect `auth_api` and `keycloak` as separate schemas.
