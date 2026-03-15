@@ -35,6 +35,10 @@ async function waitForRuntimeReady(request: APIRequestContext) {
 }
 
 async function waitForUserLoginTrace(request: APIRequestContext, userId: string) {
+  return waitForTrace(request, userId, 'device_login_finish', 'web-client')
+}
+
+async function waitForTrace(request: APIRequestContext, userId: string, traceType: string, actor: string) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const params = new URLSearchParams({
       userId,
@@ -45,7 +49,7 @@ async function waitForUserLoginTrace(request: APIRequestContext, userId: string)
 
     if (response.ok()) {
       const body = await response.json() as { items: TraceListItem[] }
-      const match = body.items.find((trace) => trace.traceType === 'device_login_finish' && trace.actors.includes('web-client'))
+      const match = body.items.find((trace) => trace.traceType === traceType && trace.actors.includes(actor))
       if (match) {
         return match
       }
@@ -54,7 +58,7 @@ async function waitForUserLoginTrace(request: APIRequestContext, userId: string)
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 
-  throw new Error(`No fresh device_login_finish trace found for ${userId}`)
+  throw new Error(`No fresh ${traceType} trace found for ${userId}`)
 }
 
 test.beforeEach(async ({ request }) => {
@@ -119,6 +123,7 @@ test('homepage contains key links', async ({ page }) => {
 })
 
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {
+  test.setTimeout(45000)
   const userId = `e2e-user-${Date.now()}`
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-codes`, {
     data: {
@@ -230,6 +235,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByLabel('Neue geschützte Notiz').fill('Playwright protected note')
   await page.getByRole('button', { name: 'Notiz an Mock API senden' }).click()
   await expect(mockApiPanel).toContainText('Playwright protected note')
+  await waitForTrace(request, userId, 'mock_api_message_create_finished', 'mock-api')
 
   await page.getByRole('tab', { name: 'Token Sitzung' }).click()
   await expect(page.getByRole('heading', { name: 'Access- und ID-Token' })).toBeVisible()

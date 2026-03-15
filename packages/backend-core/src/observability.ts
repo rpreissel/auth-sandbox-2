@@ -18,6 +18,7 @@ import type {
   TraceStatus
 } from '@auth-sandbox-2/shared-types'
 
+import { appConfig } from './config.js'
 import { pool } from './db.js'
 import { logger } from './logger.js'
 
@@ -102,6 +103,35 @@ type QueryParamValue = string | number
 
 const traceStorage = new AsyncLocalStorage<TraceContext>()
 
+function usesDirectTraceWrites() {
+  if (process.env.OBSERVABILITY_WRITE_MODE) {
+    return process.env.OBSERVABILITY_WRITE_MODE === 'direct'
+  }
+
+  return getServiceName() === 'trace-api'
+}
+
+async function postObservabilityWrite<T>(path: string, payload: unknown, expectsJson = true): Promise<T> {
+  const response = await fetch(`${appConfig.traceApiInternalUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+
+  if (!response.ok) {
+    const message = await response.text()
+    throw new Error(`Observability write failed: ${response.status} ${message}`)
+  }
+
+  if (!expectsJson || response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json() as Promise<T>
+}
+
 function getServiceName() {
   return process.env.OBSERVABILITY_SERVICE_NAME ?? 'auth-api'
 }
@@ -150,7 +180,7 @@ export function buildTraceHeaders(overrides?: Partial<Pick<TraceContext, 'traceI
   return headers
 }
 
-export async function ensureTrace(args: StartTraceArgs) {
+async function ensureTraceDirect(args: StartTraceArgs) {
   const traceId = args.traceId ?? randomUUID()
   const correlationId = args.correlationId ?? traceId
 
@@ -195,7 +225,15 @@ export async function ensureTrace(args: StartTraceArgs) {
   return { traceId, correlationId }
 }
 
-export async function startSpan(args: StartSpanArgs) {
+export async function ensureTrace(args: StartTraceArgs) {
+  if (usesDirectTraceWrites()) {
+    return ensureTraceDirect(args)
+  }
+
+  return postObservabilityWrite<{ traceId: string; correlationId: string }>('/internal/observability/traces/ensure', args)
+}
+
+async function startSpanDirect(args: StartSpanArgs) {
   const context = getTraceContext()
   const traceId = args.traceId ?? context?.traceId
   if (!traceId) {
@@ -253,7 +291,29 @@ export async function startSpan(args: StartSpanArgs) {
   return { spanId, traceId, startedAt }
 }
 
-export async function completeSpan(args: CompleteSpanArgs) {
+export async function startSpan(args: StartSpanArgs) {
+  if (usesDirectTraceWrites()) {
+    return startSpanDirect(args)
+  }
+
+  const context = getTraceContext()
+  const payload: StartSpanArgs = {
+    ...args,
+    traceId: args.traceId ?? context?.traceId,
+    parentSpanId: args.parentSpanId ?? context?.spanId ?? null,
+    userId: args.userId ?? context?.userId ?? null,
+    deviceId: args.deviceId ?? context?.deviceId ?? null,
+    sessionId: args.sessionId ?? context?.sessionId ?? null,
+    challengeId: args.challengeId ?? context?.challengeId ?? null
+  }
+
+  return postObservabilityWrite<{ spanId: string; traceId: string; startedAt: string }>('/internal/observability/spans/start', payload).then((result) => ({
+    ...result,
+    startedAt: new Date(result.startedAt)
+  }))
+}
+
+async function completeSpanDirect(args: CompleteSpanArgs) {
   await pool.query(
     `update observability.spans
       set status = $2,
@@ -266,7 +326,15 @@ export async function completeSpan(args: CompleteSpanArgs) {
   )
 }
 
-export async function completeTrace(traceId: string, status: TraceStatus, summary?: string | null) {
+export async function completeSpan(args: CompleteSpanArgs) {
+  if (usesDirectTraceWrites()) {
+    return completeSpanDirect(args)
+  }
+
+  await postObservabilityWrite('/internal/observability/spans/complete', args, false)
+}
+
+async function completeTraceDirect(traceId: string, status: TraceStatus, summary?: string | null) {
   await pool.query(
     `update observability.traces
       set status = $2,
@@ -277,7 +345,15 @@ export async function completeTrace(traceId: string, status: TraceStatus, summar
   )
 }
 
-export async function recordArtifact(input: ArtifactRecordInput) {
+export async function completeTrace(traceId: string, status: TraceStatus, summary?: string | null) {
+  if (usesDirectTraceWrites()) {
+    return completeTraceDirect(traceId, status, summary)
+  }
+
+  await postObservabilityWrite('/internal/observability/traces/complete', { traceId, status, summary: summary ?? null }, false)
+}
+
+async function recordArtifactDirect(input: ArtifactRecordInput) {
   const artifactId = randomUUID()
   const derived = decodeArtifact(input.rawValue, input.encoding, input.contentType)
   const explanation = input.explanation ?? derived.explanation ?? null
@@ -325,6 +401,15 @@ export async function recordArtifact(input: ArtifactRecordInput) {
   }
 
   return artifactId
+}
+
+export async function recordArtifact(input: ArtifactRecordInput) {
+  if (usesDirectTraceWrites()) {
+    return recordArtifactDirect(input)
+  }
+
+  const result = await postObservabilityWrite<{ artifactId: string }>('/internal/observability/artifacts/record', input)
+  return result.artifactId
 }
 
 export async function recordArtifacts(spanId: string, artifacts: ClientEventArtifactInput[]) {

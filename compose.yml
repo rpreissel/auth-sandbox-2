@@ -78,6 +78,9 @@ services:
       AUTH_API_HOST: 0.0.0.0
       AUTH_API_PORT: 3000
       AUTH_API_PUBLIC_URL: https://auth.localhost:8443
+      OBSERVABILITY_SERVICE_NAME: auth-api
+      OBSERVABILITY_WRITE_MODE: http
+      TRACE_API_INTERNAL_URL: http://trace-api:3001
       DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
       DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
       KEYCLOAK_BASE_URL: http://keycloak:8080
@@ -107,6 +110,9 @@ services:
       AUTH_API_PUBLIC_URL: https://auth.localhost:8443
       TRACE_API_HOST: 0.0.0.0
       TRACE_API_PORT: 3001
+      OBSERVABILITY_SERVICE_NAME: trace-api
+      OBSERVABILITY_WRITE_MODE: direct
+      TRACE_API_INTERNAL_URL: http://trace-api:3001
       DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
       DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
       KEYCLOAK_BASE_URL: http://keycloak:8080
@@ -135,6 +141,9 @@ services:
       MOCK_API_PORT: 3002
       MOCK_API_PUBLIC_URL: https://mock.localhost:8443
       MOCK_API_AUDIENCE: mock-api
+      OBSERVABILITY_SERVICE_NAME: mock-api
+      OBSERVABILITY_WRITE_MODE: http
+      TRACE_API_INTERNAL_URL: http://trace-api:3001
       DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
       DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
       KEYCLOAK_BASE_URL: http://keycloak:8080

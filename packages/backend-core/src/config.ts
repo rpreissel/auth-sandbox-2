@@ -9,6 +9,8 @@ const envSchema = z.object({
   AUTH_API_PUBLIC_URL: z.string().url().default('https://auth.localhost:8443'),
   DATABASE_URL: z.string().default('postgresql://auth_sandbox:auth_sandbox@postgres:5432/auth_sandbox_2'),
   DATABASE_SCHEMA: z.string().regex(/^[a-z_][a-z0-9_]*$/).default('auth_api'),
+  TRACE_API_INTERNAL_URL: z.string().url().default('http://127.0.0.1:3001'),
+  OBSERVABILITY_WRITE_MODE: z.enum(['direct', 'http']).optional(),
   KEYCLOAK_BASE_URL: z.string().default('http://keycloak:8080'),
   KEYCLOAK_PUBLIC_URL: z.string().default('https://keycloak.localhost:8443'),
   KEYCLOAK_REALM: z.string().default('auth-sandbox-2'),
@@ -23,6 +25,9 @@ const envSchema = z.object({
 })
 
 const env = envSchema.parse(process.env)
+const defaultObservabilityWriteMode = (process.env.OBSERVABILITY_SERVICE_NAME ?? 'auth-api') === 'trace-api'
+  ? 'direct'
+  : 'http'
 
 export const appConfig = {
   host: env.AUTH_API_HOST,
@@ -30,6 +35,8 @@ export const appConfig = {
   publicUrl: env.AUTH_API_PUBLIC_URL,
   databaseUrl: env.DATABASE_URL,
   databaseSchema: env.DATABASE_SCHEMA,
+  traceApiInternalUrl: env.TRACE_API_INTERNAL_URL,
+  observabilityWriteMode: env.OBSERVABILITY_WRITE_MODE ?? defaultObservabilityWriteMode,
   challengeTtlSeconds: env.CHALLENGE_TTL_SECONDS,
   corsOrigins: env.CORS_ORIGIN.split(',').map((value) => value.trim())
 }

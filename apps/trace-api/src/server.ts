@@ -2,6 +2,8 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import sensible from '@fastify/sensible'
 
+process.env.OBSERVABILITY_SERVICE_NAME ??= 'trace-api'
+
 import { appConfig, logger, runMigrations } from '@auth-sandbox-2/backend-core'
 import { registerTraceRoutes } from './routes.js'
 
