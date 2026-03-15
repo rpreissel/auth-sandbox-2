@@ -117,8 +117,8 @@ resource "keycloak_openid_client" "app_web" {
   standard_flow_enabled        = false
   direct_access_grants_enabled = false
   service_accounts_enabled     = false
-  valid_redirect_uris          = ["https://app.localhost:8443/*"]
-  web_origins                  = ["+"]
+  valid_redirect_uris          = []
+  web_origins                  = []
   client_secret                = var.app_client_secret
 }
 

@@ -15,8 +15,8 @@ done
 
 attempt=1
 
-while true; do
-  if tofu init -input=false && tofu apply \
+apply_config() {
+  tofu init -input=false && tofu apply \
     -input=false \
     -auto-approve \
     -state="${STATE_PATH}" \
@@ -26,7 +26,22 @@ while true; do
     -var="realm_name=${KEYCLOAK_REALM}" \
     -var="app_client_secret=${KEYCLOAK_CLIENT_SECRET}" \
     -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}" \
-    -var="mock_api_audience=${MOCK_API_AUDIENCE:-mock-api}"; then
+    -var="mock_api_audience=${MOCK_API_AUDIENCE:-mock-api}" \
+    "$@"
+}
+
+while true; do
+  if tofu state list -state="${STATE_PATH}" 2>/dev/null | grep -qx 'keycloak_authentication_flow.device_login_flow'; then
+    echo "migrating app-web away from legacy device-login browser flow"
+    if ! apply_config -target=keycloak_openid_client.app_web; then
+      echo "targeted app-web migration failed on attempt ${attempt}; retrying in 5 seconds"
+      attempt=$((attempt + 1))
+      sleep 5
+      continue
+    fi
+  fi
+
+  if apply_config; then
     echo "keycloak config applied successfully"
     exit 0
   fi
