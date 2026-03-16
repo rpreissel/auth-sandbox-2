@@ -1,15 +1,5 @@
 export type IsoDateTime = string
 
-export type RegistrationCodeRecord = {
-  id: string
-  userId: string
-  displayName: string | null
-  code: string
-  expiresAt: IsoDateTime
-  useCount: number
-  createdAt: IsoDateTime
-}
-
 export type RegistrationPersonRecord = {
   id: string
   userId: string
@@ -46,10 +36,18 @@ export type DeviceRecord = {
   createdAt: IsoDateTime
 }
 
-export type CreateRegistrationCodeInput = {
+export type RegistrationIdentityRecord = {
+  id: string
   userId: string
-  displayName?: string
-  validForDays?: number
+  firstName: string
+  lastName: string
+  birthDate: string
+  code: string | null
+  codeExpiresAt: IsoDateTime | null
+  codeUseCount: number | null
+  phoneNumber: string | null
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
 }
 
 export type CreateRegistrationIdentityInput = {
@@ -60,24 +58,6 @@ export type CreateRegistrationIdentityInput = {
   code?: string
   codeValidForDays?: number
   phoneNumber?: string
-}
-
-export type RegisterDeviceInput = {
-  userId: string
-  deviceName: string
-  firstName: string
-  lastName: string
-  birthDate: string
-  identityService: AssuranceFlowService
-  identityInput?: JsonObject
-  publicKey: string
-}
-
-export type RegisterDeviceResponse = {
-  deviceId: string
-  deviceName: string
-  publicKeyHash: string
-  passwordRequired: boolean
 }
 
 export type AssuranceFlowPurpose = 'registration' | 'account_upgrade' | 'step_up'

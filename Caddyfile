@@ -62,13 +62,13 @@ https://admin.localhost:8443 {
   log_append client_name {http.request.header.X-Client-Name}
   log_append method {http.request.method}
   log_append uri {http.request.uri}
-  redir /trace /trace/ 308
+  redir /trace https://trace.localhost:8443/ 308
+  redir /trace/ https://trace.localhost:8443/ 308
   handle_path /trace-api/* {
     reverse_proxy trace-api:3001
   }
-  handle_path /trace/* {
-    root * /srv/trace-web
-    file_server
+  handle /trace/* {
+    redir https://trace.localhost:8443/ 308
   }
   handle_path /caddy-logs/* {
     root * /var/log/caddy
@@ -110,10 +110,22 @@ https://trace.localhost:8443 {
   log_append client_name {http.request.header.X-Client-Name}
   log_append method {http.request.method}
   log_append uri {http.request.uri}
-  log_append upstream_host {rp.upstream.host}
-  log_append upstream_duration_ms {rp.upstream.duration_ms}
-  log_append upstream_latency_ms {rp.upstream.latency_ms}
-  reverse_proxy trace-api:3001
+  handle_path /trace-api/* {
+    reverse_proxy trace-api:3001
+  }
+  @trace_api path /health /traces /traces/* /spans/* /artifacts/* /client-events /internal/*
+  handle @trace_api {
+    log_append upstream_host {rp.upstream.host}
+    log_append upstream_duration_ms {rp.upstream.duration_ms}
+    log_append upstream_latency_ms {rp.upstream.latency_ms}
+    reverse_proxy trace-api:3001
+  }
+  handle_path /caddy-logs/* {
+    root * /var/log/caddy
+    file_server
+  }
+  root * /srv/trace-web
+  file_server
 }
 
 http://mock.localhost:8088 {

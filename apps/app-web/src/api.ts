@@ -19,8 +19,6 @@ import type {
   SmsTanStartResponse,
   RefreshTokensInput,
   RefreshTokensResponse,
-  RegisterDeviceInput,
-  RegisterDeviceResponse,
   SetPasswordInput,
   SpanDetailResponse,
   StartLoginInput,
@@ -153,7 +151,6 @@ async function mockRequest<T>(path: string, accessToken: string, init?: RequestI
 }
 
 export const api = {
-  registerDevice: (body: RegisterDeviceInput, options?: TraceRequestOptions) => request<RegisterDeviceResponse>('/api/device/register', { method: 'POST', body: JSON.stringify(body) }, options),
   createFlow: (body: CreateFlowInput, options?: TraceRequestOptions) => request<CreateFlowResponse>('/api/flows', { method: 'POST', body: JSON.stringify(body) }, options),
   getFlow: (flowId: string, flowToken: string, options?: TraceRequestOptions) => bearerRequest<GetFlowResponse>(`/api/flows/${flowId}`, flowToken, undefined, options),
   selectFlowService: (flowId: string, flowToken: string, body: SelectFlowServiceInput, options?: TraceRequestOptions) => bearerRequest<SelectFlowServiceResponse>(`/api/flows/${flowId}/select-service`, flowToken, { method: 'POST', body: JSON.stringify(body) }, options),

@@ -1,13 +1,3 @@
-export type RegistrationCodeRow = {
-  id: string
-  user_id: string
-  display_name: string | null
-  code: string
-  expires_at: string
-  use_count: number
-  created_at: string
-}
-
 export type RegistrationPersonRow = {
   id: string
   user_id: string
@@ -31,6 +21,20 @@ export type RegistrationPersonSmsNumberRow = {
   id: string
   person_id: string
   phone_number: string
+  created_at: string
+  updated_at: string
+}
+
+export type RegistrationIdentityRow = {
+  id: string
+  user_id: string
+  first_name: string
+  last_name: string
+  birth_date: string
+  code: string | null
+  code_expires_at: string | null
+  code_use_count: number | null
+  phone_number: string | null
   created_at: string
   updated_at: string
 }

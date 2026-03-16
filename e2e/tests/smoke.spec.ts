@@ -8,7 +8,7 @@ const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandb
 const KEYCLOAK_TOKEN_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect/token'
 const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
-const TRACE_WEB_URL = 'https://admin.localhost:8443/trace/'
+const TRACE_WEB_URL = 'https://trace.localhost:8443/'
 
 type TraceListItem = {
   traceId: string
@@ -107,17 +107,10 @@ test('postgres viewer login is reachable', async ({ page }) => {
 test('admin overview is localized in German', async ({ page }) => {
   await page.goto(ADMIN_WEB_URL)
 
-  await expect(page.getByRole('heading', { name: /verwalte registrierungscodes und behalte bestehende geraetebindungen im blick/i })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Registrierungscode erstellen' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /bereite registrierungsidentitaeten vor und behalte bestehende geraetebindungen im blick/i })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungsidentität vorbereiten' })).toBeVisible()
-  await expect(page.getByText('Anzeigename')).toBeVisible()
-  await expect(page.getByText('Gueltig fuer Tage')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Code erstellen' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Registrierungscodes', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Geraete', exact: true })).toBeVisible()
-  await expect(page.getByLabel('Admin Ueberblickszahlen')).toContainText('Registrierungscodes')
   await expect(page.getByLabel('Admin Ueberblickszahlen')).toContainText('Geraete')
-  await expect(page.getByLabel('Registrierungscodes durchsuchen')).toBeVisible()
   await expect(page.getByLabel('Geraete durchsuchen')).toBeVisible()
 })
 

@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import type { CreateRegistrationIdentityInput, DeviceRecord, RegistrationCodeRecord } from '@auth-sandbox-2/shared-types'
+import type { CreateRegistrationIdentityInput, DeviceRecord, RegistrationIdentityRecord } from '@auth-sandbox-2/shared-types'
 
 import './styles.css'
 
@@ -38,11 +38,10 @@ async function request<T>(path: string, init?: RequestInit) {
 }
 
 function AdminApp() {
-  const [codes, setCodes] = useState<RegistrationCodeRecord[]>([])
   const [devices, setDevices] = useState<DeviceRecord[]>([])
-  const [codeQuery, setCodeQuery] = useState('')
+  const [registrationIdentities, setRegistrationIdentities] = useState<RegistrationIdentityRecord[]>([])
   const [deviceQuery, setDeviceQuery] = useState('')
-  const [form, setForm] = useState({ userId: 'demo-user', displayName: 'Demo User', validForDays: 30 })
+  const [identityQuery, setIdentityQuery] = useState('')
   const [identityForm, setIdentityForm] = useState<CreateRegistrationIdentityInput>({
     userId: 'demo-user',
     firstName: 'Demo',
@@ -54,27 +53,17 @@ function AdminApp() {
   })
 
   async function refresh() {
-    const [codesResult, devicesResult] = await Promise.all([
-      request<RegistrationCodeRecord[]>('/api/admin/registration-codes'),
-      request<DeviceRecord[]>('/api/admin/devices')
+    const [devicesResult, registrationIdentitiesResult] = await Promise.all([
+      request<DeviceRecord[]>('/api/admin/devices'),
+      request<RegistrationIdentityRecord[]>('/api/admin/registration-identities')
     ])
-
-    setCodes(codesResult)
     setDevices(devicesResult)
+    setRegistrationIdentities(registrationIdentitiesResult)
   }
 
   useEffect(() => {
     void refresh()
   }, [])
-
-  async function handleCreate(event: FormEvent) {
-    event.preventDefault()
-    await request('/api/admin/registration-codes', {
-      method: 'POST',
-      body: JSON.stringify(form)
-    })
-    await refresh()
-  }
 
   async function handleCreateIdentity(event: FormEvent) {
     event.preventDefault()
@@ -84,18 +73,6 @@ function AdminApp() {
     })
     await refresh()
   }
-
-  const filteredCodes = useMemo(() => {
-    const query = codeQuery.trim().toLowerCase()
-    if (!query) {
-      return codes
-    }
-
-    return codes.filter((code) => {
-      const haystack = [code.userId, code.code, String(code.useCount)].join(' ').toLowerCase()
-      return haystack.includes(query)
-    })
-  }, [codeQuery, codes])
 
   const filteredDevices = useMemo(() => {
     const query = deviceQuery.trim().toLowerCase()
@@ -109,49 +86,45 @@ function AdminApp() {
     })
   }, [deviceQuery, devices])
 
+  const filteredRegistrationIdentities = useMemo(() => {
+    const query = identityQuery.trim().toLowerCase()
+    if (!query) {
+      return registrationIdentities
+    }
+
+    return registrationIdentities.filter((identity) => {
+      const haystack = [
+        identity.userId,
+        identity.firstName,
+        identity.lastName,
+        identity.birthDate,
+        identity.code ?? '',
+        identity.phoneNumber ?? ''
+      ].join(' ').toLowerCase()
+
+      return haystack.includes(query)
+    })
+  }, [identityQuery, registrationIdentities])
+
   return (
     <main className="shell admin-overview-shell">
       <section className="admin-overview-grid">
         <section className="card hero admin-hero">
           <p className="eyebrow">Admin-Oberflaeche</p>
-          <h1>Verwalte Registrierungscodes und behalte bestehende Geraetebindungen im Blick.</h1>
+          <h1>Bereite Registrierungsidentitaeten vor und behalte bestehende Geraetebindungen im Blick.</h1>
           <p className="section-copy">
             Diese Anwendung bleibt bewusst bei den taeglichen Verwaltungsaufgaben fuer Registrierung und Geraetebindung.
           </p>
           <div className="admin-summary-row" aria-label="Admin Ueberblickszahlen">
             <article className="admin-summary-chip">
-              <span>Registrierungscodes</span>
-              <strong>{codes.length}</strong>
+              <span>Identitaeten</span>
+              <strong>{registrationIdentities.length}</strong>
             </article>
             <article className="admin-summary-chip">
               <span>Geraete</span>
               <strong>{devices.length}</strong>
             </article>
           </div>
-        </section>
-
-        <section className="card admin-form-card">
-          <div className="list-card-header">
-            <div>
-              <h2>Registrierungscode erstellen</h2>
-              <p className="section-copy">Lege neue Aktivierungscodes an, damit Geraete schnell fuer den Demo-Flow registriert werden koennen.</p>
-            </div>
-          </div>
-          <form className="grid" onSubmit={handleCreate}>
-            <label>
-              User ID
-              <input value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} />
-            </label>
-            <label>
-              Anzeigename
-              <input value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
-            </label>
-            <label>
-              Gueltig fuer Tage
-              <input type="number" value={form.validForDays} onChange={(event) => setForm({ ...form, validForDays: Number(event.target.value) })} />
-            </label>
-            <button type="submit">Code erstellen</button>
-          </form>
         </section>
 
         <section className="card admin-form-card">
@@ -164,31 +137,31 @@ function AdminApp() {
           <form className="grid" onSubmit={handleCreateIdentity}>
             <label>
               User ID
-              <input value={identityForm.userId} onChange={(event) => setIdentityForm({ ...identityForm, userId: event.target.value })} />
+              <input name="userId" value={identityForm.userId} onChange={(event) => setIdentityForm({ ...identityForm, userId: event.target.value })} />
             </label>
             <label>
               Vorname
-              <input value={identityForm.firstName} onChange={(event) => setIdentityForm({ ...identityForm, firstName: event.target.value })} />
+              <input name="firstName" value={identityForm.firstName} onChange={(event) => setIdentityForm({ ...identityForm, firstName: event.target.value })} />
             </label>
             <label>
               Nachname
-              <input value={identityForm.lastName} onChange={(event) => setIdentityForm({ ...identityForm, lastName: event.target.value })} />
+              <input name="lastName" value={identityForm.lastName} onChange={(event) => setIdentityForm({ ...identityForm, lastName: event.target.value })} />
             </label>
             <label>
               Geburtsdatum
-              <input type="date" value={identityForm.birthDate} onChange={(event) => setIdentityForm({ ...identityForm, birthDate: event.target.value })} />
+              <input name="birthDate" type="date" value={identityForm.birthDate} onChange={(event) => setIdentityForm({ ...identityForm, birthDate: event.target.value })} />
             </label>
             <label>
               Code
-              <input value={identityForm.code ?? ''} onChange={(event) => setIdentityForm({ ...identityForm, code: event.target.value || undefined })} />
+              <input name="code" value={identityForm.code ?? ''} onChange={(event) => setIdentityForm({ ...identityForm, code: event.target.value || undefined })} />
             </label>
             <label>
               Code gültig für Tage
-              <input type="number" value={identityForm.codeValidForDays ?? 30} onChange={(event) => setIdentityForm({ ...identityForm, codeValidForDays: Number(event.target.value) })} />
+              <input name="codeValidForDays" type="number" value={identityForm.codeValidForDays ?? 30} onChange={(event) => setIdentityForm({ ...identityForm, codeValidForDays: Number(event.target.value) })} />
             </label>
             <label>
               Telefonnummer
-              <input value={identityForm.phoneNumber ?? ''} onChange={(event) => setIdentityForm({ ...identityForm, phoneNumber: event.target.value || undefined })} />
+              <input name="phoneNumber" value={identityForm.phoneNumber ?? ''} onChange={(event) => setIdentityForm({ ...identityForm, phoneNumber: event.target.value || undefined })} />
             </label>
             <button type="submit">Identität speichern</button>
           </form>
@@ -198,29 +171,32 @@ function AdminApp() {
           <section className="card list-card admin-list-card">
             <div className="list-card-header">
               <div>
-                <h2>Registrierungscodes</h2>
-                <p className="section-copy">Aktive Codes fuer neue Geraete-Registrierungen.</p>
+                <h2>Registrierungsidentitaeten</h2>
+                <p className="section-copy">Vorbereitete Personen mit optionalem Code und optionaler SMS-Zielnummer.</p>
               </div>
-              <strong>{codes.length}</strong>
+              <strong>{registrationIdentities.length}</strong>
             </div>
             <label className="admin-list-search">
-              Registrierungscodes durchsuchen
-              <input
-                aria-label="Registrierungscodes durchsuchen"
-                placeholder="User ID, Code oder Nutzung suchen"
-                value={codeQuery}
-                onChange={(event) => setCodeQuery(event.target.value)}
+              Identitaeten durchsuchen
+                <input
+                  name="identityQuery"
+                  aria-label="Identitaeten durchsuchen"
+                  placeholder="User ID, Name, Code oder Telefonnummer suchen"
+                  value={identityQuery}
+                onChange={(event) => setIdentityQuery(event.target.value)}
               />
             </label>
             <div className="list admin-list-scroll">
-              {filteredCodes.map((code) => (
-                <article key={code.id}>
-                  <strong>{code.userId}</strong>
-                  <span>{code.code}</span>
-                  <span>Nutzungen: {code.useCount}</span>
+              {filteredRegistrationIdentities.map((identity) => (
+                <article key={identity.id}>
+                  <strong>{identity.userId}</strong>
+                  <span>{identity.firstName} {identity.lastName}</span>
+                  <span>Geburtsdatum: {identity.birthDate}</span>
+                  <span>Code: {identity.code ?? 'nicht gesetzt'}</span>
+                  <span>SMS: {identity.phoneNumber ?? 'nicht gesetzt'}</span>
                 </article>
               ))}
-              {!filteredCodes.length && <p>{codes.length ? 'Keine Registrierungscodes passen zur aktuellen Suche.' : 'Noch keine Registrierungscodes vorhanden.'}</p>}
+              {!filteredRegistrationIdentities.length && <p>{registrationIdentities.length ? 'Keine Identitaeten passen zur aktuellen Suche.' : 'Noch keine Registrierungsidentitaeten vorbereitet.'}</p>}
             </div>
           </section>
 
@@ -234,10 +210,11 @@ function AdminApp() {
             </div>
             <label className="admin-list-search">
               Geraete durchsuchen
-              <input
-                aria-label="Geraete durchsuchen"
-                placeholder="User ID, Geraetename oder Hash suchen"
-                value={deviceQuery}
+                <input
+                  name="deviceQuery"
+                  aria-label="Geraete durchsuchen"
+                  placeholder="User ID, Geraetename oder Hash suchen"
+                  value={deviceQuery}
                 onChange={(event) => setDeviceQuery(event.target.value)}
               />
             </label>

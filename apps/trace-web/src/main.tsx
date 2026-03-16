@@ -12,6 +12,7 @@ import type {
 import './styles.css'
 
 const API_BASE = import.meta.env.VITE_TRACE_API_URL ?? '/trace-api'
+const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_DETAIL_PREFIX = '#trace/'
 
 type ProxyLogRecord = {
@@ -291,7 +292,7 @@ function TraceApp() {
       selectedTrace={selectedTrace}
       traceLoading={traceLoading}
       traceQuery={traceQuery}
-      onBack={() => window.location.assign('/')}
+      onBack={() => window.location.assign(ADMIN_WEB_URL)}
       onChangeQuery={setTraceQuery}
       onOpenDetail={(traceId) => navigateToRoute({ name: 'trace-detail', traceId })}
       onRefresh={() => void refresh()}
@@ -337,6 +338,7 @@ function TraceBrowserPage(props: {
           <label className="trace-search">
             Traces durchsuchen
               <input
+                name="traceQuery"
                 aria-label="Traces durchsuchen"
                 placeholder="Titel, Akteur oder Status suchen"
                 value={props.traceQuery}

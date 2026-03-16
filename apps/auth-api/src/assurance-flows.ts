@@ -31,7 +31,6 @@ import type {
   AssuranceFlowRow,
   AssuranceFlowStatus,
   DeviceRow,
-  RegistrationCodeRow,
   RegistrationPersonCodeRow,
   RegistrationPersonRow,
   RegistrationPersonSmsNumberRow
@@ -379,28 +378,6 @@ function maskPhone(target: string) {
 
 function generateArtifactCode(prefix: 'ah' | 'rc') {
   return `${prefix}_${randomUUID()}`
-}
-
-async function getRegistrationCodeForFlow(flow: AssuranceFlowRow, db: Queryable) {
-  const context = readContext(flow)
-  const activationCode = typeof context.activationCode === 'string' ? context.activationCode : null
-  const userId = flow.prospective_user_id ?? flow.user_hint
-  if (!activationCode || !userId) {
-    throw badRequest('Registration flow is missing activation code or user id')
-  }
-
-  const result = await db.query<RegistrationCodeRow>(
-    'select * from registration_codes where user_id = $1 and code = $2',
-    [userId, activationCode]
-  )
-  const row = result.rows[0]
-  if (!row) {
-    throw badRequest('Invalid registration code')
-  }
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    throw badRequest('Registration code expired')
-  }
-  return row
 }
 
 async function getRegistrationPersonForFlow(flow: AssuranceFlowRow, db: Queryable) {
@@ -1299,71 +1276,5 @@ export async function redeemFlowArtifact(code: string, expectedKind: 'assurance_
         authTime: typeof result.authTime === 'string' ? result.authTime : new Date().toISOString()
       }
     })
-  )
-}
-
-export async function registerDeviceViaFlow(args: {
-  userId: string
-  firstName: string
-  lastName: string
-  birthDate: string
-  deviceName: string
-  identityService: AssuranceFlowService
-  identityInput?: JsonObject
-  publicKey: string
-}) {
-  return runWithSpan(
-    {
-      kind: 'process',
-      actorType: 'backend',
-      actorName: 'auth-api',
-      operation: 'register_device_via_flow',
-      userId: args.userId,
-      notes: 'Register device through the generic flow engine.'
-    },
-    async () => {
-      const created = await createPublicAssuranceFlow({
-        purpose: 'registration',
-        subjectId: args.userId,
-        context: {
-          firstName: args.firstName,
-          lastName: args.lastName,
-          birthDate: args.birthDate,
-          identityService: args.identityService,
-          identityInput: args.identityInput ?? {},
-          deviceName: args.deviceName,
-          publicKey: args.publicKey
-        }
-      })
-      if (args.identityService === 'sms_tan') {
-        throw badRequest('Legacy device registration does not support sms_tan; use the flow endpoints for multi-step registration')
-      }
-      await selectPublicAssuranceFlowService(created.flowId, 'person_code')
-      await startPublicAssuranceFlowMethod(created.flowId, 'code', {
-        payload: {
-          service: 'person_code'
-        }
-      })
-      const completed = await completePublicAssuranceFlowMethod(created.flowId, 'code', {
-        payload: {
-          code: typeof args.identityInput?.code === 'string' ? args.identityInput.code : undefined
-        }
-      })
-      const finalized = await finalizePublicAssuranceFlow(created.flowId, { serviceResultToken: completed.serviceResultToken, channel: 'registration' })
-      if (!finalized.finalization || finalized.finalization.kind !== 'registration_result') {
-        throw badRequest('Registration flow did not return a registration result')
-      }
-      const storedFlow = await getAssuranceFlow(created.flowId)
-      if (!storedFlow) {
-        throw notFound('Unknown flow')
-      }
-      const result = readResult(storedFlow)
-      return {
-        deviceId: typeof result.deviceId === 'string' ? result.deviceId : created.flowId,
-        deviceName: args.deviceName,
-        publicKeyHash: typeof result.publicKeyHash === 'string' ? result.publicKeyHash : hashPublicKey(args.publicKey),
-        passwordRequired: finalized.finalization.passwordSetupRequired
-      }
-    }
   )
 }

@@ -19,15 +19,12 @@ import { isAllowedInternalRedeemTokenClaims, type InternalRedeemAccessTokenClaim
 import {
   completeFlowService,
   createRegistrationIdentity,
-  createRegistrationCode,
   deleteDevice,
-  deleteRegistrationCode,
   finishLogin,
+  listRegistrationIdentities,
   listDevices,
-  listRegistrationCodes,
   logout,
   refreshTokens,
-  registerDevice,
   resendFlowService,
   completeMobileStepUp,
   selectFlowService,
@@ -65,12 +62,6 @@ const redeemArtifactSchema = z.object({
   kind: z.enum(['assurance_handle', 'result_code'])
 })
 
-const createRegistrationCodeSchema = z.object({
-  userId: z.string().min(1),
-  displayName: z.string().optional(),
-  validForDays: z.number().int().positive().optional()
-})
-
 const createRegistrationIdentitySchema = z.object({
   userId: z.string().min(1),
   firstName: z.string().min(1),
@@ -79,17 +70,6 @@ const createRegistrationIdentitySchema = z.object({
   code: z.string().min(1).optional(),
   codeValidForDays: z.number().int().positive().optional(),
   phoneNumber: z.string().min(1).optional()
-})
-
-const registerDeviceSchema = z.object({
-  userId: z.string().min(1),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  birthDate: z.string().min(1),
-  deviceName: z.string().min(1),
-  identityService: z.enum(['person_code', 'sms_tan']),
-  identityInput: z.record(z.string(), z.json()).optional(),
-  publicKey: z.string().min(1)
 })
 
 const setPasswordSchema = z.object({
@@ -376,29 +356,6 @@ export async function registerRoutes(app: any) {
     })
   })
 
-  app.get('/api/admin/registration-codes', async (request: FastifyRequest, reply: FastifyReply) => tracedRoute({
-    request,
-    reply,
-    traceType: 'admin_registration_codes_list',
-    title: 'Admin registration codes list',
-    summary: 'Admin web requested the current registration code list.',
-    run: () => listRegistrationCodes()
-  }))
-  app.post('/api/admin/registration-codes', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = createRegistrationCodeSchema.parse(request.body)
-    const result = await tracedRoute({
-      request,
-      reply,
-      traceType: 'admin_registration_code_create',
-      title: `Create registration code for ${body.userId}`,
-      summary: 'Admin web created a new activation code for a demo device registration.',
-      userId: body.userId,
-      body,
-      run: () => createRegistrationCode(body)
-    })
-    reply.code(201)
-    return result
-  })
   app.post('/api/admin/registration-identities', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = createRegistrationIdentitySchema.parse(request.body)
     const result = await tracedRoute({
@@ -414,19 +371,14 @@ export async function registerRoutes(app: any) {
     reply.code(201)
     return result
   })
-  app.delete('/api/admin/registration-codes/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = z.object({ id: z.string().uuid() }).parse(request.params)
-    await tracedRoute({
-      request,
-      reply,
-      traceType: 'admin_registration_code_delete',
-      title: `Delete registration code ${params.id}`,
-      summary: 'Admin web removed an activation code from the demo environment.',
-      run: () => deleteRegistrationCode(params.id)
-    })
-    reply.code(204)
-  })
-
+  app.get('/api/admin/registration-identities', async (request: FastifyRequest, reply: FastifyReply) => tracedRoute({
+    request,
+    reply,
+    traceType: 'admin_registration_identities_list',
+    title: 'Admin registration identities list',
+    summary: 'Admin web requested the current registration identities inventory.',
+    run: () => listRegistrationIdentities()
+  }))
   app.get('/api/admin/devices', async (request: FastifyRequest, reply: FastifyReply) => tracedRoute({
     request,
     reply,
@@ -446,23 +398,6 @@ export async function registerRoutes(app: any) {
       run: () => deleteDevice(params.id)
     })
     reply.code(204)
-  })
-
-  app.post('/api/device/register', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = registerDeviceSchema.parse(request.body)
-    reply.header('x-auth-sandbox-deprecated', 'Use POST /api/flows, POST /api/flows/:flowId/select-service, direct /api/identification/* endpoints, then finalize')
-    const result = await tracedRoute({
-      request,
-      reply,
-      traceType: 'device_register',
-      title: `Register device ${body.deviceName}`,
-      summary: 'App web registered a device and created the corresponding Keycloak credential.',
-      userId: body.userId,
-      body,
-      run: () => registerDevice(body)
-    })
-    reply.code(201)
-    return result
   })
 
   app.post('/api/device/set-password', async (request: FastifyRequest, reply: FastifyReply) => {

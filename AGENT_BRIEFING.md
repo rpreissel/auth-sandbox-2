@@ -329,16 +329,6 @@ Der neue Flow soll **nicht** auf Keycloak-Onboarding-Zwaengen beruhen, sondern a
 
 Es soll nur das Noetigste geben.
 
-## `registration_codes`
-
-Mindestens:
-- `id`
-- `user_id`
-- `code`
-- `expires_at`
-- `use_count`
-- `created_at`
-
 ## `devices`
 
 Mindestens:
@@ -365,7 +355,6 @@ Mindestens:
 - `deviceName` ist pro `userId` eindeutig
 - `publicKeyHash` ist global eindeutig
 - ein User kann mehrere Devices haben
-- Registration Code gehoert fachlich zu genau einem `userId`
 
 ---
 
@@ -377,9 +366,7 @@ Die API soll klein, klar und konsistent sein.
 
 Mindestens:
 
-- `POST /api/admin/registration-codes`
-- `GET /api/admin/registration-codes`
-- `DELETE /api/admin/registration-codes/:id`
+- `POST /api/admin/registration-identities`
 - `GET /api/admin/devices`
 - `DELETE /api/admin/devices/:id` optional, wenn minimal sinnvoll
 
@@ -387,7 +374,6 @@ Mindestens:
 
 Mindestens:
 
-- `POST /api/device/register`
 - `POST /api/device/set-password`
 - `POST /api/device/login/start`
 - `POST /api/device/login/finish`

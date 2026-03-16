@@ -5,16 +5,13 @@ import type {
   AssuranceFlowService,
   CreateFlowInput,
   CreateRegistrationIdentityInput,
-  CreateRegistrationCodeInput,
   DeviceRecord,
   FinishLoginInput,
   FinishLoginResponse,
   LogoutResponse,
   RefreshTokensInput,
   RefreshTokensResponse,
-  RegisterDeviceInput,
-  RegisterDeviceResponse,
-  RegistrationCodeRecord,
+  RegistrationIdentityRecord,
   RegistrationPersonCodeRecord,
   RegistrationPersonRecord,
   RegistrationPersonSmsNumberRecord,
@@ -28,17 +25,15 @@ import {
   completePublicAssuranceFlowMethod,
   createPublicAssuranceFlow,
   finalizePublicAssuranceFlow,
-  registerDeviceViaFlow,
   selectPublicAssuranceFlowService,
   startPublicAssuranceFlowMethod
 } from './assurance-flows.js'
 import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
-import { generateActivationCode } from './lib/password.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
 import type {
   ChallengeRow,
   DeviceRow,
-  RegistrationCodeRow,
+  RegistrationIdentityRow,
   RegistrationPersonCodeRow,
   RegistrationPersonRow,
   RegistrationPersonSmsNumberRow
@@ -101,18 +96,6 @@ function getFlowServiceHandler(service: AssuranceFlowService) {
   return handler
 }
 
-function mapRegistrationCode(row: RegistrationCodeRow): RegistrationCodeRecord {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    displayName: row.display_name,
-    code: row.code,
-    expiresAt: row.expires_at,
-    useCount: row.use_count,
-    createdAt: row.created_at
-  }
-}
-
 function mapRegistrationPerson(row: RegistrationPersonRow): RegistrationPersonRecord {
   return {
     id: row.id,
@@ -157,34 +140,20 @@ function mapDevice(row: DeviceRow): DeviceRecord {
   }
 }
 
-export async function listRegistrationCodes() {
-  const result = await pool.query<RegistrationCodeRow>('select * from registration_codes order by created_at desc')
-  return result.rows.map(mapRegistrationCode)
-}
-
-export async function createRegistrationCode(input: CreateRegistrationCodeInput) {
-  return runWithSpan(
-    {
-      kind: 'process',
-      actorType: 'backend',
-      actorName: 'auth-api',
-      operation: 'create_registration_code',
-      userId: input.userId,
-      notes: 'Create registration code service operation.'
-    },
-    async () => {
-      await adminClient.ensureUser(input.userId, input.displayName)
-      const code = generateActivationCode()
-      const validForDays = input.validForDays ?? 90
-      const result = await pool.query<RegistrationCodeRow>(
-        `insert into registration_codes (user_id, display_name, code, expires_at)
-         values ($1, $2, $3, now() + ($4 || ' days')::interval)
-         returning *`,
-        [input.userId, input.displayName ?? null, code, validForDays]
-      )
-      return mapRegistrationCode(result.rows[0])
-    }
-  )
+function mapRegistrationIdentity(row: RegistrationIdentityRow): RegistrationIdentityRecord {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    birthDate: row.birth_date,
+    code: row.code,
+    codeExpiresAt: row.code_expires_at,
+    codeUseCount: row.code_use_count,
+    phoneNumber: row.phone_number,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }
 }
 
 export async function createRegistrationIdentity(input: CreateRegistrationIdentityInput) {
@@ -248,13 +217,38 @@ export async function createRegistrationIdentity(input: CreateRegistrationIdenti
   )
 }
 
-export async function deleteRegistrationCode(id: string) {
-  await pool.query('delete from registration_codes where id = $1', [id])
-}
-
 export async function listDevices() {
   const result = await pool.query<DeviceRow>('select * from devices order by created_at desc')
   return result.rows.map(mapDevice)
+}
+
+export async function listRegistrationIdentities() {
+  const result = await pool.query<RegistrationIdentityRow>(
+    `select
+       people.id,
+       people.user_id,
+       people.first_name,
+       people.last_name,
+       people.birth_date,
+       latest_code.code,
+       latest_code.expires_at as code_expires_at,
+       latest_code.use_count as code_use_count,
+       sms.phone_number,
+       people.created_at,
+       people.updated_at
+     from registration_people people
+     left join lateral (
+       select code, expires_at, use_count
+       from registration_person_codes
+       where person_id = people.id
+       order by created_at desc
+       limit 1
+     ) latest_code on true
+     left join registration_person_sms_numbers sms on sms.person_id = people.id
+     order by people.updated_at desc, people.created_at desc`
+  )
+
+  return result.rows.map(mapRegistrationIdentity)
 }
 
 export async function deleteDevice(id: string) {
@@ -273,20 +267,6 @@ export async function deleteDevice(id: string) {
         await adminClient.deleteDeviceCredential(device.user_id, device.keycloak_credential_id)
       }
     }
-  )
-}
-
-export async function registerDevice(input: RegisterDeviceInput): Promise<RegisterDeviceResponse> {
-  return runWithSpan(
-    {
-      kind: 'process',
-      actorType: 'backend',
-      actorName: 'auth-api',
-      operation: 'register_device',
-      userId: input.userId,
-      notes: 'Register device service operation.'
-    },
-    async () => registerDeviceViaFlow(input)
   )
 }
 

@@ -809,27 +809,27 @@ export function App() {
                   <form className="grid form-stack" onSubmit={handleRegister}>
                     <label>
                       <span className="field-label">Benutzer-ID</span>
-                      <input value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} disabled={busy} />
+                      <input name="userId" value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} disabled={busy} />
                     </label>
                     <label>
                       <span className="field-label">Vorname</span>
-                      <input value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} disabled={busy} />
+                      <input name="firstName" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} disabled={busy} />
                     </label>
                     <label>
                       <span className="field-label">Nachname</span>
-                      <input value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} disabled={busy} />
+                      <input name="lastName" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} disabled={busy} />
                     </label>
                     <label>
                       <span className="field-label">Geburtsdatum</span>
-                      <input type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} disabled={busy} />
+                      <input name="birthDate" type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} disabled={busy} />
                     </label>
                     <label>
                       <span className="field-label">Gerätename</span>
-                      <input value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
+                      <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                     </label>
                     <label>
                       <span className="field-label">Bevorzugter Service</span>
-                      <select value={form.selectedService} onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService })} disabled={busy}>
+                      <select name="preferredService" value={form.selectedService} onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService })} disabled={busy}>
                         <option value="person_code">Code</option>
                         <option value="sms_tan">SMS-TAN</option>
                       </select>
@@ -854,6 +854,7 @@ export function App() {
                   <label>
                     <span className="field-label">Verfügbarer Service</span>
                     <select
+                      name="availableService"
                       value={form.selectedService}
                       onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService, code: '', tan: '' })}
                       disabled={busy}
@@ -879,13 +880,13 @@ export function App() {
                     {form.selectedService === 'person_code' ? (
                       <label>
                         <span className="field-label">Code</span>
-                        <input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} disabled={busy} />
+                        <input name="code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} disabled={busy} />
                       </label>
                     ) : (
                       <>
                         <label>
                           <span className="field-label">SMS-TAN</span>
-                          <input value={form.tan} onChange={(event) => setForm({ ...form, tan: event.target.value })} disabled={busy} />
+                          <input name="tan" value={form.tan} onChange={(event) => setForm({ ...form, tan: event.target.value })} disabled={busy} />
                         </label>
                         <button type="button" onClick={() => void handleResendTan()} disabled={busy}>Neue TAN senden</button>
                       </>
@@ -907,7 +908,7 @@ export function App() {
                   <form className="grid form-stack" onSubmit={handlePassword}>
                     <label>
                       <span className="field-label">Neues Passwort</span>
-                      <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={busy} />
+                      <input name="password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={busy} />
                     </label>
                     <button type="submit" disabled={busy}>Passwort speichern</button>
                   </form>
@@ -1188,7 +1189,7 @@ function MockApiPanel(props: {
         <form className="grid form-stack mock-api-composer" onSubmit={props.onSubmit}>
           <label>
             <span className="field-label">Neue geschützte Notiz</span>
-            <textarea value={props.mockApi.draft} onChange={(event) => props.onDraftChange(event.target.value)} disabled={props.busy} rows={4} />
+            <textarea name="mockApiDraft" value={props.mockApi.draft} onChange={(event) => props.onDraftChange(event.target.value)} disabled={props.busy} rows={4} />
           </label>
           <button type="submit" disabled={props.busy}>Notiz an Mock API senden</button>
         </form>
@@ -1303,11 +1304,11 @@ function TokenComparisonPanel(props: {
       <div className="raw-token-grid">
         <details className="token-raw" open>
           <summary>Access-Token JWT</summary>
-          <textarea value={props.accessToken} readOnly rows={8} />
+          <textarea name="accessToken" value={props.accessToken} readOnly rows={8} />
         </details>
         <details className="token-raw" open>
           <summary>ID-Token JWT</summary>
-          <textarea value={props.idToken} readOnly rows={8} />
+          <textarea name="idToken" value={props.idToken} readOnly rows={8} />
         </details>
       </div>
       <details className="token-details">
@@ -1329,7 +1330,7 @@ function TokenPanel({ title, token, rawLabel, claims }: { title: string; token: 
       {claims ? <ClaimsTable title={title} claims={claims} /> : <p className="muted-copy">Keine dekodierten Claims für dieses Token verfügbar.</p>}
       <details className="token-raw">
         <summary>{rawLabel}</summary>
-        <textarea value={token} readOnly rows={8} />
+        <textarea name={rawLabel} value={token} readOnly rows={8} />
       </details>
     </article>
   )
@@ -1358,7 +1359,7 @@ function JsonPanel({ title, payload, rawLabel }: { title: string; payload: Claim
       ) : <p className="muted-copy">Keine Endpunkt-Antwort verfügbar.</p>}
       <details className="token-raw">
         <summary>{rawLabel}</summary>
-        <textarea value={payload ? JSON.stringify(payload, null, 2) : ''} readOnly rows={8} />
+        <textarea name={rawLabel} value={payload ? JSON.stringify(payload, null, 2) : ''} readOnly rows={8} />
       </details>
     </article>
   )
