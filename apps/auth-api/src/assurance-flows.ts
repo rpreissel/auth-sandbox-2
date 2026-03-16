@@ -2,25 +2,27 @@ import { randomInt, randomUUID } from 'node:crypto'
 
 import { appConfig, logger, pool, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
+  AcrLevel,
   AssuranceFlowFinalization,
   AssuranceFlowMethod,
   AssuranceFlowMethodSummary,
   AssuranceFlowNextAction,
   AssuranceFlowRecord,
+  PublicAssuranceFlowRecord,
+  AssuranceFlowService,
+  AssuranceFlowServiceOption,
   CreateFlowResponse,
   AssuranceFlowResultSummary,
-  CompleteFlowMethodInput,
   CreateFlowInput,
   FinalizeFlowChannel,
   FinalizeFlowResponse,
   GetFlowResponse,
   RedeemFlowArtifactResponse,
-  StartFlowMethodResponse,
-  StartFlowMethodInput
+  JsonObject
 } from '@auth-sandbox-2/shared-types'
 
 import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
-import { createFlowToken } from './flow-tokens.js'
+import { createFlowToken, createServiceResultToken, createServiceToken, verifyServiceResultToken } from './flow-tokens.js'
 import { KeycloakAdminClient } from './keycloak.js'
 import type {
   AssuranceFlowEventRow,
@@ -29,7 +31,10 @@ import type {
   AssuranceFlowRow,
   AssuranceFlowStatus,
   DeviceRow,
-  RegistrationCodeRow
+  RegistrationCodeRow,
+  RegistrationPersonCodeRow,
+  RegistrationPersonRow,
+  RegistrationPersonSmsNumberRow
 } from './types.js'
 
 type QueryResultRow<T> = {
@@ -59,13 +64,11 @@ type FinalizeResult = {
 export type CreateAssuranceFlowInput = {
   id?: string
   purpose: AssuranceFlowPurpose
-  requestedAcr?: string | null
-  targetAssurance?: string | null
+  requiredAcr?: AcrLevel | null
   deviceId?: string | null
-  userHint?: string | null
-  prospectiveUserId?: string | null
+  subjectId?: string | null
   resolvedUserId?: string | null
-  currentMethod?: string | null
+  selectedService?: AssuranceFlowService | null
   challengeBinding?: AssuranceFlowJson
   context?: AssuranceFlowJson
   methodState?: AssuranceFlowJson
@@ -76,12 +79,10 @@ export type CreateAssuranceFlowInput = {
 
 export type UpdateAssuranceFlowInput = {
   status?: AssuranceFlowStatus
-  currentMethod?: string | null
-  requestedAcr?: string | null
-  targetAssurance?: string | null
+  selectedService?: AssuranceFlowService | null
+  requiredAcr?: AcrLevel | null
   deviceId?: string | null
-  userHint?: string | null
-  prospectiveUserId?: string | null
+  subjectId?: string | null
   resolvedUserId?: string | null
   challengeBinding?: AssuranceFlowJson
   context?: AssuranceFlowJson
@@ -104,10 +105,12 @@ export type FlowEventInput = {
 
 type FlowMethodState = {
   method?: AssuranceFlowMethod
+  service?: AssuranceFlowService
   state?: string
   target?: string
   maskedTarget?: string
   code?: string
+  personCodeId?: string
   verifiedAt?: string
   nonce?: string
   encryptedKey?: string
@@ -122,6 +125,91 @@ const adminClient = new KeycloakAdminClient()
 const defaultTtlMs = 10 * 60 * 1000
 const artifactTtlMs = 5 * 60 * 1000
 const terminalStatuses = new Set<AssuranceFlowStatus>(['finalized', 'failed', 'expired'])
+
+type AssuranceServiceDefinition = AssuranceFlowServiceOption & {
+  purposes: AssuranceFlowPurpose[]
+  method: AssuranceFlowMethod
+  isAvailable: (flow: AssuranceFlowRow, db: Queryable) => Promise<boolean>
+}
+
+const acrRank: Record<AcrLevel, number> = {
+  level_1: 1,
+  level_2: 2
+}
+
+function satisfiesRequiredAcr(achievedAcr: AcrLevel, requiredAcr: AcrLevel) {
+  return acrRank[achievedAcr] >= acrRank[requiredAcr]
+}
+
+async function hasRegistrationPersonCode(flow: AssuranceFlowRow, db: Queryable) {
+  try {
+    const person = await getRegistrationPersonForFlow(flow, db)
+    const result = await db.query<{ id: string }>(
+      `select id from registration_person_codes
+       where person_id = $1 and expires_at >= now()
+       order by expires_at desc
+       limit 1`,
+      [person.id]
+    )
+    return Boolean(result.rows[0])
+  } catch {
+    return false
+  }
+}
+
+async function hasRegistrationSmsNumber(flow: AssuranceFlowRow, db: Queryable) {
+  try {
+    const person = await getRegistrationPersonForFlow(flow, db)
+    const result = await db.query<{ id: string }>(
+      'select id from registration_person_sms_numbers where person_id = $1 limit 1',
+      [person.id]
+    )
+    return Boolean(result.rows[0])
+  } catch {
+    return false
+  }
+}
+
+async function hasStepUpSmsNumber(flow: AssuranceFlowRow, db: Queryable) {
+  const context = readContext(flow)
+  if (typeof context.phoneNumber === 'string' && context.phoneNumber.trim().length > 0) {
+    return true
+  }
+
+  const userId = flow.resolved_user_id ?? flow.prospective_user_id ?? flow.user_hint
+  if (!userId) {
+    return false
+  }
+
+  const result = await db.query<{ id: string }>(
+    `select s.id
+     from registration_person_sms_numbers s
+     join registration_people p on p.id = s.person_id
+     where p.user_id = $1
+     limit 1`,
+    [userId]
+  )
+  return Boolean(result.rows[0])
+}
+
+const assuranceServiceRegistry: Record<AssuranceFlowService, AssuranceServiceDefinition> = {
+  person_code: {
+    id: 'person_code',
+    label: 'Personencode',
+    achievedAcr: 'level_2',
+    method: 'code',
+    purposes: ['registration'],
+    isAvailable: hasRegistrationPersonCode
+  },
+  sms_tan: {
+    id: 'sms_tan',
+    label: 'SMS-TAN',
+    achievedAcr: 'level_2',
+    method: 'sms',
+    purposes: ['registration', 'step_up'],
+    isAvailable: async (flow, db) => (flow.purpose === 'registration' ? hasRegistrationSmsNumber(flow, db) : hasStepUpSmsNumber(flow, db))
+  }
+}
 
 function notFound(message: string) {
   const error = new Error(message) as Error & { statusCode: number }
@@ -181,10 +269,10 @@ function readResult(row: AssuranceFlowRow) {
 function buildNextAction(status: AssuranceFlowStatus): AssuranceFlowNextAction {
   switch (status) {
     case 'started':
-      return 'start_method'
+      return 'select_service'
     case 'method_in_progress':
-      return 'complete_method'
     case 'method_verified':
+      return 'use_service'
     case 'finalizable':
       return 'finalize'
     default:
@@ -206,12 +294,33 @@ function buildMethodSummary(row: AssuranceFlowRow): AssuranceFlowMethodSummary |
   }
 }
 
+async function buildAvailableServices(row: AssuranceFlowRow, db: Queryable): Promise<AssuranceFlowServiceOption[]> {
+  const requiredAcr = (row.requested_acr === 'level_1' || row.requested_acr === 'level_2' ? row.requested_acr : 'level_1') satisfies AcrLevel
+  const services = Object.values(assuranceServiceRegistry).filter((service) => service.purposes.includes(row.purpose) && satisfiesRequiredAcr(service.achievedAcr, requiredAcr))
+  const availability = await Promise.all(services.map(async (service) => ({
+    service,
+    available: await service.isAvailable(row, db)
+  })))
+  return availability.filter((entry) => entry.available).map((entry) => ({
+    id: entry.service.id,
+    label: entry.service.label,
+    achievedAcr: entry.service.achievedAcr
+  }))
+}
+
 function buildResultSummary(row: AssuranceFlowRow): AssuranceFlowResultSummary | null {
   const result = readResult(row)
   const assurance = Array.isArray(result.assurance)
     ? result.assurance.filter((entry): entry is string => typeof entry === 'string')
     : []
-  return assurance.length ? { assurance } : null
+  return assurance.length
+    ? {
+        assurance,
+        achievedAcr: result.achievedAcr === 'level_1' || result.achievedAcr === 'level_2' ? result.achievedAcr : undefined,
+        deviceId: typeof result.deviceId === 'string' ? result.deviceId : undefined,
+        publicKeyHash: typeof result.publicKeyHash === 'string' ? result.publicKeyHash : undefined
+      }
+    : null
 }
 
 function buildFinalization(row: AssuranceFlowRow): AssuranceFlowFinalization | null {
@@ -236,6 +345,8 @@ function buildFinalization(row: AssuranceFlowRow): AssuranceFlowFinalization | n
     return {
       kind: 'registration_result',
       userId: result.userId,
+      deviceId: typeof result.deviceId === 'string' ? result.deviceId : undefined,
+      publicKeyHash: typeof result.publicKeyHash === 'string' ? result.publicKeyHash : undefined,
       passwordSetupRequired: result.passwordSetupRequired
     }
   }
@@ -292,6 +403,102 @@ async function getRegistrationCodeForFlow(flow: AssuranceFlowRow, db: Queryable)
   return row
 }
 
+async function getRegistrationPersonForFlow(flow: AssuranceFlowRow, db: Queryable) {
+  const context = readContext(flow)
+  const userId = flow.prospective_user_id ?? flow.user_hint
+  const firstName = typeof context.firstName === 'string' ? context.firstName.trim() : ''
+  const lastName = typeof context.lastName === 'string' ? context.lastName.trim() : ''
+  const birthDate = typeof context.birthDate === 'string' ? context.birthDate : ''
+
+  if (!userId || !firstName || !lastName || !birthDate) {
+    throw badRequest('Registration flow is missing person identity data')
+  }
+
+  const result = await db.query<RegistrationPersonRow>(
+    `select * from registration_people
+     where user_id = $1 and first_name = $2 and last_name = $3 and birth_date = $4`,
+    [userId, firstName, lastName, birthDate]
+  )
+
+  const row = result.rows[0]
+  if (!row) {
+    throw badRequest('Unknown registration identity')
+  }
+
+  return row
+}
+
+async function getRegistrationPersonCodeForFlow(flow: AssuranceFlowRow, db: Queryable) {
+  return getRegistrationPersonCodeForInput(readContext(flow).identityInput, flow, db)
+}
+
+async function getRegistrationPersonCodeForInput(inputValue: unknown, flow: AssuranceFlowRow, db: Queryable) {
+  const context = readContext(flow)
+  const identityInput = asJsonObject(inputValue ?? context.identityInput)
+  const codeValue = typeof identityInput.code === 'string' ? identityInput.code.trim() : ''
+  const person = await getRegistrationPersonForFlow(flow, db)
+  if (!codeValue) {
+    throw badRequest('Registration flow is missing code value')
+  }
+
+  const result = await db.query<RegistrationPersonCodeRow>(
+    'select * from registration_person_codes where person_id = $1 and code = $2',
+    [person.id, codeValue]
+  )
+  const row = result.rows[0]
+  if (!row) {
+    throw badRequest('Invalid registration code')
+  }
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    throw badRequest('Registration code expired')
+  }
+  return { person, code: row }
+}
+
+async function getRegistrationPersonCodeById(codeId: string, db: Queryable) {
+  const result = await db.query<RegistrationPersonCodeRow>('select * from registration_person_codes where id = $1', [codeId])
+  const row = result.rows[0]
+  if (!row) {
+    throw badRequest('Invalid registration code reference')
+  }
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    throw badRequest('Registration code expired')
+  }
+  return row
+}
+
+function readIdentityService(flow: AssuranceFlowRow): AssuranceFlowService | null {
+  const context = readContext(flow)
+  return context.identityService === 'person_code' || context.identityService === 'sms_tan'
+    ? context.identityService
+    : null
+}
+
+async function getRegistrationSmsNumberForFlow(flow: AssuranceFlowRow, db: Queryable) {
+  const person = await getRegistrationPersonForFlow(flow, db)
+  const result = await db.query<RegistrationPersonSmsNumberRow>(
+    'select * from registration_person_sms_numbers where person_id = $1',
+    [person.id]
+  )
+  const row = result.rows[0]
+  if (!row) {
+    throw badRequest('No SMS target is stored for this registration identity')
+  }
+  return { person, smsNumber: row }
+}
+
+async function getSmsNumberByUserId(userId: string, db: Queryable) {
+  const result = await db.query<RegistrationPersonSmsNumberRow>(
+    `select s.*
+     from registration_person_sms_numbers s
+     join registration_people p on p.id = s.person_id
+     where p.user_id = $1
+     limit 1`,
+    [userId]
+  )
+  return result.rows[0] ?? null
+}
+
 async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryable) {
   const methodState = readMethodState(flow)
   const context = readContext(flow)
@@ -320,7 +527,11 @@ async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryab
 }
 
 async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Promise<FinalizeResult> {
-  const registrationCode = await getRegistrationCodeForFlow(flow, db)
+  const activeMethodState = readMethodState(flow)
+  const verificationMethod = activeMethodState.method ?? 'code'
+  const verificationService = activeMethodState.service ?? readIdentityService(flow)
+  const person = await getRegistrationPersonForFlow(flow, db)
+  const smsIdentity = verificationMethod === 'sms' ? await getRegistrationSmsNumberForFlow(flow, db) : null
   const methodState = await ensureRegistrationDeviceState(flow, db)
   const userId = flow.prospective_user_id ?? flow.user_hint
   const deviceName = methodState.deviceName
@@ -331,7 +542,7 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
     throw badRequest('Registration flow is missing device material')
   }
 
-  const displayName = registrationCode.display_name ?? undefined
+  const displayName = `${person.first_name} ${person.last_name}`
   const keycloakUserId = await adminClient.ensureUser(userId, displayName)
   const encryptionKeys = generateEncryptionKeyPair()
   const credentialId = await adminClient.createDeviceCredential({
@@ -349,10 +560,24 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
     [userId, deviceName, publicKey, publicKeyHash, encryptionKeys.publicKeyPem, keycloakUserId, credentialId]
   )
 
-  await db.query('update registration_codes set use_count = use_count + 1 where id = $1', [registrationCode.id])
+  if (verificationService === 'person_code') {
+    if (!activeMethodState.personCodeId) {
+      throw badRequest('Registration flow is missing verified code reference')
+    }
+    const code = await getRegistrationPersonCodeById(activeMethodState.personCodeId, db)
+    if (code.person_id !== person.id) {
+      throw badRequest('Registration code does not belong to the selected person')
+    }
+    await db.query('update registration_person_codes set use_count = use_count + 1 where id = $1', [code.id])
+  }
+
+  if (smsIdentity && smsIdentity.person.id !== person.id) {
+    throw badRequest('Registration SMS identity does not belong to the selected person')
+  }
   const passwordSetupRequired = !(await adminClient.hasPassword(userId))
   const nextResult = {
-    assurance: ['device_registered'],
+    assurance: [verificationMethod === 'sms' ? 'phone_verified' : 'activation_code_verified', 'device_registered'],
+    achievedAcr: 'level_2' as const,
     userId,
     deviceId: deviceResult.rows[0].id,
     publicKeyHash,
@@ -404,12 +629,12 @@ async function finalizeStepUp(flow: AssuranceFlowRow, channel: FinalizeFlowChann
   const result = readResult(current)
   const nextRow = await updateAssuranceFlow(flow.id, {
     status: 'finalized',
-    result: {
-      ...result,
-      authTime: result.authTime ?? new Date().toISOString(),
-      achievedAcr: result.achievedAcr ?? current.requested_acr ?? current.target_assurance ?? null,
-      amr: Array.isArray(result.amr) ? result.amr : ['sms']
-    },
+      result: {
+        ...result,
+        authTime: result.authTime ?? new Date().toISOString(),
+        achievedAcr: result.achievedAcr ?? current.requested_acr ?? null,
+        amr: Array.isArray(result.amr) ? result.amr : ['sms']
+      },
     finalArtifactKind: artifactKind,
     finalArtifactCode: artifactCode,
     finalArtifactExpiresAt: artifactExpiresAt,
@@ -488,12 +713,12 @@ export async function createAssuranceFlow(input: CreateAssuranceFlowInput, db: Q
     [
       flowId,
       input.purpose,
-      input.currentMethod ?? null,
-      input.requestedAcr ?? null,
-      input.targetAssurance ?? null,
+      input.selectedService ?? null,
+      input.requiredAcr ?? null,
+      null,
       input.deviceId ?? null,
-      input.userHint ?? null,
-      input.prospectiveUserId ?? null,
+      input.subjectId ?? null,
+      input.subjectId ?? null,
       input.resolvedUserId ?? null,
       JSON.stringify(ensureJson(input.challengeBinding)),
       JSON.stringify(ensureJson(input.context)),
@@ -561,12 +786,12 @@ export async function updateAssuranceFlow(flowId: string, input: UpdateAssurance
     [
       flowId,
       nextStatus,
-      input.currentMethod === undefined ? current.current_method : input.currentMethod,
-      input.requestedAcr === undefined ? current.requested_acr : input.requestedAcr,
-      input.targetAssurance === undefined ? current.target_assurance : input.targetAssurance,
+      input.selectedService === undefined ? current.current_method : input.selectedService,
+      input.requiredAcr === undefined ? current.requested_acr : input.requiredAcr,
+      current.target_assurance,
       input.deviceId === undefined ? current.device_id : input.deviceId,
-      input.userHint === undefined ? current.user_hint : input.userHint,
-      input.prospectiveUserId === undefined ? current.prospective_user_id : input.prospectiveUserId,
+      input.subjectId === undefined ? current.user_hint : input.subjectId,
+      input.subjectId === undefined ? current.prospective_user_id : input.subjectId,
       input.resolvedUserId === undefined ? current.resolved_user_id : input.resolvedUserId,
       JSON.stringify(input.challengeBinding === undefined ? current.challenge_binding_json : ensureJson(input.challengeBinding)),
       JSON.stringify(input.context === undefined ? current.context_json : ensureJson(input.context)),
@@ -626,13 +851,17 @@ export async function listExpiredAssuranceFlows(limit = 100, db: Queryable = poo
 }
 
 export function mapAssuranceFlowRecord(row: AssuranceFlowRow): AssuranceFlowRecord {
+  const result = readResult(row)
   return {
     flowId: row.id,
     purpose: row.purpose,
     status: row.status,
-    currentMethod: row.current_method,
-    requestedAcr: row.requested_acr,
-    targetAssurance: row.target_assurance,
+    selectedService: row.current_method === 'person_code' || row.current_method === 'sms_tan' ? row.current_method : null,
+    availableServices: [],
+    requiredAcr: row.requested_acr === 'level_1' || row.requested_acr === 'level_2' ? row.requested_acr : null,
+    achievedAcr: result.achievedAcr === 'level_1' || result.achievedAcr === 'level_2' ? result.achievedAcr : null,
+    subjectId: row.prospective_user_id ?? row.user_hint,
+    resolvedUserId: row.resolved_user_id,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
     nextAction: buildNextAction(row.status),
@@ -642,10 +871,24 @@ export function mapAssuranceFlowRecord(row: AssuranceFlowRow): AssuranceFlowReco
   }
 }
 
-function mapPublicAssuranceFlowRecord(row: AssuranceFlowRow): CreateFlowResponse | GetFlowResponse | StartFlowMethodResponse | FinalizeFlowResponse {
+async function mapPublicAssuranceFlowRecord(row: AssuranceFlowRow, db: Queryable = pool): Promise<PublicAssuranceFlowRecord> {
+  const mapped = mapAssuranceFlowRecord(row)
   return {
-    ...mapAssuranceFlowRecord(row),
+    ...mapped,
+    availableServices: await buildAvailableServices(row, db),
     flowToken: createFlowToken(row.id, row.expires_at)
+  }
+}
+
+function createServiceSessionId(flowId: string, service: AssuranceFlowService) {
+  return `${service}:${flowId}`
+}
+
+async function createSelectedServiceResponse(row: AssuranceFlowRow, service: AssuranceFlowService, db: Queryable = pool): Promise<PublicAssuranceFlowRecord> {
+  const mapped = await mapPublicAssuranceFlowRecord(row, db)
+  return {
+    ...mapped,
+    serviceToken: createServiceToken(row.id, service, createServiceSessionId(row.id, service), row.expires_at)
   }
 }
 
@@ -656,32 +899,73 @@ export async function createPublicAssuranceFlow(input: CreateFlowInput, db: Quer
       actorType: 'backend',
       actorName: 'auth-api',
       operation: 'create_generic_flow',
-      userId: input.prospectiveUserId ?? input.userHint ?? null,
+      userId: input.subjectId ?? null,
       deviceId: input.deviceId ?? null,
       notes: 'Create generic assurance flow.'
     },
     async () => {
       const flow = await createAssuranceFlow({
         purpose: input.purpose,
-        requestedAcr: input.requestedAcr ?? null,
-        targetAssurance: input.targetAssurance ?? null,
+        requiredAcr: input.requiredAcr ?? 'level_1',
         deviceId: input.deviceId ?? null,
-        userHint: input.userHint ?? null,
-        prospectiveUserId: input.prospectiveUserId ?? null,
+        subjectId: input.subjectId ?? null,
         context: input.context ?? {}
       }, db)
       await appendAssuranceFlowEvent({ flowId: flow.id, eventType: 'flow_created', payload: { purpose: flow.purpose } }, db)
-      return mapPublicAssuranceFlowRecord(flow)
+      return mapPublicAssuranceFlowRecord(flow, db)
     }
   )
 }
 
 export async function getPublicAssuranceFlow(flowId: string, db: Queryable = pool) {
   const flow = await getAssuranceFlow(flowId, db)
-  return flow ? mapPublicAssuranceFlowRecord(flow) : null
+  return flow ? mapPublicAssuranceFlowRecord(flow, db) : null
 }
 
-export async function startPublicAssuranceFlowMethod(flowId: string, method: AssuranceFlowMethod, input: StartFlowMethodInput, db: Queryable = pool) {
+export async function selectPublicAssuranceFlowService(flowId: string, service: AssuranceFlowService, db: Queryable = pool) {
+  return runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'select_flow_service',
+      challengeId: flowId,
+      notes: 'Select concrete identification service for flow.'
+    },
+    async () => withTransaction(async (client) => {
+      const flow = await getAssuranceFlow(flowId, client)
+      if (!flow) {
+        throw notFound('Unknown flow')
+      }
+      if (flow.status !== 'started') {
+        throw badRequest('Flow is not ready for service selection')
+      }
+
+      const availableServices = await buildAvailableServices(flow, client)
+      if (!availableServices.some((entry) => entry.id === service)) {
+        throw badRequest('Requested service is not available for this flow')
+      }
+
+      const updated = await updateAssuranceFlow(flow.id, {
+        status: 'method_in_progress',
+        selectedService: service,
+        methodState: {
+          ...readMethodState(flow),
+          service,
+          method: assuranceServiceRegistry[service].method
+        }
+      }, client)
+      if (!updated) {
+        throw notFound('Unknown flow')
+      }
+
+      await appendAssuranceFlowEvent({ flowId, eventType: 'flow_service_selected', payload: { service } }, client)
+      return createSelectedServiceResponse(updated, service, client)
+    })
+  )
+}
+
+export async function startPublicAssuranceFlowMethod(flowId: string, method: AssuranceFlowMethod, input: { payload?: JsonObject }, db: Queryable = pool) {
   return runWithSpan(
     {
       kind: 'process',
@@ -692,12 +976,12 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
       notes: 'Start generic assurance flow method.'
     },
     async () => {
-      const record = await withTransaction(async (client) => {
+  const record = await withTransaction(async (client) => {
         const flow = await getAssuranceFlow(flowId, client)
         if (!flow) {
           throw notFound('Unknown flow')
         }
-        if (flow.status !== 'started' && flow.status !== 'method_in_progress') {
+        if (flow.status !== 'method_in_progress') {
           throw badRequest('Flow cannot start a method in the current state')
         }
 
@@ -708,18 +992,20 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
             if (flow.purpose !== 'registration') {
               throw badRequest('Method code is only supported for registration flows')
             }
-            const registrationCode = await getRegistrationCodeForFlow(flow, client)
+            if (payload.service !== 'person_code') {
+              throw badRequest('Method code requires service person_code')
+            }
             const methodState: FlowMethodState = {
               method: 'code',
+              service: 'person_code',
               state: 'challenge_sent',
-              code: registrationCode.code,
               verifiedAt: undefined,
               deviceName: typeof readContext(flow).deviceName === 'string' ? String(readContext(flow).deviceName) : undefined,
               publicKey: typeof readContext(flow).publicKey === 'string' ? String(readContext(flow).publicKey) : undefined
             }
             const row = await updateAssuranceFlow(flow.id, {
               status: 'method_in_progress',
-              currentMethod: 'code',
+              selectedService: 'person_code',
               methodState,
               result: { assurance: [] }
             }, client)
@@ -730,13 +1016,25 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
             break
           }
           case 'sms': {
-            const target = typeof payload.target === 'string' ? payload.target.trim() : ''
+            if (flow.purpose === 'registration' && payload.service !== 'sms_tan') {
+              throw badRequest('Registration SMS requires service sms_tan')
+            }
+            const target = flow.purpose === 'registration'
+              ? (await getRegistrationSmsNumberForFlow(flow, client)).smsNumber.phone_number
+              : (typeof payload.target === 'string'
+                  ? payload.target.trim()
+                  : (typeof readContext(flow).phoneNumber === 'string'
+                      ? String(readContext(flow).phoneNumber).trim()
+                      : (flow.prospective_user_id ?? flow.user_hint)
+                        ? ((await getSmsNumberByUserId(flow.prospective_user_id ?? flow.user_hint ?? '', client))?.phone_number ?? '')
+                        : ''))
             if (!target) {
               throw badRequest('SMS target is required')
             }
             const code = generateSmsCode()
             const methodState: FlowMethodState = {
               method: 'sms',
+              service: flow.purpose === 'registration' ? 'sms_tan' : undefined,
               state: 'challenge_sent',
               target,
               maskedTarget: maskPhone(target),
@@ -744,7 +1042,7 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
             }
             const row = await updateAssuranceFlow(flow.id, {
               status: 'method_in_progress',
-              currentMethod: 'sms',
+              selectedService: 'sms_tan',
               methodState,
               result: { assurance: [] }
             }, client)
@@ -764,7 +1062,11 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
             methodState: readMethodState(result.row)
           }
         }, client)
-        return mapPublicAssuranceFlowRecord(result.row)
+        return {
+          status: 'challenge_sent' as const,
+          maskedTarget: readMethodState(result.row).maskedTarget ?? null,
+          devCode: readMethodState(result.row).code ?? null
+        }
       })
 
       return record
@@ -772,7 +1074,7 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
   )
 }
 
-export async function completePublicAssuranceFlowMethod(flowId: string, method: AssuranceFlowMethod, input: CompleteFlowMethodInput, db: Queryable = pool) {
+export async function completePublicAssuranceFlowMethod(flowId: string, method: AssuranceFlowMethod, input: { payload?: JsonObject }, db: Queryable = pool) {
   return runWithSpan(
     {
       kind: 'process',
@@ -801,19 +1103,29 @@ export async function completePublicAssuranceFlowMethod(flowId: string, method: 
         let result: MethodCompleteResult
         switch (method) {
           case 'code': {
+            const service = methodState.service ?? readIdentityService(flow)
+            if (service !== 'person_code') {
+              throw badRequest('Active code flow does not use service person_code')
+            }
+            const codeIdentity = await getRegistrationPersonCodeForInput(payload, flow, client)
             const providedCode = typeof payload.code === 'string' ? payload.code.trim() : ''
-            if (!providedCode || providedCode !== methodState.code) {
+            if (!providedCode || providedCode !== codeIdentity.code.code) {
               throw badRequest('Invalid verification code')
             }
             const verifiedAt = new Date().toISOString()
             const nextMethodState = await ensureRegistrationDeviceState(flow, client)
+            nextMethodState.service = 'person_code'
+            nextMethodState.personCodeId = codeIdentity.code.id
             nextMethodState.verifiedAt = verifiedAt
             const row = await updateAssuranceFlow(flow.id, {
               status: 'finalizable',
-              currentMethod: 'code',
+              selectedService: 'person_code',
               methodState: nextMethodState,
               result: {
                 assurance: ['activation_code_verified'],
+                achievedAcr: 'level_2',
+                amr: ['code'],
+                authTime: verifiedAt,
                 verifiedAt
               }
             }, client)
@@ -824,22 +1136,22 @@ export async function completePublicAssuranceFlowMethod(flowId: string, method: 
             break
           }
           case 'sms': {
-            const providedCode = typeof payload.code === 'string' ? payload.code.trim() : ''
+            const providedCode = typeof payload.tan === 'string' ? payload.tan.trim() : (typeof payload.code === 'string' ? payload.code.trim() : '')
             if (!providedCode || providedCode !== methodState.code) {
               throw badRequest('Invalid SMS code')
             }
             const verifiedAt = new Date().toISOString()
             const row = await updateAssuranceFlow(flow.id, {
               status: 'finalizable',
-              currentMethod: 'sms',
+              selectedService: 'sms_tan',
               methodState: {
                 ...methodState,
                 state: 'challenge_verified',
                 verifiedAt
               },
               result: {
-                assurance: ['phone_verified'],
-                achievedAcr: flow.requested_acr ?? flow.target_assurance ?? 'urn:auth-sandbox-2:acr:sms',
+                assurance: [flow.purpose === 'registration' ? 'registration_identity_verified' : 'phone_verified'],
+                achievedAcr: 'level_2',
                 amr: ['sms'],
                 authTime: verifiedAt
               }
@@ -853,7 +1165,20 @@ export async function completePublicAssuranceFlowMethod(flowId: string, method: 
         }
 
         await appendAssuranceFlowEvent({ flowId, eventType: result.eventType, payload: { method } }, client)
-        return mapPublicAssuranceFlowRecord(result.row)
+        const finalizedMethodState = readMethodState(result.row)
+        const resultState = readResult(result.row)
+        const service = finalizedMethodState.service ?? (method === 'code' ? 'person_code' : 'sms_tan')
+        return {
+          status: 'verified' as const,
+          achievedAcr: resultState.achievedAcr === 'level_1' || resultState.achievedAcr === 'level_2' ? resultState.achievedAcr : 'level_2',
+          serviceResultToken: createServiceResultToken(
+            result.row.id,
+            service,
+            createServiceSessionId(result.row.id, service),
+            resultState.achievedAcr === 'level_1' || resultState.achievedAcr === 'level_2' ? resultState.achievedAcr : 'level_2',
+            result.row.expires_at
+          )
+        }
       })
 
       return record
@@ -861,7 +1186,7 @@ export async function completePublicAssuranceFlowMethod(flowId: string, method: 
   )
 }
 
-export async function finalizePublicAssuranceFlow(flowId: string, channel: FinalizeFlowChannel = 'registration', db: Queryable = pool) {
+export async function finalizePublicAssuranceFlow(flowId: string, input: { serviceResultToken?: string; channel?: FinalizeFlowChannel }, db: Queryable = pool) {
   return runWithSpan(
     {
       kind: 'process',
@@ -883,15 +1208,38 @@ export async function finalizePublicAssuranceFlow(flowId: string, channel: Final
           throw notFound('Unknown flow')
         }
 
-        let result: FinalizeResult
-        if (current.purpose === 'registration') {
-          result = await finalizeRegistration(current, client)
-        } else {
-          result = await finalizeStepUp(current, channel, client)
+        if (!input.serviceResultToken) {
+          throw badRequest('Missing service result token')
+        }
+        const serviceResult = verifyServiceResultToken(input.serviceResultToken, flowId)
+        if (!serviceResult.ok) {
+          throw badRequest('Invalid service result token')
+        }
+        const requiredAcr = current.requested_acr === 'level_1' || current.requested_acr === 'level_2' ? current.requested_acr : 'level_1'
+        const achievedAcr = serviceResult.claims.achievedAcr === 'level_1' || serviceResult.claims.achievedAcr === 'level_2' ? serviceResult.claims.achievedAcr : null
+        if (!achievedAcr || !satisfiesRequiredAcr(achievedAcr, requiredAcr)) {
+          throw badRequest('Service result does not satisfy required ACR')
         }
 
-        await appendAssuranceFlowEvent({ flowId, eventType: result.eventType, payload: { channel } }, client)
-        return mapPublicAssuranceFlowRecord(result.row)
+        const updatedCurrent = await updateAssuranceFlow(flowId, {
+          result: {
+            ...readResult(current),
+            achievedAcr
+          }
+        }, client)
+        if (!updatedCurrent) {
+          throw notFound('Unknown flow')
+        }
+
+        let result: FinalizeResult
+        if (updatedCurrent.purpose === 'registration') {
+          result = await finalizeRegistration(updatedCurrent, client)
+        } else {
+          result = await finalizeStepUp(updatedCurrent, input.channel ?? 'registration', client)
+        }
+
+        await appendAssuranceFlowEvent({ flowId, eventType: result.eventType, payload: { channel: input.channel ?? 'registration' } }, client)
+        return mapPublicAssuranceFlowRecord(result.row, client)
       })
 
       return record
@@ -956,8 +1304,12 @@ export async function redeemFlowArtifact(code: string, expectedKind: 'assurance_
 
 export async function registerDeviceViaFlow(args: {
   userId: string
+  firstName: string
+  lastName: string
+  birthDate: string
   deviceName: string
-  activationCode: string
+  identityService: AssuranceFlowService
+  identityInput?: JsonObject
   publicKey: string
 }) {
   return runWithSpan(
@@ -972,21 +1324,32 @@ export async function registerDeviceViaFlow(args: {
     async () => {
       const created = await createPublicAssuranceFlow({
         purpose: 'registration',
-        userHint: args.userId,
-        prospectiveUserId: args.userId,
+        subjectId: args.userId,
         context: {
-          activationCode: args.activationCode,
+          firstName: args.firstName,
+          lastName: args.lastName,
+          birthDate: args.birthDate,
+          identityService: args.identityService,
+          identityInput: args.identityInput ?? {},
           deviceName: args.deviceName,
           publicKey: args.publicKey
         }
       })
-      await startPublicAssuranceFlowMethod(created.flowId, 'code', {})
-      await completePublicAssuranceFlowMethod(created.flowId, 'code', {
+      if (args.identityService === 'sms_tan') {
+        throw badRequest('Legacy device registration does not support sms_tan; use the flow endpoints for multi-step registration')
+      }
+      await selectPublicAssuranceFlowService(created.flowId, 'person_code')
+      await startPublicAssuranceFlowMethod(created.flowId, 'code', {
         payload: {
-          code: args.activationCode
+          service: 'person_code'
         }
       })
-      const finalized = await finalizePublicAssuranceFlow(created.flowId, 'registration')
+      const completed = await completePublicAssuranceFlowMethod(created.flowId, 'code', {
+        payload: {
+          code: typeof args.identityInput?.code === 'string' ? args.identityInput.code : undefined
+        }
+      })
+      const finalized = await finalizePublicAssuranceFlow(created.flowId, { serviceResultToken: completed.serviceResultToken, channel: 'registration' })
       if (!finalized.finalization || finalized.finalization.kind !== 'registration_result') {
         throw badRequest('Registration flow did not return a registration result')
       }

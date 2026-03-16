@@ -2,13 +2,38 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 
 import { appConfig } from '@auth-sandbox-2/backend-core'
 
-type FlowTokenClaims = {
-  flowId: string
+type BaseTokenClaims = {
+  kind: 'flow' | 'service' | 'service_result'
   expiresAt: string
+}
+
+type FlowTokenClaims = BaseTokenClaims & {
+  flowId: string
+}
+
+type ServiceTokenClaims = BaseTokenClaims & {
+  flowId: string
+  service: string
+  serviceSessionId: string
+}
+
+type ServiceResultTokenClaims = BaseTokenClaims & {
+  flowId: string
+  service: string
+  achievedAcr: string
+  serviceSessionId: string
 }
 
 type VerifyFlowTokenResult =
   | { ok: true; claims: FlowTokenClaims }
+  | { ok: false; reason: 'invalid' | 'expired' }
+
+type VerifyServiceTokenResult =
+  | { ok: true; claims: ServiceTokenClaims }
+  | { ok: false; reason: 'invalid' | 'expired' }
+
+type VerifyServiceResultTokenResult =
+  | { ok: true; claims: ServiceResultTokenClaims }
   | { ok: false; reason: 'invalid' | 'expired' }
 
 function encodeBase64Url(value: string | Buffer) {
@@ -31,13 +56,60 @@ function signPayload(payload: string) {
 }
 
 export function createFlowToken(flowId: string, expiresAt: string) {
-  const claims: FlowTokenClaims = { flowId, expiresAt }
+  const claims: FlowTokenClaims = { kind: 'flow', flowId, expiresAt }
+  const payload = encodeBase64Url(JSON.stringify(claims))
+  const signature = encodeBase64Url(signPayload(payload))
+  return `${payload}.${signature}`
+}
+
+export function createServiceToken(flowId: string, service: string, serviceSessionId: string, expiresAt: string) {
+  const claims: ServiceTokenClaims = { kind: 'service', flowId, service, serviceSessionId, expiresAt }
+  const payload = encodeBase64Url(JSON.stringify(claims))
+  const signature = encodeBase64Url(signPayload(payload))
+  return `${payload}.${signature}`
+}
+
+export function createServiceResultToken(flowId: string, service: string, serviceSessionId: string, achievedAcr: string, expiresAt: string) {
+  const claims: ServiceResultTokenClaims = { kind: 'service_result', flowId, service, serviceSessionId, achievedAcr, expiresAt }
   const payload = encodeBase64Url(JSON.stringify(claims))
   const signature = encodeBase64Url(signPayload(payload))
   return `${payload}.${signature}`
 }
 
 export function verifyFlowToken(token: string, expectedFlowId: string): VerifyFlowTokenResult {
+  const verified = verifyClaims<FlowTokenClaims>(token)
+  if (!verified.ok) {
+    return verified
+  }
+  if (verified.claims.kind !== 'flow' || verified.claims.flowId !== expectedFlowId) {
+    return { ok: false, reason: 'invalid' }
+  }
+  return verified
+}
+
+export function verifyServiceToken(token: string, expectedService: string): VerifyServiceTokenResult {
+  const verified = verifyClaims<ServiceTokenClaims>(token)
+  if (!verified.ok) {
+    return verified
+  }
+  if (verified.claims.kind !== 'service' || verified.claims.service !== expectedService) {
+    return { ok: false, reason: 'invalid' }
+  }
+  return verified
+}
+
+export function verifyServiceResultToken(token: string, expectedFlowId: string): VerifyServiceResultTokenResult {
+  const verified = verifyClaims<ServiceResultTokenClaims>(token)
+  if (!verified.ok) {
+    return verified
+  }
+  if (verified.claims.kind !== 'service_result' || verified.claims.flowId !== expectedFlowId) {
+    return { ok: false, reason: 'invalid' }
+  }
+  return verified
+}
+
+function verifyClaims<T extends BaseTokenClaims>(token: string): { ok: true; claims: T } | { ok: false; reason: 'invalid' | 'expired' } {
   const parts = token.split('.')
   if (parts.length !== 2) {
     return { ok: false, reason: 'invalid' }
@@ -52,11 +124,8 @@ export function verifyFlowToken(token: string, expectedFlowId: string): VerifyFl
       return { ok: false, reason: 'invalid' }
     }
 
-    const claims = JSON.parse(decodeBase64Url(payload)) as Partial<FlowTokenClaims>
-    if (typeof claims.flowId !== 'string' || typeof claims.expiresAt !== 'string') {
-      return { ok: false, reason: 'invalid' }
-    }
-    if (claims.flowId !== expectedFlowId) {
+    const claims = JSON.parse(decodeBase64Url(payload)) as Partial<T>
+    if (typeof claims.expiresAt !== 'string' || typeof claims.kind !== 'string') {
       return { ok: false, reason: 'invalid' }
     }
     if (Number.isNaN(Date.parse(claims.expiresAt)) || Date.parse(claims.expiresAt) < Date.now()) {
@@ -65,10 +134,7 @@ export function verifyFlowToken(token: string, expectedFlowId: string): VerifyFl
 
     return {
       ok: true,
-      claims: {
-        flowId: claims.flowId,
-        expiresAt: claims.expiresAt
-      }
+      claims: claims as T
     }
   } catch {
     return { ok: false, reason: 'invalid' }

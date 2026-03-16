@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createFlowToken, verifyFlowToken } from './flow-tokens.js'
+import { createFlowToken, createServiceResultToken, createServiceToken, verifyFlowToken, verifyServiceResultToken, verifyServiceToken } from './flow-tokens.js'
 
 describe('flow tokens', () => {
   it('round-trips a valid token', () => {
@@ -10,6 +10,7 @@ describe('flow tokens', () => {
     expect(verifyFlowToken(token, 'flow-123')).toEqual({
       ok: true,
       claims: {
+        kind: 'flow',
         flowId: 'flow-123',
         expiresAt
       }
@@ -45,5 +46,38 @@ describe('flow tokens', () => {
     const token = createFlowToken('flow-789', new Date(Date.now() + 60_000).toISOString())
 
     expect(verifyFlowToken(token, 'flow-789').ok).toBe(true)
+  })
+
+  it('round-trips a valid service token', () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString()
+    const token = createServiceToken('flow-123', 'sms_tan', 'svc-1', expiresAt)
+
+    expect(verifyServiceToken(token, 'sms_tan')).toEqual({
+      ok: true,
+      claims: {
+        kind: 'service',
+        flowId: 'flow-123',
+        service: 'sms_tan',
+        serviceSessionId: 'svc-1',
+        expiresAt
+      }
+    })
+  })
+
+  it('round-trips a valid service result token', () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString()
+    const token = createServiceResultToken('flow-123', 'person_code', 'svc-2', 'level_2', expiresAt)
+
+    expect(verifyServiceResultToken(token, 'flow-123')).toEqual({
+      ok: true,
+      claims: {
+        kind: 'service_result',
+        flowId: 'flow-123',
+        service: 'person_code',
+        serviceSessionId: 'svc-2',
+        achievedAcr: 'level_2',
+        expiresAt
+      }
+    })
   })
 })

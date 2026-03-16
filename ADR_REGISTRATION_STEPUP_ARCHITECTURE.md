@@ -37,15 +37,18 @@ Das `auth-api` verwaltet persistierte Flows mit einem generischen Modell aus:
 - `method`: z. B. `sms`, `eid`, `code`, spaeter weitere
 - `result` / `assurance`: z. B. `phone_verified`, `legal_identity_verified`, `high_assurance`
 
-Die API wird nicht nach Verfahren geschnitten. Statt separater verfahrensspezifischer Endpoints wird eine generische Flow-API verwendet.
+Die API wird an der Orchestrierungsgrenze generisch geschnitten. Das `auth-api` bleibt fuer Flow-Erzeugung, Service-Selektion und Finalisierung zustaendig; konkrete Identifikationsverfahren laufen ueber feste direkte Service-Endpoints.
 
 Beispielhafte Endpoints:
 
 - `POST /flows`
 - `GET /flows/{flowId}`
-- `POST /flows/{flowId}/methods/{method}/start`
-- `POST /flows/{flowId}/methods/{method}/complete`
+- `POST /flows/{flowId}/select-service`
 - `POST /flows/{flowId}/finalize`
+- `POST /identification/person-code/complete`
+- `POST /identification/sms-tan/start`
+- `POST /identification/sms-tan/resend`
+- `POST /identification/sms-tan/complete`
 
 ### 3. Zwischenstaende werden ausschliesslich im `auth-api` persistiert
 
@@ -54,9 +57,10 @@ Das `auth-api` speichert pro Flow mindestens:
 - `flowId`
 - `purpose`
 - `status`
-- `requestedAcr` oder `targetAssurance`
+- `requiredAcr`
+- `achievedAcr`
 - `deviceId`
-- `userHint` oder `prospectiveUserId`
+- `subjectId`
 - methodenspezifische Zwischenergebnisse
 - Ablaufzeit
 - Idempotenz- und Audit-Informationen

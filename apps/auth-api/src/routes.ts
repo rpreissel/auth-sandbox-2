@@ -9,16 +9,16 @@ import {
   withRequestTrace
 } from '@auth-sandbox-2/backend-core'
 import {
-  completePublicAssuranceFlowMethod,
   createPublicAssuranceFlow,
   finalizePublicAssuranceFlow,
   getPublicAssuranceFlow,
-  redeemFlowArtifact,
-  startPublicAssuranceFlowMethod
+  redeemFlowArtifact
 } from './assurance-flows.js'
-import { verifyFlowToken } from './flow-tokens.js'
+import { verifyFlowToken, verifyServiceToken } from './flow-tokens.js'
 import { isAllowedInternalRedeemTokenClaims, type InternalRedeemAccessTokenClaims } from './internal-auth.js'
 import {
+  completeFlowService,
+  createRegistrationIdentity,
   createRegistrationCode,
   deleteDevice,
   deleteRegistrationCode,
@@ -28,7 +28,10 @@ import {
   logout,
   refreshTokens,
   registerDevice,
+  resendFlowService,
   completeMobileStepUp,
+  selectFlowService,
+  startFlowService,
   setPassword,
   startBrowserStepUpFlow,
   startLogin
@@ -36,11 +39,9 @@ import {
 
 const createFlowSchema = z.object({
   purpose: z.enum(['registration', 'account_upgrade', 'step_up']),
-  requestedAcr: z.string().min(1).optional(),
-  targetAssurance: z.string().min(1).optional(),
+  requiredAcr: z.enum(['level_1', 'level_2']).optional(),
   deviceId: z.string().uuid().optional(),
-  userHint: z.string().min(1).optional(),
-  prospectiveUserId: z.string().min(1).optional(),
+  subjectId: z.string().min(1).optional(),
   context: z.record(z.string(), z.json()).optional()
 })
 
@@ -48,20 +49,14 @@ const getFlowParamsSchema = z.object({
   flowId: z.string().min(1)
 })
 
-const flowMethodParamsSchema = z.object({
-  flowId: z.string().min(1),
-  method: z.enum(['code', 'sms'])
+const selectFlowServiceSchema = z.object({
+  service: z.enum(['person_code', 'sms_tan'])
 })
-
-const startFlowMethodSchema = z.object({
-  payload: z.record(z.string(), z.json()).optional()
-})
-
-const completeFlowMethodSchema = z.object({
-  payload: z.record(z.string(), z.json()).optional()
-})
+const personCodeCompleteSchema = z.object({ code: z.string().min(1) })
+const smsTanCompleteSchema = z.object({ tan: z.string().min(1) })
 
 const finalizeFlowSchema = z.object({
+  serviceResultToken: z.string().min(1).optional(),
   channel: z.enum(['registration', 'mobile', 'browser']).optional()
 })
 
@@ -76,10 +71,24 @@ const createRegistrationCodeSchema = z.object({
   validForDays: z.number().int().positive().optional()
 })
 
+const createRegistrationIdentitySchema = z.object({
+  userId: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  birthDate: z.string().min(1),
+  code: z.string().min(1).optional(),
+  codeValidForDays: z.number().int().positive().optional(),
+  phoneNumber: z.string().min(1).optional()
+})
+
 const registerDeviceSchema = z.object({
   userId: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  birthDate: z.string().min(1),
   deviceName: z.string().min(1),
-  activationCode: z.string().min(1),
+  identityService: z.enum(['person_code', 'sms_tan']),
+  identityInput: z.record(z.string(), z.json()).optional(),
   publicKey: z.string().min(1)
 })
 
@@ -107,7 +116,7 @@ const refreshSchema = z.object({
 const browserStepUpSchema = z.object({
   userId: z.string().min(1),
   phoneNumber: z.string().min(1),
-  requestedAcr: z.string().min(1).optional()
+  requiredAcr: z.enum(['level_1', 'level_2']).optional()
 })
 
 const mobileStepUpSchema = z.object({
@@ -136,12 +145,16 @@ function setTraceHeaders(reply: FastifyReply, traceHeaders: ReturnType<typeof re
   }
 }
 
-function requireFlowToken(app: any, request: FastifyRequest, flowId: string) {
-  const token = request.headers['x-flow-token']
-  if (typeof token !== 'string' || token.length === 0) {
-    throw app.httpErrors.unauthorized('Missing flow token')
+function requireBearerToken(app: any, request: FastifyRequest) {
+  const authorization = request.headers.authorization
+  if (!authorization?.startsWith('Bearer ')) {
+    throw app.httpErrors.unauthorized('Missing bearer token')
   }
+  return authorization.slice('Bearer '.length)
+}
 
+function requireFlowToken(app: any, request: FastifyRequest, flowId: string) {
+  const token = requireBearerToken(app, request)
   const result = verifyFlowToken(token, flowId)
   if (!result.ok) {
     if (result.reason === 'expired') {
@@ -149,6 +162,18 @@ function requireFlowToken(app: any, request: FastifyRequest, flowId: string) {
     }
     throw app.httpErrors.forbidden('Invalid flow token')
   }
+}
+
+function requireServiceToken(app: any, request: FastifyRequest, service: 'person_code' | 'sms_tan') {
+  const token = requireBearerToken(app, request)
+  const result = verifyServiceToken(token, service)
+  if (!result.ok) {
+    if (result.reason === 'expired') {
+      throw app.httpErrors.unauthorized('Service token expired')
+    }
+    throw app.httpErrors.forbidden('Invalid service token')
+  }
+  return result.claims
 }
 
 async function requireInternalRedeemAccessToken(app: any, request: FastifyRequest) {
@@ -227,7 +252,7 @@ export async function registerRoutes(app: any) {
       traceType: 'generic_flow_create',
       title: `Create ${body.purpose} flow`,
       summary: 'A client created a new generic assurance flow.',
-      userId: body.prospectiveUserId ?? body.userHint ?? null,
+      userId: body.subjectId ?? null,
       deviceId: body.deviceId ?? null,
       body,
       run: () => createPublicAssuranceFlow(body)
@@ -255,33 +280,70 @@ export async function registerRoutes(app: any) {
     return result
   })
 
-  app.post('/api/flows/:flowId/methods/:method/start', async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = flowMethodParamsSchema.parse(request.params)
-    const body = startFlowMethodSchema.parse(request.body ?? {})
+  app.post('/api/flows/:flowId/select-service', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = getFlowParamsSchema.parse(request.params)
+    const body = selectFlowServiceSchema.parse(request.body)
     requireFlowToken(app, request, params.flowId)
     return tracedRoute({
       request,
       reply,
-      traceType: 'generic_flow_method_start',
-      title: `Start ${params.method} for ${params.flowId}`,
-      summary: 'A client started a generic assurance-flow method.',
+      traceType: 'flow_select_service',
+      title: `Select ${body.service} for ${params.flowId}`,
+      summary: 'A client selected a concrete identification service for a flow.',
       body,
-      run: () => startPublicAssuranceFlowMethod(params.flowId, params.method, body)
+      run: () => selectFlowService(params.flowId, body.service)
     })
   })
 
-  app.post('/api/flows/:flowId/methods/:method/complete', async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = flowMethodParamsSchema.parse(request.params)
-    const body = completeFlowMethodSchema.parse(request.body ?? {})
-    requireFlowToken(app, request, params.flowId)
+  app.post('/api/identification/person-code/complete', async (request: FastifyRequest, reply: FastifyReply) => {
+    const claims = requireServiceToken(app, request, 'person_code')
+    const body = personCodeCompleteSchema.parse(request.body)
     return tracedRoute({
       request,
       reply,
-      traceType: 'generic_flow_method_complete',
-      title: `Complete ${params.method} for ${params.flowId}`,
-      summary: 'A client completed a generic assurance-flow method.',
+      traceType: 'person_code_complete',
+      title: `Complete person_code for ${claims.flowId}`,
+      summary: 'A client completed the fixed person-code identification service.',
       body,
-      run: () => completePublicAssuranceFlowMethod(params.flowId, params.method, body)
+      run: () => completeFlowService(claims.flowId, 'person_code', { code: body.code })
+    })
+  })
+
+  app.post('/api/identification/sms-tan/start', async (request: FastifyRequest, reply: FastifyReply) => {
+    const claims = requireServiceToken(app, request, 'sms_tan')
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'sms_tan_start',
+      title: `Start sms_tan for ${claims.flowId}`,
+      summary: 'A client started the fixed SMS-TAN identification service.',
+      run: () => startFlowService(claims.flowId, 'sms_tan')
+    })
+  })
+
+  app.post('/api/identification/sms-tan/resend', async (request: FastifyRequest, reply: FastifyReply) => {
+    const claims = requireServiceToken(app, request, 'sms_tan')
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'sms_tan_resend',
+      title: `Resend sms_tan for ${claims.flowId}`,
+      summary: 'A client requested a fresh SMS-TAN challenge.',
+      run: () => resendFlowService(claims.flowId, 'sms_tan')
+    })
+  })
+
+  app.post('/api/identification/sms-tan/complete', async (request: FastifyRequest, reply: FastifyReply) => {
+    const claims = requireServiceToken(app, request, 'sms_tan')
+    const body = smsTanCompleteSchema.parse(request.body)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'sms_tan_complete',
+      title: `Complete sms_tan for ${claims.flowId}`,
+      summary: 'A client completed the fixed SMS-TAN identification service.',
+      body,
+      run: () => completeFlowService(claims.flowId, 'sms_tan', { tan: body.tan })
     })
   })
 
@@ -296,7 +358,7 @@ export async function registerRoutes(app: any) {
       title: `Finalize flow ${params.flowId}`,
       summary: 'A client finalized a generic assurance flow.',
       body,
-      run: () => finalizePublicAssuranceFlow(params.flowId, body.channel ?? 'registration')
+      run: () => finalizePublicAssuranceFlow(params.flowId, body)
     })
   })
 
@@ -337,6 +399,21 @@ export async function registerRoutes(app: any) {
     reply.code(201)
     return result
   })
+  app.post('/api/admin/registration-identities', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = createRegistrationIdentitySchema.parse(request.body)
+    const result = await tracedRoute({
+      request,
+      reply,
+      traceType: 'admin_registration_identity_create',
+      title: `Create registration identity for ${body.userId}`,
+      summary: 'Admin web created the person, code, and SMS registration records for a reusable registration identity.',
+      userId: body.userId,
+      body,
+      run: () => createRegistrationIdentity(body)
+    })
+    reply.code(201)
+    return result
+  })
   app.delete('/api/admin/registration-codes/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const params = z.object({ id: z.string().uuid() }).parse(request.params)
     await tracedRoute({
@@ -373,7 +450,7 @@ export async function registerRoutes(app: any) {
 
   app.post('/api/device/register', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = registerDeviceSchema.parse(request.body)
-    reply.header('x-auth-sandbox-deprecated', 'Use POST /api/flows with purpose=registration plus method/finalize endpoints')
+    reply.header('x-auth-sandbox-deprecated', 'Use POST /api/flows, POST /api/flows/:flowId/select-service, direct /api/identification/* endpoints, then finalize')
     const result = await tracedRoute({
       request,
       reply,

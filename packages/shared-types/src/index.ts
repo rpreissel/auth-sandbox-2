@@ -10,6 +10,33 @@ export type RegistrationCodeRecord = {
   createdAt: IsoDateTime
 }
 
+export type RegistrationPersonRecord = {
+  id: string
+  userId: string
+  firstName: string
+  lastName: string
+  birthDate: string
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
+}
+
+export type RegistrationPersonCodeRecord = {
+  id: string
+  personId: string
+  code: string
+  expiresAt: IsoDateTime
+  useCount: number
+  createdAt: IsoDateTime
+}
+
+export type RegistrationPersonSmsNumberRecord = {
+  id: string
+  personId: string
+  phoneNumber: string
+  createdAt: IsoDateTime
+  updatedAt: IsoDateTime
+}
+
 export type DeviceRecord = {
   id: string
   userId: string
@@ -25,10 +52,24 @@ export type CreateRegistrationCodeInput = {
   validForDays?: number
 }
 
+export type CreateRegistrationIdentityInput = {
+  userId: string
+  firstName: string
+  lastName: string
+  birthDate: string
+  code?: string
+  codeValidForDays?: number
+  phoneNumber?: string
+}
+
 export type RegisterDeviceInput = {
   userId: string
   deviceName: string
-  activationCode: string
+  firstName: string
+  lastName: string
+  birthDate: string
+  identityService: AssuranceFlowService
+  identityInput?: JsonObject
   publicKey: string
 }
 
@@ -52,7 +93,17 @@ export type AssuranceFlowStatus =
 
 export type AssuranceFlowMethod = 'code' | 'sms'
 
-export type AssuranceFlowNextAction = 'start_method' | 'complete_method' | 'finalize' | null
+export type AssuranceFlowService = 'person_code' | 'sms_tan'
+
+export type AcrLevel = 'level_1' | 'level_2'
+
+export type AssuranceFlowServiceOption = {
+  id: AssuranceFlowService
+  label: string
+  achievedAcr: AcrLevel
+}
+
+export type AssuranceFlowNextAction = 'select_service' | 'use_service' | 'finalize' | null
 
 export type AssuranceFlowMethodSummary = {
   kind: AssuranceFlowMethod
@@ -63,12 +114,17 @@ export type AssuranceFlowMethodSummary = {
 
 export type AssuranceFlowResultSummary = {
   assurance: string[]
+  achievedAcr?: AcrLevel
+  deviceId?: string
+  publicKeyHash?: string
 }
 
 export type AssuranceFlowFinalization =
   | {
     kind: 'registration_result'
     userId: string
+    deviceId?: string
+    publicKeyHash?: string
     passwordSetupRequired: boolean
   }
   | {
@@ -86,11 +142,9 @@ export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser'
 
 export type CreateFlowInput = {
   purpose: AssuranceFlowPurpose
-  requestedAcr?: string
-  targetAssurance?: string
+  requiredAcr?: AcrLevel
   deviceId?: string
-  userHint?: string
-  prospectiveUserId?: string
+  subjectId?: string
   context?: JsonObject
 }
 
@@ -98,9 +152,12 @@ export type AssuranceFlowRecord = {
   flowId: string
   purpose: AssuranceFlowPurpose
   status: AssuranceFlowStatus
-  currentMethod: string | null
-  requestedAcr: string | null
-  targetAssurance: string | null
+  selectedService: AssuranceFlowService | null
+  availableServices: AssuranceFlowServiceOption[]
+  requiredAcr: AcrLevel | null
+  achievedAcr: AcrLevel | null
+  subjectId: string | null
+  resolvedUserId: string | null
   expiresAt: IsoDateTime
   createdAt: IsoDateTime
   nextAction: AssuranceFlowNextAction
@@ -111,25 +168,46 @@ export type AssuranceFlowRecord = {
 
 export type PublicAssuranceFlowRecord = AssuranceFlowRecord & {
   flowToken: string
+  serviceToken?: string
 }
 
 export type CreateFlowResponse = PublicAssuranceFlowRecord
 
 export type GetFlowResponse = PublicAssuranceFlowRecord
 
-export type StartFlowMethodInput = {
-  payload?: JsonObject
+export type SelectFlowServiceInput = {
+  service: AssuranceFlowService
 }
 
-export type StartFlowMethodResponse = PublicAssuranceFlowRecord
+export type SelectFlowServiceResponse = PublicAssuranceFlowRecord
 
-export type CompleteFlowMethodInput = {
-  payload?: JsonObject
+export type ServiceResultEnvelope = {
+  status: 'verified'
+  achievedAcr: AcrLevel
+  serviceResultToken: string
 }
 
-export type CompleteFlowMethodResponse = PublicAssuranceFlowRecord
+export type PersonCodeCompleteInput = {
+  code: string
+}
+
+export type SmsTanStartInput = JsonObject
+
+export type SmsTanStartResponse = {
+  status: 'challenge_sent'
+  maskedTarget: string | null
+}
+
+export type SmsTanCompleteInput = {
+  tan: string
+}
+
+export type CompleteFlowServiceInput = {
+  payload?: JsonObject
+}
 
 export type FinalizeFlowInput = {
+  serviceResultToken?: string
   channel?: FinalizeFlowChannel
 }
 

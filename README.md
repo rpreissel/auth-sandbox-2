@@ -55,6 +55,75 @@ Explicitly out of scope:
 10. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
 11. App can refresh tokens and log out.
 
+```mermaid
+sequenceDiagram
+  autonumber
+  actor Admin
+  participant App
+  participant Auth as auth-api
+  participant DB
+  participant KC as Keycloak
+  participant Ext as KC extension
+  participant Mock as mock-api
+
+  Admin->>Auth: Create registration code
+  Auth->>DB: Store code
+  Auth-->>Admin: Code issued
+
+  App->>Auth: Register device
+  Auth->>DB: Create registration flow
+  Auth->>KC: Ensure user + create device credential
+  KC-->>Auth: OK
+  Auth-->>App: Device registered\n(password setup may be required)
+
+  App->>Auth: Start device login
+  Auth->>DB: Store encrypted challenge
+  Auth-->>App: Challenge payload
+
+  App->>Auth: Finish device login with signature
+  Auth->>KC: Custom device-login grant
+  KC-->>Auth: Token bundle
+  Auth-->>App: Access / ID / Refresh tokens
+
+  App->>Mock: Call protected API with access token
+  Mock->>KC: Verify JWT via JWKS
+  Mock-->>App: Protected response
+
+  App->>Auth: Create step-up flow
+  Auth->>DB: Store flow
+  Auth-->>App: flowId + flowToken
+
+  App->>Auth: Select sms_tan service\nwith flow bearer token
+  Auth-->>App: service token
+  App->>SMS: Start/complete SMS-TAN\nwith service bearer token
+  SMS-->>App: service result token
+  App->>Auth: Finalize flow\nwith flow bearer token + service result token
+  Auth->>DB: Verify service result and finalize flow
+
+  alt Browser step-up
+    App->>Auth: Finalize flow
+    Auth->>DB: Issue result_code
+    Auth-->>App: result_code
+    KC->>Ext: Redeem result_code
+    Ext->>Auth: Internal redeem with service token
+    Auth->>DB: Consume artifact
+    Auth-->>Ext: User + assurance context
+    Ext-->>KC: Complete authentication
+    KC-->>App: Browser session / tokens
+  else Mobile step-up
+    App->>Auth: Finalize flow
+    Auth->>DB: Issue assurance_handle
+    Auth-->>App: assurance_handle
+    App->>KC: Custom assurance-handle grant
+    KC->>Ext: Redeem assurance_handle
+    Ext->>Auth: Internal redeem with service token
+    Auth->>DB: Consume artifact
+    Auth-->>Ext: User + assurance context
+    Ext-->>KC: Issue upgraded tokens
+    KC-->>App: Upgraded token bundle
+  end
+```
+
 ## Architecture notes
 
 - Keycloak `username` always equals `userId`.
@@ -68,8 +137,9 @@ Explicitly out of scope:
 ## Flow endpoint protection
 
 - `POST /api/flows` remains the public flow-creation entrypoint.
-- Follow-up public flow routes require the `x-flow-token` header returned by `POST /api/flows`.
-- The flow token is HMAC-signed by `auth-api`, bound to one `flowId`, and expires with the flow record.
+- `GET /api/flows/:flowId`, `POST /api/flows/:flowId/select-service`, and `POST /api/flows/:flowId/finalize` require `Authorization: Bearer <flowToken>`.
+- Direct identification endpoints require `Authorization: Bearer <serviceToken>` and return a `serviceResultToken` for finalization.
+- Flow, service, and service-result tokens are HMAC-signed by `auth-api`, scoped to their intended use, and expire with the flow record.
 - `POST /api/internal/flows/redeem` requires a Keycloak bearer token from the dedicated service-account client `auth-api-internal-redeem`.
 - Redeem artifacts remain single-use, kind-checked, and expiry-checked even after bearer-token validation.
 

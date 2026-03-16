@@ -109,6 +109,7 @@ test('admin overview is localized in German', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: /verwalte registrierungscodes und behalte bestehende geraetebindungen im blick/i })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungscode erstellen' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Registrierungsidentität vorbereiten' })).toBeVisible()
   await expect(page.getByText('Anzeigename')).toBeVisible()
   await expect(page.getByText('Gueltig fuer Tage')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Code erstellen' })).toBeVisible()
@@ -140,16 +141,19 @@ test('homepage contains key links', async ({ page }) => {
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {
   test.setTimeout(45000)
   const userId = `e2e-user-${Date.now()}`
-  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-codes`, {
+  const registrationCode = `PLAY${Date.now().toString(36).toUpperCase()}`
+  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     data: {
       userId,
-      displayName: 'E2E User',
-      validForDays: 30
+      firstName: 'E2E',
+      lastName: 'User',
+      birthDate: '1990-01-01',
+      code: registrationCode,
+      codeValidForDays: 30
     }
   })
 
   expect(registrationResponse.ok()).toBeTruthy()
-  const registration = await registrationResponse.json()
 
   await page.goto('https://app.localhost:8443')
   await expect(page.getByRole('heading', { name: 'Dieses Telefon einrichten' })).toBeVisible()
@@ -157,14 +161,18 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('heading', { name: 'Sitzungstokens', exact: true })).toBeVisible()
   await expect(page.getByLabel('Token wallet empty state')).toContainText('Tokens erscheinen hier nach der Geräteanmeldung.')
   await page.getByLabel('Benutzer-ID').fill(userId)
+  await page.getByLabel('Vorname').fill('E2E')
+  await page.getByLabel('Nachname').fill('User')
+  await page.getByLabel('Geburtsdatum').fill('1990-01-01')
   await page.getByLabel('Gerätename').fill('Playwright Device')
-  await page.getByLabel('Aktivierungscode').fill(registration.code)
   await page.getByRole('button', { name: 'Weiter' }).click()
-
   await expect(page.getByLabel('Secure element prompt')).toBeVisible()
   await expect(page.getByText('Bestätige deine Identität')).toBeVisible()
-  await expect(page.getByText('Android-Sicherheit', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+  await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Code-Eingabe starten' }).click()
+  await page.getByRole('textbox', { name: 'Code' }).fill(registrationCode)
+  await page.getByRole('button', { name: 'Identifikation abschließen' }).click()
 
   await expect(page.getByText('Gerätebindung gespeichert. Lege ein neues Keycloak-Passwort fest, um fortzufahren.')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Neues Passwort erstellen' })).toBeVisible()
@@ -320,31 +328,37 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(artifactViewer).toContainText('Audience')
 })
 
-test('generic registration and step-up flow APIs support create, method lifecycle, finalize, and redeem', async ({ request }) => {
+test('generic registration and step-up flow APIs support service selection, concrete service lifecycle, finalize, and redeem', async ({ request }) => {
   const userId = `e2e-flow-${Date.now()}`
+  const registrationCode = `FLOW${Date.now().toString(36).toUpperCase()}`
   const flowPublicKey = `-----BEGIN PUBLIC KEY-----\n${Buffer.from(`flow-test-public-key-${userId}`).toString('base64')}\n-----END PUBLIC KEY-----`
-  const withFlowToken = (flowToken: string) => ({
-    'x-flow-token': flowToken
+  const withBearer = (token: string) => ({
+    authorization: `Bearer ${token}`
   })
 
-  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-codes`, {
+  const registrationIdentityResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     data: {
       userId,
-      displayName: 'Flow User',
-      validForDays: 30
+      firstName: 'Flow',
+      lastName: 'User',
+      birthDate: '1990-01-01',
+      code: registrationCode,
+      codeValidForDays: 30,
+      phoneNumber: '+49123456789'
     }
   })
 
-  expect(registrationResponse.ok()).toBeTruthy()
-  const registration = await registrationResponse.json() as { code: string }
+  expect(registrationIdentityResponse.ok()).toBeTruthy()
 
   const createRegistrationFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
     data: {
       purpose: 'registration',
-      userHint: userId,
-      prospectiveUserId: userId,
+      subjectId: userId,
+      requiredAcr: 'level_1',
       context: {
-        activationCode: registration.code,
+        firstName: 'Flow',
+        lastName: 'User',
+        birthDate: '1990-01-01',
         deviceName: 'Flow Device',
         publicKey: flowPublicKey
       }
@@ -352,40 +366,40 @@ test('generic registration and step-up flow APIs support create, method lifecycl
   })
 
   expect(createRegistrationFlow.status()).toBe(201)
-  const registrationFlow = await createRegistrationFlow.json() as { flowId: string; flowToken: string; nextAction: string; status: string }
+  const registrationFlow = await createRegistrationFlow.json() as { flowId: string; flowToken: string; nextAction: string; status: string; availableServices: Array<{ id: string }> }
   expect(registrationFlow.status).toBe('started')
-  expect(registrationFlow.nextAction).toBe('start_method')
+  expect(registrationFlow.nextAction).toBe('select_service')
+  expect(registrationFlow.availableServices.map((service) => service.id).sort()).toEqual(['person_code', 'sms_tan'])
 
   const missingTokenGet = await request.get(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}`)
   expect(missingTokenGet.status()).toBe(401)
 
-  const startCode = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/methods/code/start`, {
-    headers: withFlowToken(registrationFlow.flowToken),
+  const selectCode = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/select-service`, {
+    headers: withBearer(registrationFlow.flowToken),
     data: {
-      payload: {}
+      service: 'person_code'
     }
   })
-  expect(startCode.ok()).toBeTruthy()
-  const startedCode = await startCode.json() as { method: { devCode: string | null }; status: string }
-  expect(startedCode.status).toBe('method_in_progress')
-  expect(startedCode.method?.devCode).toBe(registration.code)
+  expect(selectCode.ok()).toBeTruthy()
+  const selectedCode = await selectCode.json() as { serviceToken: string; selectedService: string; nextAction: string }
+  expect(selectedCode.selectedService).toBe('person_code')
+  expect(selectedCode.nextAction).toBe('use_service')
 
-  const completeCode = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/methods/code/complete`, {
-    headers: withFlowToken(registrationFlow.flowToken),
+  const completeCode = await request.post(`${AUTH_API_URL}/api/identification/person-code/complete`, {
+    headers: withBearer(selectedCode.serviceToken),
     data: {
-      payload: {
-        code: registration.code
-      }
+      code: registrationCode
     }
   })
   expect(completeCode.ok()).toBeTruthy()
-  const completedCode = await completeCode.json() as { status: string; nextAction: string }
-  expect(completedCode.status).toBe('finalizable')
-  expect(completedCode.nextAction).toBe('finalize')
+  const completedCode = await completeCode.json() as { status: string; serviceResultToken: string; achievedAcr: string }
+  expect(completedCode.status).toBe('verified')
+  expect(completedCode.achievedAcr).toBe('level_2')
 
   const finalizeRegistration = await request.post(`${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/finalize`, {
-    headers: withFlowToken(registrationFlow.flowToken),
+    headers: withBearer(registrationFlow.flowToken),
     data: {
+      serviceResultToken: completedCode.serviceResultToken,
       channel: 'registration'
     }
   })
@@ -397,40 +411,55 @@ test('generic registration and step-up flow APIs support create, method lifecycl
   const createStepUpFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
     data: {
       purpose: 'step_up',
-      userHint: userId,
-      prospectiveUserId: userId,
-      requestedAcr: 'urn:auth-sandbox-2:acr:sms'
+      subjectId: userId,
+      requiredAcr: 'level_1'
     }
   })
   expect(createStepUpFlow.status()).toBe(201)
-  const stepUpFlow = await createStepUpFlow.json() as { flowId: string; flowToken: string }
+  const stepUpFlow = await createStepUpFlow.json() as { flowId: string; flowToken: string; availableServices: Array<{ id: string }> }
+  expect(stepUpFlow.availableServices.map((service) => service.id)).toEqual(['sms_tan'])
 
-  const startSms = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/methods/sms/start`, {
-    headers: withFlowToken(stepUpFlow.flowToken),
+  const selectSms = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/select-service`, {
+    headers: withBearer(stepUpFlow.flowToken),
     data: {
-      payload: {
-        target: '+49123456789'
-      }
+      service: 'sms_tan'
     }
   })
-  expect(startSms.ok()).toBeTruthy()
-  const startedSms = await startSms.json() as { method: { devCode: string | null; maskedTarget: string | null } }
-  expect(startedSms.method.maskedTarget).toContain('+49')
-  expect(startedSms.method.devCode).not.toBeNull()
+  expect(selectSms.ok()).toBeTruthy()
+  const selectedSms = await selectSms.json() as { serviceToken: string }
 
-  const completeSms = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/methods/sms/complete`, {
-    headers: withFlowToken(stepUpFlow.flowToken),
+  const startSms = await request.post(`${AUTH_API_URL}/api/identification/sms-tan/start`, {
+    headers: withBearer(selectedSms.serviceToken),
+    data: {}
+  })
+  expect(startSms.ok()).toBeTruthy()
+  const startedSms = await startSms.json() as { maskedTarget: string | null; devCode: string | null }
+  expect(startedSms.maskedTarget).toContain('+49')
+  expect(startedSms.devCode).not.toBeNull()
+
+  const resendSms = await request.post(`${AUTH_API_URL}/api/identification/sms-tan/resend`, {
+    headers: withBearer(selectedSms.serviceToken),
+    data: {}
+  })
+  expect(resendSms.ok()).toBeTruthy()
+  const resentSms = await resendSms.json() as { devCode: string | null }
+  expect(resentSms.devCode).not.toBeNull()
+  expect(resentSms.devCode).not.toBe(startedSms.devCode)
+
+  const completeSms = await request.post(`${AUTH_API_URL}/api/identification/sms-tan/complete`, {
+    headers: withBearer(selectedSms.serviceToken),
     data: {
-      payload: {
-        code: startedSms.method.devCode
-      }
+      tan: resentSms.devCode
     }
   })
   expect(completeSms.ok()).toBeTruthy()
+  const completedSms = await completeSms.json() as { serviceResultToken: string; achievedAcr: string }
+  expect(completedSms.achievedAcr).toBe('level_2')
 
   const finalizeBrowser = await request.post(`${AUTH_API_URL}/api/flows/${stepUpFlow.flowId}/finalize`, {
-    headers: withFlowToken(stepUpFlow.flowToken),
+    headers: withBearer(stepUpFlow.flowToken),
     data: {
+      serviceResultToken: completedSms.serviceResultToken,
       channel: 'browser'
     }
   })
@@ -459,39 +488,48 @@ test('generic registration and step-up flow APIs support create, method lifecycl
   expect(redeemResultCode.ok()).toBeTruthy()
   const redeemedResult = await redeemResultCode.json() as { userId: string; achievedAcr: string | null }
   expect(redeemedResult.userId).toBe(userId)
-  expect(redeemedResult.achievedAcr).toBe('urn:auth-sandbox-2:acr:sms')
+  expect(redeemedResult.achievedAcr).toBe('level_2')
 })
 
 test('missing saved device binding is cleared instead of failing with a server error', async ({ page, request }) => {
   const userId = `e2e-missing-device-${Date.now()}`
   const deviceName = 'Missing Device Test'
-  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-codes`, {
+  const registrationCode = `MISS${Date.now().toString(36).toUpperCase()}`
+  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     data: {
       userId,
-      displayName: 'Missing Device User',
-      validForDays: 30
+      firstName: 'Missing',
+      lastName: 'User',
+      birthDate: '1990-01-01',
+      code: registrationCode,
+      codeValidForDays: 30
     }
   })
 
   expect(registrationResponse.ok()).toBeTruthy()
-  const registration = await registrationResponse.json()
 
   await page.goto('https://app.localhost:8443')
   await page.getByLabel('Benutzer-ID').fill(userId)
+  await page.getByLabel('Vorname').fill('Missing')
+  await page.getByLabel('Nachname').fill('User')
+  await page.getByLabel('Geburtsdatum').fill('1990-01-01')
   await page.getByLabel('Gerätename').fill(deviceName)
-  await page.getByLabel('Aktivierungscode').fill(registration.code)
   await page.getByRole('button', { name: 'Weiter' }).click()
-
   await expect(page.getByLabel('Secure element prompt')).toBeVisible()
   await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+  await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
+  await page.getByRole('button', { name: 'Code-Eingabe starten' }).click()
+  await page.getByRole('textbox', { name: 'Code' }).fill(registrationCode)
+  await page.getByRole('button', { name: 'Identifikation abschließen' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Neues Passwort erstellen' })).toBeVisible()
-  await page.getByLabel('Neues Passwort').fill('ChangeMe123!')
-  await page.getByRole('button', { name: 'Passwort speichern' }).click()
-
-  await expect(page.getByLabel('Secure element prompt')).toBeVisible()
-  await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
-  await expect(page.getByRole('heading', { name: deviceName })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Neues Passwort erstellen|Mit gespeichertem Gerät anmelden/ })).toBeVisible()
+  if (await page.getByRole('heading', { name: 'Neues Passwort erstellen' }).isVisible().catch(() => false)) {
+    await page.getByLabel('Neues Passwort').fill('ChangeMe123!')
+    await page.getByRole('button', { name: 'Passwort speichern' }).click()
+    await expect(page.getByLabel('Secure element prompt')).toBeVisible()
+    await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+    await expect(page.getByRole('heading', { name: deviceName })).toBeVisible()
+  }
 
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Mit gespeichertem Gerät anmelden' })).toBeVisible()

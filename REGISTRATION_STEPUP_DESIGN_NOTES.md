@@ -85,9 +85,10 @@ Moegliche Daten pro Flow:
 - `flowId`
 - `purpose`
 - `status`
-- `requestedAcr` oder `targetAssurance`
+- `requiredAcr`
+- `achievedAcr`
 - `deviceId`
-- `userHint` / `prospectiveUserId`
+- `subjectId`
 - methodenspezifische Zwischenergebnisse
 - Challenge-/Proof-Metadaten
 - Ablaufzeit
@@ -118,7 +119,7 @@ Beispiel:
 ```json
 {
   "purpose": "registration",
-  "targetAssurance": "phone_verified"
+  "requiredAcr": "level_1"
 }
 ```
 
@@ -127,8 +128,8 @@ Antwort:
 ```json
 {
   "flowId": "flow_123",
-  "token": "flow-token",
-  "availableMethods": ["sms", "eid", "code"]
+  "flowToken": "flow-token",
+  "availableServices": ["sms_tan", "eid", "person_code"]
 }
 ```
 
@@ -143,16 +144,20 @@ Liefert z. B.:
 - bereits erreichte Assurance
 - naechste erlaubte Aktionen
 
-### Methode waehlen oder starten
+### Service waehlen
 
-- `POST /flows/{flowId}/select-method`
-- oder direkt `POST /flows/{flowId}/methods/{method}/start`
+- `POST /flows/{flowId}/select-service`
 
-### Methode abschliessen
+Antwort mit `serviceToken`
 
-`POST /flows/{flowId}/methods/{method}/complete`
+### Direktes Service-API
 
-Hier werden z. B. OTP, eID-Assertion oder Registrierungscode eingereicht.
+- `POST /identification/person-code/complete`
+- `POST /identification/sms-tan/start`
+- `POST /identification/sms-tan/resend`
+- `POST /identification/sms-tan/complete`
+
+Hier werden z. B. TAN, eID-Assertion oder Registrierungscode eingereicht. Erfolgreiche Services liefern ein `serviceResultToken`.
 
 ### Flow finalisieren
 

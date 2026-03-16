@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import type { DeviceRecord, RegistrationCodeRecord } from '@auth-sandbox-2/shared-types'
+import type { CreateRegistrationIdentityInput, DeviceRecord, RegistrationCodeRecord } from '@auth-sandbox-2/shared-types'
 
 import './styles.css'
 
@@ -43,6 +43,15 @@ function AdminApp() {
   const [codeQuery, setCodeQuery] = useState('')
   const [deviceQuery, setDeviceQuery] = useState('')
   const [form, setForm] = useState({ userId: 'demo-user', displayName: 'Demo User', validForDays: 30 })
+  const [identityForm, setIdentityForm] = useState<CreateRegistrationIdentityInput>({
+    userId: 'demo-user',
+    firstName: 'Demo',
+    lastName: 'User',
+    birthDate: '1990-01-01',
+    code: 'A1B2C3D4',
+    codeValidForDays: 30,
+    phoneNumber: '+491701234567'
+  })
 
   async function refresh() {
     const [codesResult, devicesResult] = await Promise.all([
@@ -63,6 +72,15 @@ function AdminApp() {
     await request('/api/admin/registration-codes', {
       method: 'POST',
       body: JSON.stringify(form)
+    })
+    await refresh()
+  }
+
+  async function handleCreateIdentity(event: FormEvent) {
+    event.preventDefault()
+    await request('/api/admin/registration-identities', {
+      method: 'POST',
+      body: JSON.stringify(identityForm)
     })
     await refresh()
   }
@@ -133,6 +151,46 @@ function AdminApp() {
               <input type="number" value={form.validForDays} onChange={(event) => setForm({ ...form, validForDays: Number(event.target.value) })} />
             </label>
             <button type="submit">Code erstellen</button>
+          </form>
+        </section>
+
+        <section className="card admin-form-card">
+          <div className="list-card-header">
+            <div>
+              <h2>Registrierungsidentität vorbereiten</h2>
+              <p className="section-copy">Lege Person, optionalen Code und optionale SMS-Zielnummer getrennt ab. Das auth-api orchestriert nur den Flow; konkrete Identifikationsservices werden selektiert und können später in eigene Backend-Container ausgelagert werden.</p>
+            </div>
+          </div>
+          <form className="grid" onSubmit={handleCreateIdentity}>
+            <label>
+              User ID
+              <input value={identityForm.userId} onChange={(event) => setIdentityForm({ ...identityForm, userId: event.target.value })} />
+            </label>
+            <label>
+              Vorname
+              <input value={identityForm.firstName} onChange={(event) => setIdentityForm({ ...identityForm, firstName: event.target.value })} />
+            </label>
+            <label>
+              Nachname
+              <input value={identityForm.lastName} onChange={(event) => setIdentityForm({ ...identityForm, lastName: event.target.value })} />
+            </label>
+            <label>
+              Geburtsdatum
+              <input type="date" value={identityForm.birthDate} onChange={(event) => setIdentityForm({ ...identityForm, birthDate: event.target.value })} />
+            </label>
+            <label>
+              Code
+              <input value={identityForm.code ?? ''} onChange={(event) => setIdentityForm({ ...identityForm, code: event.target.value || undefined })} />
+            </label>
+            <label>
+              Code gültig für Tage
+              <input type="number" value={identityForm.codeValidForDays ?? 30} onChange={(event) => setIdentityForm({ ...identityForm, codeValidForDays: Number(event.target.value) })} />
+            </label>
+            <label>
+              Telefonnummer
+              <input value={identityForm.phoneNumber ?? ''} onChange={(event) => setIdentityForm({ ...identityForm, phoneNumber: event.target.value || undefined })} />
+            </label>
+            <button type="submit">Identität speichern</button>
           </form>
         </section>
 

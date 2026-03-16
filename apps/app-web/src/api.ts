@@ -1,12 +1,22 @@
 import type {
   ArtifactDetailResponse,
   ClientEventInput,
+  CreateFlowInput,
+  CreateFlowResponse,
+  FinalizeFlowInput,
+  FinalizeFlowResponse,
   FinishLoginInput,
   FinishLoginResponse,
+  GetFlowResponse,
   MockApiCreateMessageInput,
   MockApiCreateMessageResponse,
   MockApiMessagesResponse,
   MockApiProfileResponse,
+  PublicAssuranceFlowRecord,
+  SelectFlowServiceInput,
+  SelectFlowServiceResponse,
+  ServiceResultEnvelope,
+  SmsTanStartResponse,
   RefreshTokensInput,
   RefreshTokensResponse,
   RegisterDeviceInput,
@@ -87,6 +97,16 @@ async function request<T>(path: string, init?: RequestInit, options?: TraceReque
   return response.json() as Promise<T>
 }
 
+async function bearerRequest<T>(path: string, token: string, init?: RequestInit, options?: TraceRequestOptions) {
+  return request<T>(path, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(init?.headers ?? {})
+    }
+  }, options)
+}
+
 async function traceRequest<T>(path: string, init?: RequestInit, options?: TraceRequestOptions) {
   const traceHeaders = createTraceHeaders(options)
   const response = await fetch(`${TRACE_API_BASE}${path}`, {
@@ -134,6 +154,14 @@ async function mockRequest<T>(path: string, accessToken: string, init?: RequestI
 
 export const api = {
   registerDevice: (body: RegisterDeviceInput, options?: TraceRequestOptions) => request<RegisterDeviceResponse>('/api/device/register', { method: 'POST', body: JSON.stringify(body) }, options),
+  createFlow: (body: CreateFlowInput, options?: TraceRequestOptions) => request<CreateFlowResponse>('/api/flows', { method: 'POST', body: JSON.stringify(body) }, options),
+  getFlow: (flowId: string, flowToken: string, options?: TraceRequestOptions) => bearerRequest<GetFlowResponse>(`/api/flows/${flowId}`, flowToken, undefined, options),
+  selectFlowService: (flowId: string, flowToken: string, body: SelectFlowServiceInput, options?: TraceRequestOptions) => bearerRequest<SelectFlowServiceResponse>(`/api/flows/${flowId}/select-service`, flowToken, { method: 'POST', body: JSON.stringify(body) }, options),
+  completePersonCode: (serviceToken: string, code: string, options?: TraceRequestOptions) => bearerRequest<ServiceResultEnvelope>('/api/identification/person-code/complete', serviceToken, { method: 'POST', body: JSON.stringify({ code }) }, options),
+  startSmsTan: (serviceToken: string, options?: TraceRequestOptions) => bearerRequest<SmsTanStartResponse & { devCode?: string | null }>('/api/identification/sms-tan/start', serviceToken, { method: 'POST', body: JSON.stringify({}) }, options),
+  resendSmsTan: (serviceToken: string, options?: TraceRequestOptions) => bearerRequest<SmsTanStartResponse & { devCode?: string | null }>('/api/identification/sms-tan/resend', serviceToken, { method: 'POST', body: JSON.stringify({}) }, options),
+  completeSmsTan: (serviceToken: string, tan: string, options?: TraceRequestOptions) => bearerRequest<ServiceResultEnvelope>('/api/identification/sms-tan/complete', serviceToken, { method: 'POST', body: JSON.stringify({ tan }) }, options),
+  finalizeFlow: (flowId: string, flowToken: string, body: FinalizeFlowInput, options?: TraceRequestOptions) => bearerRequest<FinalizeFlowResponse>(`/api/flows/${flowId}/finalize`, flowToken, { method: 'POST', body: JSON.stringify(body) }, options),
   setPassword: (body: SetPasswordInput, options?: TraceRequestOptions) => request<{ passwordSet: true }>('/api/device/set-password', { method: 'POST', body: JSON.stringify(body) }, options),
   startLogin: (body: StartLoginInput, options?: TraceRequestOptions) => request<StartLoginResponse>('/api/device/login/start', { method: 'POST', body: JSON.stringify(body) }, options),
   finishLogin: (body: FinishLoginInput, options?: TraceRequestOptions) => request<FinishLoginResponse>('/api/device/login/finish', { method: 'POST', body: JSON.stringify(body) }, options),

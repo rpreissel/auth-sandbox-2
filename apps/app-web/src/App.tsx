@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import type {
+  AssuranceFlowService,
+  AssuranceFlowServiceOption,
   FinishLoginResponse,
   MockApiMessageRecord,
   MockApiProfileResponse,
+  PublicAssuranceFlowRecord,
   StartLoginResponse
 } from '@auth-sandbox-2/shared-types'
 
@@ -21,7 +24,7 @@ type DeviceState = {
   privateKey: CryptoKey
 }
 
-type Step = 'register' | 'password' | 'login' | 'authenticated'
+type Step = 'register' | 'register_verify' | 'password' | 'login' | 'authenticated'
 
 type AuthenticatedTab = 'tokens' | 'mock-api'
 
@@ -37,6 +40,17 @@ type StoredDeviceBinding = {
 type TraceState = {
   traceId: string
   sessionId: string
+}
+
+type PendingRegistration = {
+  flowId: string
+  flowToken: string
+  serviceToken?: string
+  publicKey: string
+  privateKey: CryptoKey
+  availableServices: AssuranceFlowServiceOption[]
+  selectedService: AssuranceFlowService
+  maskedTarget?: string | null
 }
 
 type MockApiState = {
@@ -70,8 +84,13 @@ const PRIORITY_CLAIM_KEYS = ['sub', 'preferred_username', 'userId', 'scope', 'az
 function createInitialForm() {
   return {
     userId: 'demo-user',
+    firstName: 'Demo',
+    lastName: 'User',
+    birthDate: '1990-01-01',
     deviceName: 'My Phone',
-    activationCode: '',
+    selectedService: 'person_code' as AssuranceFlowService,
+    code: '',
+    tan: '',
     password: 'ChangeMe123!'
   }
 }
@@ -128,6 +147,7 @@ export function App() {
   const [tokens, setTokens] = useState<FinishLoginResponse | null>(null)
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
+  const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null)
   const [traceState, setTraceState] = useState<TraceState | null>(null)
   const [activeAuthenticatedTab, setActiveAuthenticatedTab] = useState<AuthenticatedTab>('tokens')
   const [mockApi, setMockApi] = useState<MockApiState>({
@@ -171,7 +191,8 @@ export function App() {
           ...current,
           userId: stored.userId,
           deviceName: stored.deviceName,
-          activationCode: ''
+          code: '',
+          tan: ''
         }))
         setStep(stored.passwordRequired ? 'password' : 'login')
         setStatus('Dieses Gerät ist bereit zur Anmeldung')
@@ -194,6 +215,7 @@ export function App() {
     setChallenge(null)
     setTokens(null)
     setSecurePrompt(null)
+    setPendingRegistration(null)
     setTraceState(null)
     setActiveAuthenticatedTab('tokens')
     setMockApi({
@@ -445,38 +467,81 @@ export function App() {
     setStatus(nextStatus)
   }
 
-  async function completeRegister() {
-    const flow = await createFlowTrace('device_registration_started', [{ name: 'registration_form', value: form }])
-    setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
-    const signingKeys = await createSigningKeys()
-    setStatus('Gerätebindung wird gespeichert...')
-    const result = await api.registerDevice({
-      userId: form.userId,
-      deviceName: form.deviceName,
-      activationCode: form.activationCode,
-      publicKey: signingKeys.publicKey
-    }, flow)
-
+  async function finalizeRegistration(result: PublicAssuranceFlowRecord, signingKeys: { publicKey: string; privateKey: CryptoKey }) {
+    if (!result.finalization || result.finalization.kind !== 'registration_result') {
+      throw new Error('Registration flow did not return a registration result')
+    }
+    if (!result.finalization.publicKeyHash) {
+      throw new Error('Registration flow did not return a public key hash')
+    }
     const nextDevice = {
-      userId: form.userId,
-      deviceName: result.deviceName,
+      userId: result.finalization.userId,
+      deviceName: form.deviceName,
       publicKey: signingKeys.publicKey,
-      publicKeyHash: result.publicKeyHash,
+      publicKeyHash: result.finalization.publicKeyHash,
       privateKey: signingKeys.privateKey
     }
 
     setDevice(nextDevice)
     setChallenge(null)
     setTokens(null)
-    await persistDeviceBinding(nextDevice, result.passwordRequired)
+    await persistDeviceBinding(nextDevice, result.finalization.passwordSetupRequired)
 
-    if (result.passwordRequired) {
+    if (result.finalization.passwordSetupRequired) {
       setStatus('Gerätebindung gespeichert. Lege ein neues Keycloak-Passwort fest, um fortzufahren.')
       setStep('password')
+      setPendingRegistration(null)
       return
     }
 
-      await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff, um die Anmeldung abzuschließen')
+    setPendingRegistration(null)
+    await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff, um die Anmeldung abzuschließen')
+  }
+
+  async function completeRegister() {
+    const flow = await createFlowTrace('device_registration_started', [{ name: 'registration_form', value: form }])
+    setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
+    const signingKeys = await createSigningKeys()
+    setStatus('Registrierungs-Flow wird angelegt...')
+    const created = await api.createFlow({
+      purpose: 'registration',
+      subjectId: form.userId,
+      requiredAcr: 'level_1',
+      context: {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        birthDate: form.birthDate,
+        deviceName: form.deviceName,
+        publicKey: signingKeys.publicKey
+      }
+    }, flow)
+
+    if (created.availableServices.length === 0) {
+      throw new Error('Für diese Person sind aktuell keine Identifikationsservices vorbereitet')
+    }
+
+    const selectedService = created.availableServices.some((service) => service.id === form.selectedService)
+      ? form.selectedService
+      : created.availableServices[0].id
+
+    setPendingRegistration({
+      flowId: created.flowId,
+      flowToken: created.flowToken,
+      serviceToken: undefined,
+      publicKey: signingKeys.publicKey,
+      privateKey: signingKeys.privateKey,
+      availableServices: created.availableServices,
+      selectedService,
+      maskedTarget: created.method?.maskedTarget ?? null
+    })
+    setForm((current) => ({
+      ...current,
+      selectedService,
+      code: '',
+      tan: ''
+    }))
+    setStatus('Wähle einen verfügbaren Identifikationsservice aus und führe ihn aus.')
+    setStep('register_verify')
   }
 
   async function handleRegister(event: FormEvent) {
@@ -487,6 +552,90 @@ export function App() {
       body: 'Nutze deine Displaysperre, um diese Gerätebindung im Android-Keystore zu speichern.',
       caption: 'Sicherheitsprüfung erforderlich',
       confirmLabel: 'Displaysperre verwenden'
+    })
+  }
+
+  async function handleStartSelectedService() {
+    if (!pendingRegistration) {
+      return
+    }
+
+    const selected = await api.selectFlowService(
+      pendingRegistration.flowId,
+      pendingRegistration.flowToken,
+      { service: form.selectedService },
+      traceState ?? undefined
+    )
+    const serviceToken = selected.serviceToken
+    if (!serviceToken) {
+      throw new Error('Flow selection did not return a service token')
+    }
+
+    const started = form.selectedService === 'sms_tan'
+      ? await api.startSmsTan(serviceToken, traceState ?? undefined)
+      : { maskedTarget: null, devCode: null }
+
+    setPendingRegistration((current) => current
+      ? {
+          ...current,
+          serviceToken,
+          selectedService: form.selectedService,
+          maskedTarget: started.maskedTarget ?? current.maskedTarget ?? null
+        }
+      : current)
+
+    setStatus(form.selectedService === 'sms_tan'
+      ? 'Eine neue SMS-TAN wurde angefordert. Gib die TAN ein oder fordere eine neue an.'
+      : 'Gib den vorbereiteten Code ein, um die Registrierung fortzusetzen.')
+  }
+
+  async function handleCompleteSelectedService(event: FormEvent) {
+    event.preventDefault()
+    if (!pendingRegistration) {
+      return
+    }
+
+    await runAction(async () => {
+      if (!pendingRegistration.serviceToken) {
+        throw new Error('No service token available. Start the selected service first.')
+      }
+      const completed = form.selectedService === 'person_code'
+        ? await api.completePersonCode(pendingRegistration.serviceToken, form.code, traceState ?? undefined)
+        : await api.completeSmsTan(pendingRegistration.serviceToken, form.tan, traceState ?? undefined)
+      const finalized = await api.finalizeFlow(
+        pendingRegistration.flowId,
+        pendingRegistration.flowToken,
+        { serviceResultToken: completed.serviceResultToken, channel: 'registration' },
+        traceState ?? undefined
+      )
+      await finalizeRegistration(finalized, {
+        publicKey: pendingRegistration.publicKey,
+        privateKey: pendingRegistration.privateKey
+      })
+    })
+  }
+
+  async function handleResendTan() {
+    if (!pendingRegistration || form.selectedService !== 'sms_tan') {
+      return
+    }
+
+    await runAction(async () => {
+      if (!pendingRegistration.serviceToken) {
+        throw new Error('No service token available. Start SMS-TAN first.')
+      }
+      const restarted = await api.resendSmsTan(pendingRegistration.serviceToken, traceState ?? undefined)
+      setPendingRegistration((current) => current
+        ? {
+            ...current,
+            maskedTarget: restarted.maskedTarget ?? current.maskedTarget ?? null
+          }
+        : current)
+      setForm((current) => ({
+        ...current,
+        tan: ''
+      }))
+      setStatus('Eine neue TAN wurde gesendet.')
     })
   }
 
@@ -622,7 +771,7 @@ export function App() {
                   ? 'Deine Keycloak-Sitzung ist auf diesem Gerät aktiv.'
                   : device
                     ? 'Nutze die gespeicherte Gerätebindung, um dich mit Android-Sicherheit erneut anzumelden.'
-                    : 'Gib deinen Aktivierungscode ein und speichere dieses Telefon im Android-Keystore.'}
+                    : 'Gib zuerst deine Identitätsdaten ein und identifiziere dich dann per Code oder SMS-TAN.'}
               </p>
             </header>
 
@@ -654,8 +803,8 @@ export function App() {
                     </div>
                   </div>
                   <div className="android-intro">
-                    <strong>Nutze den Aktivierungscode aus deinem Admin-Flow.</strong>
-                    <p className="muted-copy">Nach der Einrichtung hält Android-Sicherheit die Gerätebindung für die Anmeldung per Tippen bereit.</p>
+                    <strong>Prüfe zuerst deine Personendaten und wähle dann Code oder SMS-TAN.</strong>
+                    <p className="muted-copy">Die hinterlegte Methode wird gegen die beim Admin vorbereiteten Personendaten geprüft und bleibt als Flow später für Browser-Step-up wiederverwendbar.</p>
                   </div>
                   <form className="grid form-stack" onSubmit={handleRegister}>
                     <label>
@@ -663,14 +812,85 @@ export function App() {
                       <input value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} disabled={busy} />
                     </label>
                     <label>
+                      <span className="field-label">Vorname</span>
+                      <input value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} disabled={busy} />
+                    </label>
+                    <label>
+                      <span className="field-label">Nachname</span>
+                      <input value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} disabled={busy} />
+                    </label>
+                    <label>
+                      <span className="field-label">Geburtsdatum</span>
+                      <input type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} disabled={busy} />
+                    </label>
+                    <label>
                       <span className="field-label">Gerätename</span>
                       <input value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                     </label>
                     <label>
-                      <span className="field-label">Aktivierungscode</span>
-                      <input value={form.activationCode} onChange={(event) => setForm({ ...form, activationCode: event.target.value })} disabled={busy} />
+                      <span className="field-label">Bevorzugter Service</span>
+                      <select value={form.selectedService} onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService })} disabled={busy}>
+                        <option value="person_code">Code</option>
+                        <option value="sms_tan">SMS-TAN</option>
+                      </select>
                     </label>
                     <button type="submit" disabled={busy}>Weiter</button>
+                  </form>
+                </>
+              )}
+
+              {step === 'register_verify' && pendingRegistration && (
+                <>
+                  <div className="section-heading simple-heading">
+                    <div>
+                      <p className="section-label">Identifikation</p>
+                      <h2>Verfügbaren Service ausführen</h2>
+                    </div>
+                  </div>
+                  <div className="android-intro">
+                    <strong>Es werden nur die für diese Person vorbereiteten Services angeboten.</strong>
+                    <p className="muted-copy">SMS-TAN erscheint nur mit hinterlegter Telefonnummer. Weitere Services können später über dieselbe Flow-Auswahl ergänzt werden.</p>
+                  </div>
+                  <label>
+                    <span className="field-label">Verfügbarer Service</span>
+                    <select
+                      value={form.selectedService}
+                      onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService, code: '', tan: '' })}
+                      disabled={busy}
+                    >
+                      {pendingRegistration.availableServices.map((service) => (
+                        <option key={service.id} value={service.id}>{service.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="challenge-card">
+                    <p className="section-label">Service starten</p>
+                    <strong>{form.selectedService === 'sms_tan' ? 'SMS-TAN senden' : 'Code prüfen'}</strong>
+                    <p className="muted-copy">
+                      {form.selectedService === 'sms_tan'
+                        ? `Die TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet und muss hier eingegeben werden.`
+                        : 'Der Nutzer gibt den vorbereiteten Code selbst ein.'}
+                    </p>
+                    <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
+                      {form.selectedService === 'sms_tan' ? 'TAN senden' : 'Code-Eingabe starten'}
+                    </button>
+                  </div>
+                  <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
+                    {form.selectedService === 'person_code' ? (
+                      <label>
+                        <span className="field-label">Code</span>
+                        <input value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} disabled={busy} />
+                      </label>
+                    ) : (
+                      <>
+                        <label>
+                          <span className="field-label">SMS-TAN</span>
+                          <input value={form.tan} onChange={(event) => setForm({ ...form, tan: event.target.value })} disabled={busy} />
+                        </label>
+                        <button type="button" onClick={() => void handleResendTan()} disabled={busy}>Neue TAN senden</button>
+                      </>
+                    )}
+                    <button type="submit" disabled={busy}>Identifikation abschließen</button>
                   </form>
                 </>
               )}
