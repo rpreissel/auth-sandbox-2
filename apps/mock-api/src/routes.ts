@@ -9,6 +9,8 @@ import {
   withRequestTrace
 } from '@auth-sandbox-2/backend-core'
 import type {
+  MockApiAssuranceLevel,
+  MockApiAssuranceResponse,
   MockApiCreateMessageInput,
   MockApiCreateMessageResponse,
   MockApiMessageRecord,
@@ -23,6 +25,8 @@ type MockAccessTokenClaims = JWTPayload & {
   preferred_username?: string
   userId?: string
   scope?: string
+  acr?: string
+  amr?: string[] | string
 }
 
 const jwks = createRemoteJWKSet(new URL(mockApiConfig.jwksUrl))
@@ -128,6 +132,59 @@ function toIsoDateTime(value: number | undefined) {
   return typeof value === 'number' ? new Date(value * 1000).toISOString() : null
 }
 
+function normalizeAmr(amr: MockAccessTokenClaims['amr']) {
+  if (Array.isArray(amr)) {
+    return amr.filter((value): value is string => typeof value === 'string')
+  }
+  if (typeof amr === 'string') {
+    return amr.split(' ').filter(Boolean)
+  }
+  return []
+}
+
+function normalizeAcr(acr: unknown) {
+  return typeof acr === 'string' && acr.trim() ? acr : null
+}
+
+function satisfiesRequiredLevel(acr: string | null, requiredLevel: MockApiAssuranceLevel) {
+  if (requiredLevel === '1se') {
+    return acr === '1se' || acr === '2se'
+  }
+  return acr === '2se'
+}
+
+async function requireAssuranceLevel(request: FastifyRequest, requiredLevel: MockApiAssuranceLevel) {
+  const claims = await verifyAccessToken(request)
+  const acr = normalizeAcr(claims.acr)
+  if (!satisfiesRequiredLevel(acr, requiredLevel)) {
+    throw new Error(`Token acr ${acr ?? 'missing'} does not satisfy ${requiredLevel}`)
+  }
+  return claims
+}
+
+function buildAssuranceResponse(claims: MockAccessTokenClaims, requiredLevel: MockApiAssuranceLevel): MockApiAssuranceResponse {
+  const userId = getUserId(claims)
+  return {
+    ...readTraceEnvelope(),
+    subject: claims.sub ?? userId,
+    userId,
+    username: claims.preferred_username ?? userId,
+    audience: normalizeAudience(claims),
+    scope: normalizeScope(claims.scope),
+    issuer: typeof claims.iss === 'string' ? claims.iss : mockApiConfig.issuer,
+    clientId: claims.azp ?? null,
+    issuedAt: toIsoDateTime(claims.iat),
+    expiresAt: toIsoDateTime(claims.exp),
+    tokenAcr: normalizeAcr(claims.acr),
+    tokenAmr: normalizeAmr(claims.amr),
+    requiredLevel,
+    accessGranted: true,
+    message: requiredLevel === '1se'
+      ? 'The token satisfied the baseline 1se assurance check.'
+      : 'The token satisfied the stronger 2se assurance check.'
+  }
+}
+
 function readTraceEnvelope() {
   const trace = getTraceContext()
   return {
@@ -171,6 +228,48 @@ function createMessage(userId: string, input: MockApiCreateMessageInput) {
 
 export async function registerMockRoutes(app: any) {
   app.get('/health', async () => ({ status: 'ok', service: 'mock-api' }))
+
+  app.get('/api/mock/assurance/1se', async (request: FastifyRequest, reply: FastifyReply) => {
+    let claims: MockAccessTokenClaims
+    try {
+      claims = await requireAssuranceLevel(request, '1se')
+    } catch {
+      reply.code(403)
+      return { message: 'This endpoint requires a token with acr 1se or 2se.' }
+    }
+
+    const userId = getUserId(claims)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'mock_api_assurance_1se_read',
+      title: `Mock 1se assurance check for ${userId}`,
+      summary: 'mock-api accepted the token for a baseline assurance-protected endpoint.',
+      userId,
+      run: async () => buildAssuranceResponse(claims, '1se')
+    })
+  })
+
+  app.get('/api/mock/assurance/2se', async (request: FastifyRequest, reply: FastifyReply) => {
+    let claims: MockAccessTokenClaims
+    try {
+      claims = await requireAssuranceLevel(request, '2se')
+    } catch {
+      reply.code(403)
+      return { message: 'This endpoint requires a token with acr 2se.' }
+    }
+
+    const userId = getUserId(claims)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'mock_api_assurance_2se_read',
+      title: `Mock 2se assurance check for ${userId}`,
+      summary: 'mock-api accepted the token for a strong assurance-protected endpoint.',
+      userId,
+      run: async () => buildAssuranceResponse(claims, '2se')
+    })
+  })
 
   app.get('/api/mock/profile', async (request: FastifyRequest, reply: FastifyReply) => {
     let claims: MockAccessTokenClaims

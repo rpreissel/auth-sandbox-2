@@ -34,6 +34,7 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String LOGIN_TOKEN_PARAM = "login_token";
+    private static final String DEVICE_LOGIN_ACR = "2se";
 
     @Override
     public Response process(Context context) {
@@ -120,6 +121,9 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             event.session(userSession);
 
             AuthenticationManager.setClientScopesInSession(session, authSession);
+            authSession.setAuthNote("acr", DEVICE_LOGIN_ACR);
+            authSession.setUserSessionNote("acr", DEVICE_LOGIN_ACR);
+            userSession.setNote("acr", DEVICE_LOGIN_ACR);
             ClientSessionContext clientSessionCtx = TokenManager.attachAuthenticationSession(session, userSession, authSession);
             clientSessionCtx.setAttribute(Constants.GRANT_TYPE, context.getGrantType());
             updateUserSessionFromClientAuth(userSession);

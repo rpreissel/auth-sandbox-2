@@ -76,6 +76,60 @@ public final class AuthApiClient {
         );
     }
 
+    public BrowserSmsChallenge startBrowserStepUp(String userId) throws IOException, InterruptedException {
+        HttpRequest request = authorizedJsonRequest(
+                authApiBaseUrl + "/api/internal/browser-step-up/start",
+                MAPPER.writeValueAsString(Map.of("userId", userId))
+        );
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new IOException("Browser step-up start failed: " + response.statusCode() + " " + response.body());
+        }
+
+        JsonNode root = MAPPER.readTree(response.body());
+        return new BrowserSmsChallenge(
+                requiredText(root, "flowId"),
+                requiredText(root, "serviceToken"),
+                textOrNull(root, "maskedTarget"),
+                textOrNull(root, "devCode")
+        );
+    }
+
+    public BrowserStepUpResult completeBrowserStepUp(String flowId, String serviceToken, String tan) throws IOException, InterruptedException {
+        HttpRequest completeRequest = authorizedJsonRequest(
+                authApiBaseUrl + "/api/internal/browser-step-up/complete",
+                MAPPER.writeValueAsString(Map.of(
+                        "flowId", flowId,
+                        "serviceToken", serviceToken,
+                        "tan", tan
+                ))
+        );
+
+        HttpResponse<String> completeResponse = httpClient.send(completeRequest, HttpResponse.BodyHandlers.ofString());
+        if (completeResponse.statusCode() < 200 || completeResponse.statusCode() >= 300) {
+            throw new IOException("Browser step-up complete failed: " + completeResponse.statusCode() + " " + completeResponse.body());
+        }
+
+        JsonNode finalized = MAPPER.readTree(completeResponse.body());
+        JsonNode result = finalized.path("result");
+        return new BrowserStepUpResult(
+                "level_2".equals(textOrNull(result, "achievedAcr")) ? "2se" : textOrNull(result, "achievedAcr"),
+                java.util.List.of("sms")
+        );
+    }
+
+    private HttpRequest authorizedJsonRequest(String uri, String body) throws IOException, InterruptedException {
+        String accessToken = getServiceAccessToken();
+        return HttpRequest.newBuilder()
+                .uri(URI.create(uri))
+                .timeout(REQUEST_TIMEOUT)
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer " + accessToken)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+    }
+
     private String getServiceAccessToken() throws IOException, InterruptedException {
         String form = "grant_type=client_credentials"
                 + "&client_id=" + urlEncode(internalRedeemClientId)
@@ -109,12 +163,31 @@ public final class AuthApiClient {
         return node.asText();
     }
 
+    private static String textOrNull(JsonNode root, String field) {
+        JsonNode node = root.path(field);
+        return node.isTextual() && !node.asText().isBlank() ? node.asText() : null;
+    }
+
     public record FlowArtifactRedeemResult(
             String flowId,
             String userId,
             String purpose,
             String achievedAcr,
             String authTime,
+            java.util.List<String> amr
+    ) {
+    }
+
+    public record BrowserSmsChallenge(
+            String flowId,
+            String serviceToken,
+            String maskedTarget,
+            String devCode
+    ) {
+    }
+
+    public record BrowserStepUpResult(
+            String achievedAcr,
             java.util.List<String> amr
     ) {
     }

@@ -600,9 +600,13 @@ async function finalizeStepUp(flow: AssuranceFlowRow, channel: FinalizeFlowChann
     }
   }
 
-  const artifactKind = channel === 'browser' ? 'result_code' : 'assurance_handle'
-  const artifactCode = generateArtifactCode(channel === 'browser' ? 'rc' : 'ah')
-  const artifactExpiresAt = defaultArtifactExpiresAt()
+  const artifactKind = channel === 'browser' ? 'result_code' : channel === 'mobile' ? 'assurance_handle' : null
+  const artifactCode = artifactKind === 'result_code'
+    ? generateArtifactCode('rc')
+    : artifactKind === 'assurance_handle'
+      ? generateArtifactCode('ah')
+      : null
+  const artifactExpiresAt = artifactKind ? defaultArtifactExpiresAt() : null
   const result = readResult(current)
   const nextRow = await updateAssuranceFlow(flow.id, {
     status: 'finalized',
@@ -624,7 +628,11 @@ async function finalizeStepUp(flow: AssuranceFlowRow, channel: FinalizeFlowChann
 
   return {
     row: nextRow,
-    eventType: artifactKind === 'assurance_handle' ? 'flow_finalized_assurance_handle' : 'flow_finalized_result_code'
+    eventType: artifactKind === 'assurance_handle'
+      ? 'flow_finalized_assurance_handle'
+      : artifactKind === 'result_code'
+        ? 'flow_finalized_result_code'
+        : 'flow_finalized_keycloak'
   }
 }
 

@@ -18,6 +18,12 @@ public class ResultCodeAuthenticator implements Authenticator {
         try {
             String resultCode = context.getAuthenticationSession().getClientNote(RESULT_CODE_NOTE);
             if (resultCode == null || resultCode.isBlank()) {
+                resultCode = context.getAuthenticationSession().getClientNote("result_code");
+            }
+            if (resultCode == null || resultCode.isBlank()) {
+                resultCode = context.getHttpRequest().getUri().getQueryParameters().getFirst("result_code");
+            }
+            if (resultCode == null || resultCode.isBlank()) {
                 LOG.warn("No result_code found in auth session notes");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
@@ -33,8 +39,13 @@ public class ResultCodeAuthenticator implements Authenticator {
 
             context.getAuthenticationSession().setAuthNote("acr", redeem.achievedAcr());
             context.getAuthenticationSession().setAuthNote("auth_time", redeem.authTime());
+            context.getAuthenticationSession().setUserSessionNote("acr", redeem.achievedAcr());
+            context.getAuthenticationSession().setUserSessionNote("auth_time", redeem.authTime());
+            context.getAuthenticationSession().setClientNote(RESULT_CODE_NOTE, resultCode);
+            context.getAuthenticationSession().setClientNote("result_code", resultCode);
             if (!redeem.amr().isEmpty()) {
                 context.getAuthenticationSession().setAuthNote("amr", String.join(" ", redeem.amr()));
+                context.getAuthenticationSession().setUserSessionNote("amr", String.join(" ", redeem.amr()));
             }
 
             context.setUser(user);

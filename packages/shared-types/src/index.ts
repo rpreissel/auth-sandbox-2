@@ -118,7 +118,7 @@ export type AssuranceFlowFinalization =
     expiresAt: IsoDateTime
   }
 
-export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser'
+export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser' | 'keycloak'
 
 export type CreateFlowInput = {
   purpose: AssuranceFlowPurpose
@@ -460,6 +460,25 @@ export type MockApiProfileResponse = MockApiTraceEnvelope & {
   clientId: string | null
   issuedAt: IsoDateTime | null
   expiresAt: IsoDateTime | null
+}
+
+export type MockApiAssuranceLevel = '1se' | '2se'
+
+export type MockApiAssuranceResponse = MockApiTraceEnvelope & {
+  subject: string
+  userId: string
+  username: string
+  audience: string[]
+  scope: string[]
+  issuer: string
+  clientId: string | null
+  issuedAt: IsoDateTime | null
+  expiresAt: IsoDateTime | null
+  tokenAcr: string | null
+  tokenAmr: string[]
+  requiredLevel: MockApiAssuranceLevel
+  accessGranted: true
+  message: string
 }
 
 export type MockApiMessageRecord = {

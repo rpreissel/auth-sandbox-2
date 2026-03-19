@@ -28,6 +28,7 @@ import {
   selectPublicAssuranceFlowService,
   startPublicAssuranceFlowMethod
 } from './assurance-flows.js'
+import { verifyServiceToken } from './flow-tokens.js'
 import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
 import type {
@@ -330,6 +331,42 @@ export async function resendFlowService(flowId: string, service: AssuranceFlowSe
       return handler.resend(flowId)
     }
   )
+}
+
+export async function startKeycloakBrowserStepUp(userId: string) {
+  const created = await createPublicAssuranceFlow({
+    purpose: 'step_up',
+    subjectId: userId,
+    requiredAcr: 'level_2'
+  })
+  const selected = await selectPublicAssuranceFlowService(created.flowId, 'sms_tan')
+  const started = await startFlowService(created.flowId, 'sms_tan')
+  if (!selected.serviceToken) {
+    throw new Error('SMS-TAN selection did not yield a service token')
+  }
+  return {
+    flowId: created.flowId,
+    serviceToken: selected.serviceToken,
+    maskedTarget: started.maskedTarget,
+    devCode: started.devCode ?? null
+  }
+}
+
+export async function completeKeycloakBrowserStepUp(input: {
+  flowId: string
+  serviceToken: string
+  tan: string
+}) {
+  const verified = verifyServiceToken(input.serviceToken, 'sms_tan')
+  if (!verified.ok || verified.claims.flowId !== input.flowId) {
+    throw badRequest('Invalid service token for browser step-up')
+  }
+
+  const completed = await completeFlowService(input.flowId, 'sms_tan', { tan: input.tan })
+  return finalizePublicAssuranceFlow(input.flowId, {
+    serviceResultToken: completed.serviceResultToken,
+    channel: 'keycloak'
+  })
 }
 
 export async function setPassword(input: SetPasswordInput) {

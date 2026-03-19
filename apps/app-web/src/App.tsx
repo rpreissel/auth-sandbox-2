@@ -87,6 +87,7 @@ function createInitialForm() {
     firstName: 'Demo',
     lastName: 'User',
     birthDate: '1990-01-01',
+    phoneNumber: '+491701234567',
     deviceName: 'My Phone',
     selectedService: 'person_code' as AssuranceFlowService,
     code: '',
@@ -511,6 +512,7 @@ export function App() {
         firstName: form.firstName,
         lastName: form.lastName,
         birthDate: form.birthDate,
+        phoneNumber: form.phoneNumber,
         deviceName: form.deviceName,
         publicKey: signingKeys.publicKey
       }
@@ -585,7 +587,7 @@ export function App() {
       : current)
 
     setStatus(form.selectedService === 'sms_tan'
-      ? 'Eine neue SMS-TAN wurde angefordert. Gib die TAN ein oder fordere eine neue an.'
+      ? 'Die SMS-TAN wurde gesendet. Gib sie hier ein oder fordere eine neue SMS-TAN an.'
       : 'Gib den vorbereiteten Code ein, um die Registrierung fortzusetzen.')
   }
 
@@ -635,7 +637,7 @@ export function App() {
         ...current,
         tan: ''
       }))
-      setStatus('Eine neue TAN wurde gesendet.')
+      setStatus('Eine neue SMS-TAN wurde gesendet.')
     })
   }
 
@@ -824,6 +826,10 @@ export function App() {
                       <input name="birthDate" type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} disabled={busy} />
                     </label>
                     <label>
+                      <span className="field-label">Telefonnummer</span>
+                      <input name="phoneNumber" value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} disabled={busy} />
+                    </label>
+                    <label>
                       <span className="field-label">Gerätename</span>
                       <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                     </label>
@@ -869,14 +875,14 @@ export function App() {
                     <strong>{form.selectedService === 'sms_tan' ? 'SMS-TAN senden' : 'Code prüfen'}</strong>
                     <p className="muted-copy">
                       {form.selectedService === 'sms_tan'
-                        ? `Die TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet und muss hier eingegeben werden.`
+                        ? `Die SMS-TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet. Gib sie hier ein und bestätige den Schritt anschließend.`
                         : 'Der Nutzer gibt den vorbereiteten Code selbst ein.'}
-                    </p>
-                    <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
-                      {form.selectedService === 'sms_tan' ? 'TAN senden' : 'Code-Eingabe starten'}
-                    </button>
-                  </div>
-                  <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
+                     </p>
+                     <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
+                       {form.selectedService === 'sms_tan' ? 'SMS-TAN senden' : 'Code-Eingabe starten'}
+                     </button>
+                   </div>
+                   <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
                     {form.selectedService === 'person_code' ? (
                       <label>
                         <span className="field-label">Code</span>
@@ -888,13 +894,13 @@ export function App() {
                           <span className="field-label">SMS-TAN</span>
                           <input name="tan" value={form.tan} onChange={(event) => setForm({ ...form, tan: event.target.value })} disabled={busy} />
                         </label>
-                        <button type="button" onClick={() => void handleResendTan()} disabled={busy}>Neue TAN senden</button>
-                      </>
-                    )}
-                    <button type="submit" disabled={busy}>Identifikation abschließen</button>
-                  </form>
-                </>
-              )}
+                         <button type="button" onClick={() => void handleResendTan()} disabled={busy}>Neue SMS-TAN senden</button>
+                       </>
+                     )}
+                     <button type="submit" disabled={busy}>{form.selectedService === 'sms_tan' ? 'SMS-TAN bestätigen' : 'Identifikation abschließen'}</button>
+                   </form>
+                 </>
+               )}
 
               {step === 'password' && (
                 <>
@@ -1077,7 +1083,7 @@ function TokenEmptyState({ hasDevice, hasChallenge }: { hasDevice: boolean; hasC
           ? 'Bestätige den sicheren Anmeldedialog, um den Token-Bereich zu entsperren.'
           : hasDevice
             ? 'Dieses Telefon hat bereits eine gespeicherte Gerätebindung.'
-            : 'Verbinde dieses Telefon zuerst mit einem Aktivierungscode.'}
+            : 'Richte dieses Telefon zuerst ein und bestätige die Registrierung per Code oder SMS-TAN.'}
       </p>
       <p>Noch keine Keycloak-Tokens.</p>
     </section>
@@ -1263,6 +1269,7 @@ function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord
   const subject = readString(accessClaims, 'sub') ?? readString(idClaims, 'sub') ?? 'Nicht verfügbar'
   const expiresAt = formatExpiry(readNumber(accessClaims, 'exp') ?? readNumber(idClaims, 'exp'))
   const roles = extractRoles(accessClaims)
+  const assuranceLevel = readString(accessClaims, 'acr') ?? readString(idClaims, 'acr') ?? 'Nicht verfügbar'
 
   return (
     <section className="claim-summary" aria-label="Token claim summary">
@@ -1281,6 +1288,10 @@ function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord
       <article>
         <span>Rollen</span>
         <strong>{roles.length ? roles.join(', ') : 'Keine Rollen'}</strong>
+      </article>
+      <article>
+        <span>Assurance Level</span>
+        <strong>{assuranceLevel}</strong>
       </article>
       <article>
         <span>Endet</span>

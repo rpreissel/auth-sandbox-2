@@ -23,6 +23,13 @@ resource "keycloak_realm" "realm" {
   realm        = var.realm_name
   enabled      = true
   display_name = "auth-sandbox-2"
+
+  attributes = {
+    "acr.loa.map" = jsonencode({
+      "1se" = 1
+      "2se" = 2
+    })
+  }
 }
 
 resource "keycloak_realm_user_profile" "realm_profile" {
@@ -101,15 +108,100 @@ resource "keycloak_openid_client_scope" "mock_api_scope" {
 resource "keycloak_authentication_flow" "browser_step_up_flow" {
   realm_id    = keycloak_realm.realm.id
   alias       = "browser-step-up-flow"
-  description = "Browser step-up flow using result_code redeem"
+  description = "Browser flow with LoA conditions and inline SMS-TAN step-up"
+  provider_id = "basic-flow"
 }
 
-resource "keycloak_authentication_execution" "browser_step_up_result_code" {
+resource "keycloak_authentication_execution" "browser_cookie" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
-  authenticator     = "result-code-authenticator"
+  authenticator     = "auth-cookie"
+  requirement       = "ALTERNATIVE"
+  priority          = 10
+}
+
+resource "keycloak_authentication_subflow" "browser_auth_flow" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
+  alias             = "browser-step-up-auth"
+  description       = "Interactive browser authentication with LoA-aware branches"
+  provider_id       = "basic-flow"
+  requirement       = "ALTERNATIVE"
+  priority          = 20
+}
+
+resource "keycloak_authentication_subflow" "browser_loa_1_flow" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_auth_flow.alias
+  alias             = "browser-step-up-loa-1"
+  description       = "Initial password login for LoA 1"
+  provider_id       = "basic-flow"
+  requirement       = "CONDITIONAL"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution" "browser_loa_1_condition" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_loa_1_flow.alias
+  authenticator     = "conditional-level-of-authentication"
   requirement       = "REQUIRED"
   priority          = 10
+}
+
+resource "keycloak_authentication_execution_config" "browser_loa_1_condition" {
+  realm_id     = keycloak_realm.realm.id
+  execution_id = keycloak_authentication_execution.browser_loa_1_condition.id
+  alias        = "browser-loa-1-condition"
+
+  config = {
+    "loa-condition-level" = "1"
+    "loa-max-age"         = "36000"
+  }
+}
+
+resource "keycloak_authentication_execution" "browser_username_password" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_loa_1_flow.alias
+  authenticator     = "auth-username-password-form"
+  requirement       = "REQUIRED"
+  priority          = 20
+}
+
+resource "keycloak_authentication_subflow" "browser_loa_2_flow" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_auth_flow.alias
+  alias             = "browser-step-up-loa-2"
+  description       = "Step-up branch for LoA 2 using inline SMS-TAN verification"
+  provider_id       = "basic-flow"
+  requirement       = "CONDITIONAL"
+  priority          = 20
+}
+
+resource "keycloak_authentication_execution" "browser_loa_2_condition" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_loa_2_flow.alias
+  authenticator     = "conditional-level-of-authentication"
+  requirement       = "REQUIRED"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution_config" "browser_loa_2_condition" {
+  realm_id     = keycloak_realm.realm.id
+  execution_id = keycloak_authentication_execution.browser_loa_2_condition.id
+  alias        = "browser-loa-2-condition"
+
+  config = {
+    "loa-condition-level" = "2"
+    "loa-max-age"         = "36000"
+  }
+}
+
+resource "keycloak_authentication_execution" "browser_step_up_sms" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_loa_2_flow.alias
+  authenticator     = "sms-tan-authenticator"
+  requirement       = "REQUIRED"
+  priority          = 20
 }
 
 resource "keycloak_openid_audience_protocol_mapper" "mock_api_audience" {
@@ -140,13 +232,17 @@ resource "keycloak_openid_client" "browser_app" {
   realm_id                     = keycloak_realm.realm.id
   client_id                    = var.browser_client_id
   name                         = var.browser_client_id
-  access_type                  = "CONFIDENTIAL"
+  access_type                  = "PUBLIC"
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
   service_accounts_enabled     = false
-  valid_redirect_uris          = ["https://app.localhost:8443/*", "https://admin.localhost:8443/*"]
-  web_origins                  = ["https://app.localhost:8443", "https://admin.localhost:8443"]
-  client_secret                = var.browser_client_secret
+  valid_redirect_uris          = ["https://mock.localhost:8443/*"]
+  web_origins                  = ["https://mock.localhost:8443"]
+
+  extra_config = {
+    "default.acr.values" = "1se"
+    "minimum.acr.value"  = "1se"
+  }
 
   authentication_flow_binding_overrides {
     browser_id = keycloak_authentication_flow.browser_step_up_flow.id
@@ -157,6 +253,7 @@ resource "keycloak_openid_client_default_scopes" "browser_default_scopes" {
   realm_id  = keycloak_realm.realm.id
   client_id = keycloak_openid_client.browser_app.id
   default_scopes = [
+    "acr",
     "profile",
     "email",
     keycloak_openid_client_scope.profile_scope.name,
@@ -168,6 +265,7 @@ resource "keycloak_openid_client_default_scopes" "app_default_scopes" {
   realm_id  = keycloak_realm.realm.id
   client_id = keycloak_openid_client.app_web.id
   default_scopes = [
+    "acr",
     "profile",
     "email",
     keycloak_openid_client_scope.profile_scope.name,

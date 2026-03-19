@@ -9,6 +9,7 @@ const KEYCLOAK_TOKEN_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-
 const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_WEB_URL = 'https://trace.localhost:8443/'
+const MOCK_WEB_URL = 'https://mock.localhost:8443'
 
 type TraceListItem = {
   traceId: string
@@ -62,6 +63,49 @@ async function waitForTrace(request: APIRequestContext, userId: string, traceTyp
   throw new Error(`No fresh ${traceType} trace found for ${userId}`)
 }
 
+async function createBrowserUser(request: APIRequestContext, suffix: string) {
+  const userId = `mock-web-${suffix}-${Date.now()}`
+  const password = 'ChangeMe123!'
+  const response = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    data: {
+      userId,
+      firstName: 'Mock',
+      lastName: 'Browser',
+      birthDate: '1990-01-01',
+      phoneNumber: '+491701234567'
+    }
+  })
+
+  expect(response.ok()).toBeTruthy()
+
+  const passwordResponse = await request.post(`${AUTH_API_URL}/api/device/set-password`, {
+    data: {
+      userId,
+      password
+    }
+  })
+
+  expect(passwordResponse.ok()).toBeTruthy()
+  return { userId, password }
+}
+
+async function loginMockWeb(page: import('@playwright/test').Page, userId: string, password: string) {
+  await page.context().clearCookies()
+  await page.goto(MOCK_WEB_URL)
+  await expect(page.getByRole('button', { name: /mit keycloak 1se anmelden/i })).toBeVisible()
+  await page.getByRole('button', { name: /mit keycloak 1se anmelden/i }).click()
+
+  await expect(page).toHaveURL(/keycloak\.localhost:8443/)
+  await page.locator('#username').fill(userId)
+  await page.locator('#password').fill(password)
+  await page.getByRole('button', { name: /sign in|anmelden/i }).click()
+
+  await expect(page).toHaveURL(/mock\.localhost:8443/)
+  const tokenSessionCard = page.locator('.card').filter({ has: page.getByRole('heading', { name: /token claims and browser session/i }) })
+  await expect(tokenSessionCard).toContainText('Has token')
+  await expect(tokenSessionCard).toContainText('yes', { timeout: 15000 })
+}
+
 async function getInternalRedeemAccessToken(request: APIRequestContext) {
   const response = await request.post(KEYCLOAK_TOKEN_URL, {
     form: {
@@ -108,20 +152,38 @@ test('admin overview is localized in German', async ({ page }) => {
   await page.goto(ADMIN_WEB_URL)
 
   await expect(page.getByRole('heading', { name: /bereite registrierungsidentitaeten vor und behalte bestehende geraetebindungen im blick/i })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /springe vom admin-ueberblick direkt in die trace-analyse/i })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Registrierungsidentität vorbereiten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Geraete', exact: true })).toBeVisible()
   await expect(page.getByLabel('Admin Ueberblickszahlen')).toContainText('Geraete')
   await expect(page.getByLabel('Geraete durchsuchen')).toBeVisible()
+  const traceViewerLink = page.getByRole('link', { name: 'Trace Viewer oeffnen' })
+  await expect(traceViewerLink).toBeVisible()
+  await expect(traceViewerLink).toHaveAttribute('href', 'https://trace.localhost:8443/')
+  await expect(traceViewerLink).toHaveAttribute('target', '_blank')
+})
+
+test('admin overview shows save errors instead of opaque network failures', async ({ page }) => {
+  await page.goto(ADMIN_WEB_URL)
+
+  await page.locator('input[name="userId"]').fill(`admin-error-${Date.now()}`)
+  await page.locator('input[name="codeValidForDays"]').fill('0')
+  await page.getByRole('button', { name: 'Identität speichern' }).click()
+
+  await expect(page.getByRole('alert')).toContainText('Too small')
 })
 
 test('homepage contains key links', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /minimal device-login sandbox/i })).toBeVisible()
   const appWebLink = page.getByRole('link', { name: /app web/i })
+  const mockWebLink = page.getByRole('link', { name: /mock web/i })
   const dbViewerLink = page.getByRole('link', { name: /db viewer/i })
   await expect(appWebLink).toBeVisible()
+  await expect(mockWebLink).toBeVisible()
   await expect(dbViewerLink).toBeVisible()
   await expect(appWebLink).toHaveAttribute('target', '_blank')
+  await expect(mockWebLink).toHaveAttribute('target', '_blank')
   await expect(dbViewerLink).toHaveAttribute('target', '_blank')
   await expect(page.getByRole('heading', { name: /db viewer login/i })).toBeVisible()
   await expect(page.getByText('auth_sandbox_2')).toBeVisible()
@@ -131,18 +193,78 @@ test('homepage contains key links', async ({ page }) => {
   await expect(page.getByText('Encrypted login and token lifecycle')).toBeVisible()
 })
 
+test('mock web homepage serves the browser step-up app shell', async ({ page }) => {
+  await page.goto('https://mock.localhost:8443')
+  await expect(page.getByRole('heading', { name: /browser login starts with 1se/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /mit keycloak 1se anmelden/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /step-up auf 2se starten/i })).toBeVisible()
+  await expect(page.getByText(/trigger a fresh auth request with/i)).toBeVisible()
+})
+
+test('mock web browser login, step-up, and tracing work end to end', async ({ page, request }) => {
+  test.setTimeout(90000)
+  const statusCards = page.getByLabel('Mock web status cards')
+  const currentAcrCard = statusCards.locator('article').filter({ hasText: 'Current acr' })
+
+  const { userId, password } = await createBrowserUser(request, 'stepup')
+  await loginMockWeb(page, userId, password)
+
+  await expect(statusCards).toBeVisible()
+  await expect(currentAcrCard.locator('strong')).toHaveText('1se')
+  await expect(page.getByText(/step-up to 2se to unlock this endpoint/i)).toBeVisible()
+
+  await page.getByRole('button', { name: /step-up auf 2se starten/i }).click()
+  await expect(page).toHaveURL(/keycloak\.localhost:8443/)
+  await expect(page.getByText(/sms-tan bestaetigen|sms-tan bestätigen/i)).toBeVisible()
+  const demoTanText = await page.locator('body').textContent()
+  const demoTan = demoTanText?.match(/Demo TAN:\s*(\d{6})/)?.[1]
+  expect(demoTan).toBeTruthy()
+  await page.locator('#smsTan').fill(demoTan ?? '')
+  await page.getByRole('button', { name: /2se schritt abschliessen|2se Schritt abschließen/i }).click()
+
+  await expect(page).toHaveURL(/mock\.localhost:8443/)
+  await expect(currentAcrCard.locator('strong')).toHaveText('2se', { timeout: 15000 })
+  await expect(page.getByText(/the token satisfied the stronger 2se assurance check/i)).toBeVisible()
+
+  await page.getByLabel('Neue geschützte Notiz').fill('Mock web playwright note')
+  await page.getByRole('button', { name: /notiz an mock api senden/i }).click()
+  await expect(page.getByLabel('Mock message response')).toContainText('Mock web playwright note')
+
+  const browserTrace = await waitForTrace(request, userId, 'mock_web_step_up', 'mock-web')
+  const authApiTrace = await waitForTrace(request, userId, 'browser_step_up_start_internal', 'auth-api')
+  await page.goto(`${TRACE_WEB_URL}#trace/${browserTrace.traceId}`)
+  await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
+
+  const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
+  await expect(timeline).toContainText('mock-web')
+
+  const artifactList = page.getByRole('list', { name: 'Artifact list' })
+  await timeline.getByRole('button', { name: /mock_web_step_up_challenge_ready/i }).click()
+  await expect(artifactList).toContainText('sms_tan_challenge')
+  await artifactList.getByRole('button', { name: /sms_tan_challenge/i }).click()
+  const artifactViewer = page.getByLabel('Artifact viewer')
+  await expect(artifactViewer).toContainText('keycloak_inline')
+
+  await page.goto(`${TRACE_WEB_URL}#trace/${authApiTrace.traceId}`)
+  await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
+  const authApiTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
+  await expect(authApiTimeline).toContainText('auth-api')
+  await authApiTimeline.getByRole('button', { name: /POST \/api\/internal\/browser-step-up\/start/i }).click()
+  await expect(artifactList).toContainText('outgoing_response_body')
+  await artifactList.getByRole('button', { name: /outgoing_response_body/i }).click()
+  await expect(artifactViewer).toContainText('maskedTarget')
+})
+
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {
   test.setTimeout(45000)
   const userId = `e2e-user-${Date.now()}`
-  const registrationCode = `PLAY${Date.now().toString(36).toUpperCase()}`
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     data: {
       userId,
       firstName: 'E2E',
       lastName: 'User',
       birthDate: '1990-01-01',
-      code: registrationCode,
-      codeValidForDays: 30
+      phoneNumber: '+491701234567'
     }
   })
 
@@ -157,15 +279,24 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByLabel('Vorname').fill('E2E')
   await page.getByLabel('Nachname').fill('User')
   await page.getByLabel('Geburtsdatum').fill('1990-01-01')
+  await page.getByLabel('Telefonnummer').fill('+491701234567')
   await page.getByLabel('Gerätename').fill('Playwright Device')
+  await page.getByLabel('Bevorzugter Service').selectOption('sms_tan')
   await page.getByRole('button', { name: 'Weiter' }).click()
   await expect(page.getByLabel('Secure element prompt')).toBeVisible()
   await expect(page.getByText('Bestätige deine Identität')).toBeVisible()
   await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
   await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
-  await page.getByRole('button', { name: 'Code-Eingabe starten' }).click()
-  await page.getByRole('textbox', { name: 'Code' }).fill(registrationCode)
-  await page.getByRole('button', { name: 'Identifikation abschließen' }).click()
+  await expect(page.getByText('SMS-TAN erscheint nur mit hinterlegter Telefonnummer.')).toBeVisible()
+  const startSmsTanResponsePromise = page.waitForResponse((response) => response.url().includes('/api/identification/sms-tan/start') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'SMS-TAN senden', exact: true }).click()
+  const startSmsTanResponse = await startSmsTanResponsePromise
+  expect(startSmsTanResponse.ok()).toBeTruthy()
+  const startSmsTanBody = await startSmsTanResponse.json() as { devCode?: string | null }
+  expect(startSmsTanBody.devCode).toMatch(/^\d{6}$/)
+  await expect(page.getByRole('button', { name: 'Neue SMS-TAN senden' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'SMS-TAN' }).fill(startSmsTanBody.devCode ?? '')
+  await page.getByRole('button', { name: 'SMS-TAN bestätigen' }).click()
 
   await expect(page.getByText('Gerätebindung gespeichert. Lege ein neues Keycloak-Passwort fest, um fortzufahren.')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Neues Passwort erstellen' })).toBeVisible()
@@ -183,6 +314,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByText('Angemeldet und bereit')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Aktive Sitzung' })).toBeVisible()
   await expect(page.getByLabel('Token overview cards')).toContainText('Zugriff')
+  await expect(page.getByLabel('Token claim summary').locator('article').filter({ hasText: 'Assurance Level' }).locator('strong')).toHaveText('2se')
   const bindingNotice = page.getByRole('note', { name: 'Local device binding notice' })
   await expect(page.getByRole('button', { name: 'Tokens aktualisieren' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Abmelden' })).toBeVisible()
@@ -235,7 +367,9 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(claimSummary.locator('article').filter({ hasText: 'Benutzername' }).locator('strong')).toHaveText(userId)
   await expect(claimSummary.locator('article').filter({ hasText: 'Sitzungs-ID' }).locator('strong')).not.toBeEmpty()
   await expect(claimSummary.locator('article').filter({ hasText: 'Rollen' }).locator('strong')).not.toBeEmpty()
+  await expect(claimSummary.locator('article').filter({ hasText: 'Assurance Level' }).locator('strong')).toHaveText('2se')
   await expect(claimSummary.locator('article').filter({ hasText: 'Endet' }).locator('strong')).not.toBeEmpty()
+  await expect(comparisonClaimsTable.getByRole('row', { name: /acr/i })).toContainText('2se')
 
   await expect(page.getByText('OIDC-geschützte Demo-Endpunkte')).toHaveCount(0)
   const mockApiPanel = page.getByLabel('Protected mock API panel')

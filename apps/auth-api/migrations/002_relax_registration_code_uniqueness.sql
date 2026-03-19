@@ -1,0 +1,1 @@
+alter table registration_person_codes drop constraint if exists registration_person_codes_code_key;

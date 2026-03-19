@@ -114,6 +114,13 @@ button {
   align-items: start;
 }
 
+.admin-top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+  align-items: start;
+}
+
 .admin-hero {
   display: grid;
   gap: 1rem;
@@ -125,6 +132,33 @@ button {
   display: grid;
   gap: 1rem;
 }
+
+.admin-trace-card {
+  align-content: start;
+}
+
+.admin-trace-card h2 {
+  margin: 0;
+}
+
+.admin-trace-highlight {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(14, 34, 52, 0.05);
+  border: 1px solid rgba(14, 34, 52, 0.08);
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, #0e2234 0%, #34657d 100%);
+  color: white;
+  text-decoration: none;
+ }
 
 .admin-summary-row {
   display: flex;
@@ -230,6 +264,15 @@ button {
 .section-copy {
   margin: 0.35rem 0 0;
   color: rgba(14, 34, 52, 0.72);
+}
+
+.form-error {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(160, 31, 31, 0.1);
+  border: 1px solid rgba(160, 31, 31, 0.18);
+  color: #8f1d1d;
 }
 
 .trace-search {
@@ -535,6 +578,7 @@ button {
 }
 
 @media (max-width: 980px) {
+  .admin-top-grid,
   .admin-overview-grid,
   .trace-browser-layout,
   .trace-inspector-layout,

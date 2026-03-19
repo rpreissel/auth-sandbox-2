@@ -1,3 +1,4 @@
 dev.authsandbox.keycloak.DeviceLoginConditionAuthenticatorFactory
 dev.authsandbox.keycloak.DeviceLoginTokenAuthenticatorFactory
+dev.authsandbox.keycloak.SmsTanAuthenticatorFactory
 dev.authsandbox.keycloak.ResultCodeAuthenticatorFactory

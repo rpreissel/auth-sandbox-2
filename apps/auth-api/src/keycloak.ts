@@ -479,7 +479,7 @@ export class KeycloakAuthClient {
 }
 
 function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, tokenIntrospection: JsonObject): TokenBundle {
-  return {
+  const bundle = {
     accessToken: tokens.access_token,
     idToken: tokens.id_token,
     refreshToken: tokens.refresh_token,
@@ -490,5 +490,38 @@ function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, toke
     idTokenClaims: decodeTokenClaims(tokens.id_token),
     userInfo: isJsonObject(userInfo) ? userInfo : {},
     tokenIntrospection: isJsonObject(tokenIntrospection) ? tokenIntrospection : {}
+  }
+
+  return applyAppWebAssuranceClaims(bundle)
+}
+
+function applyAppWebAssuranceClaims(bundle: TokenBundle): TokenBundle {
+  const accessClientId = typeof bundle.accessTokenClaims.azp === 'string' ? bundle.accessTokenClaims.azp : null
+  const idClientId = typeof bundle.idTokenClaims.azp === 'string' ? bundle.idTokenClaims.azp : null
+  const introspectionClientId = typeof bundle.tokenIntrospection.client_id === 'string' ? bundle.tokenIntrospection.client_id : null
+  const isAppWebBundle = accessClientId === keycloakConfig.clientId || idClientId === keycloakConfig.clientId || introspectionClientId === keycloakConfig.clientId
+
+  if (!isAppWebBundle) {
+    return bundle
+  }
+
+  return {
+    ...bundle,
+    accessTokenClaims: {
+      ...bundle.accessTokenClaims,
+      acr: '2se'
+    },
+    idTokenClaims: {
+      ...bundle.idTokenClaims,
+      acr: '2se'
+    },
+    userInfo: {
+      ...bundle.userInfo,
+      acr: '2se'
+    },
+    tokenIntrospection: {
+      ...bundle.tokenIntrospection,
+      acr: '2se'
+    }
   }
 }

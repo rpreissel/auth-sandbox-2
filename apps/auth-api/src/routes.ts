@@ -17,6 +17,7 @@ import {
 import { verifyFlowToken, verifyServiceToken } from './flow-tokens.js'
 import { isAllowedInternalRedeemTokenClaims, type InternalRedeemAccessTokenClaims } from './internal-auth.js'
 import {
+  completeKeycloakBrowserStepUp,
   completeFlowService,
   createRegistrationIdentity,
   deleteDevice,
@@ -28,6 +29,7 @@ import {
   resendFlowService,
   completeMobileStepUp,
   selectFlowService,
+  startKeycloakBrowserStepUp,
   startFlowService,
   setPassword,
   startBrowserStepUpFlow,
@@ -54,7 +56,7 @@ const smsTanCompleteSchema = z.object({ tan: z.string().min(1) })
 
 const finalizeFlowSchema = z.object({
   serviceResultToken: z.string().min(1).optional(),
-  channel: z.enum(['registration', 'mobile', 'browser']).optional()
+  channel: z.enum(['registration', 'mobile', 'browser', 'keycloak']).optional()
 })
 
 const redeemArtifactSchema = z.object({
@@ -103,6 +105,16 @@ const mobileStepUpSchema = z.object({
   userId: z.string().min(1),
   phoneNumber: z.string().min(1),
   refreshToken: z.string().min(1).optional()
+})
+
+const internalBrowserStepUpStartSchema = z.object({
+  userId: z.string().min(1)
+})
+
+const internalBrowserStepUpCompleteSchema = z.object({
+  flowId: z.string().min(1),
+  serviceToken: z.string().min(1),
+  tan: z.string().min(1)
 })
 
 const keycloakJwks = createRemoteJWKSet(new URL(`${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/certs`))
@@ -353,6 +365,35 @@ export async function registerRoutes(app: any) {
       summary: 'A trusted backend redeemed a generic assurance-flow artifact.',
       body,
       run: () => redeemFlowArtifact(body.code, body.kind)
+    })
+  })
+
+  app.post('/api/internal/browser-step-up/start', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireInternalRedeemAccessToken(app, request)
+    const body = internalBrowserStepUpStartSchema.parse(request.body)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'browser_step_up_start_internal',
+      title: `Start browser step-up for ${body.userId}`,
+      summary: 'Keycloak started an inline browser SMS-TAN step-up flow through auth-api.',
+      userId: body.userId,
+      body,
+      run: () => startKeycloakBrowserStepUp(body.userId)
+    })
+  })
+
+  app.post('/api/internal/browser-step-up/complete', async (request: FastifyRequest, reply: FastifyReply) => {
+    await requireInternalRedeemAccessToken(app, request)
+    const body = internalBrowserStepUpCompleteSchema.parse(request.body)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'browser_step_up_complete_internal',
+      title: `Complete browser step-up for ${body.flowId}`,
+      summary: 'Keycloak completed an inline browser SMS-TAN step-up flow through auth-api.',
+      body,
+      run: () => completeKeycloakBrowserStepUp(body)
     })
   })
 

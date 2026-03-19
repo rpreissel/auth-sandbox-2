@@ -104,7 +104,7 @@ services:
       AUTH_API_INTERNAL_URL: http://auth-api:3000
       KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443
+      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443,https://mock.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -138,7 +138,7 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
       KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443
+      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -163,7 +163,7 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
-      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443
+      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443,https://home.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -193,6 +193,7 @@ services:
       - ./apps/admin-web/dist:/srv/admin-web:ro
       - ./apps/trace-web/dist:/srv/trace-web:ro
       - ./apps/home-web/dist:/srv/home-web:ro
+      - ./apps/mock-web/dist:/srv/mock-web:ro
       - ./runtime/caddy-logs:/var/log/caddy
     depends_on:
       - auth-api
