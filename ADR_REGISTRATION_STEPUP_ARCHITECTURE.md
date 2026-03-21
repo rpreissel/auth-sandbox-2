@@ -97,6 +97,8 @@ Wenn die bestehende Session nicht ausreicht, startet ein Custom Authenticator in
 
 Nach erfolgreicher Verifikation antwortet das `auth-api` nicht mit finalen Tokens im Frontchannel, sondern mit einem kurzlebigen One-Time-`result_code`. Keycloak redeemt diesen Code serverseitig beim `auth-api`, validiert das Ergebnis und setzt anschliessend Session- und Token-Claims wie `acr`, `amr` und `auth_time`.
 
+Der oeffentliche Browser-Shortcut-Endpunkt fuer Step-up wurde bewusst nicht uebernommen. Browser-Step-up startet nur noch innerhalb des Keycloak-Browser-Flows und nutzt ausschliesslich die internen Backchannel-Endpunkte des `auth-api`.
+
 ### 7. Native Mobile Apps nutzen einen Custom Grant in Keycloak
 
 Native Apps koennen denselben fachlichen Flow direkt gegen das `auth-api` ausfuehren und eigene UIs fuer die einzelnen Methoden bereitstellen.
@@ -128,6 +130,8 @@ Normales Keycloak Access Token fuer bekannte oder eingeloggte User.
 ### Interne Service-Authentisierung
 
 Gesicherte Kommunikation zwischen Keycloak und `auth-api`, z. B. per mTLS oder signierter Service-Authentisierung.
+
+Im aktuellen Repo wird dafuer ein dedizierter Keycloak-Service-Account genutzt. Zusaetzlich werden browserseitige Demo-Routen fuer Admin-, Passwort- und Trace-Zugriffe ueber exakte Proxy-Bearer-Tokens abgesichert, die Caddy injiziert.
 
 Zusaetzlich gilt fuer jeden geschuetzten Flow-Endpunkt:
 
@@ -183,3 +187,35 @@ Verworfen zugunsten eines One-Time-Codes mit serverseitigem Redeem durch Keycloa
 - Mapping von Methoden auf `acr`, `amr` und dauerhafte Assurance spezifizieren
 - Locking- und Idempotenzstrategie fuer `finalize` festlegen
 - Keycloak-Erweiterungen fuer Browser- und Mobile-Pfad konkret entwerfen
+
+## Visualisierte Zieltopologie
+
+```mermaid
+flowchart LR
+  Browser[mock-web browser]
+  Device[app-web device flow]
+  Admin[admin-web]
+  Caddy[Caddy]
+  Auth[auth-api]
+  Trace[trace-api]
+  Mock[mock-api]
+  KC[Keycloak]
+  Ext[KC extension]
+  DB[(Postgres)]
+
+  Admin --> Caddy -->|admin proxy token| Auth
+  Device --> Caddy -->|app proxy token for set-password| Auth
+  Device --> Auth
+  Browser --> KC
+  Browser --> Caddy -->|trace browser token| Trace
+  Device --> Caddy -->|trace browser token| Trace
+  Admin --> Caddy -->|trace browser token| Trace
+  Browser --> Caddy --> Mock
+  Mock --> KC
+  Auth --> KC
+  Auth --> DB
+  Trace --> DB
+  Mock --> DB
+  KC --> Ext
+  Ext -->|internal redeem bearer| Auth
+```
