@@ -243,24 +243,35 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue
 
 export type JsonObject = { [key: string]: JsonValue | undefined }
 
-export type TokenBundle = {
+// Minimal token/session data needed to continue an authenticated device session.
+// These fields drive login completion, refresh, logout and authenticated API use.
+export type SessionTokenBundle = {
   accessToken: string
   idToken: string
   refreshToken: string
   tokenType: string
   expiresIn: number
   scope: string
+}
+
+// Demo token-inspection data used by app-web to render decoded token details.
+// These fields are not required to complete registration or login themselves.
+export type TokenDisplayBundle = {
   accessTokenClaims: JwtClaims
   idTokenClaims: JwtClaims
   userInfo: JsonObject
   tokenIntrospection: JsonObject
 }
 
-export type FinishLoginResponse = TokenBundle & {
-  requiredAction: string | null
-}
+// Combined demo transport returned by auth-api. Business flows only need the
+// session fields, while app-web also reads the display bundle for token panels.
+export type TokenBundle = SessionTokenBundle & TokenDisplayBundle
 
-export type RefreshTokensResponse = TokenBundle
+// Demo login response: session-critical fields plus token-display data.
+export type FinishLoginResponse = SessionTokenBundle & TokenDisplayBundle
+
+// Demo refresh response: session-critical fields plus token-display data.
+export type RefreshTokensResponse = SessionTokenBundle & TokenDisplayBundle
 
 export type LogoutResponse = {
   logout: true
@@ -271,6 +282,8 @@ export type HealthResponse = {
   service: string
 }
 
+// Trace explorer domain types. These contracts are served by trace-api and are
+// not part of the auth/mock business payloads.
 export type TraceStatus = 'running' | 'success' | 'error'
 
 export type SpanKind = 'client_event' | 'http_in' | 'http_out' | 'crypto' | 'process'
@@ -431,6 +444,7 @@ export type ClientEventArtifactInput = {
   explanation?: string | null
 }
 
+// Trace-only client telemetry payload posted to trace-api/client-events.
 export type ClientEventInput = {
   traceId: string
   traceType?: string
@@ -445,6 +459,7 @@ export type ClientEventInput = {
   artifacts?: ClientEventArtifactInput[]
 }
 
+// Business responses may carry these IDs only as trace correlation metadata.
 export type MockApiTraceEnvelope = {
   traceId: string | null
   correlationId: string | null

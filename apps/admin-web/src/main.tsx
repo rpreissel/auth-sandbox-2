@@ -6,7 +6,7 @@ import type { CreateRegistrationIdentityInput, DeviceRecord, RegistrationIdentit
 
 import './styles.css'
 
-const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
+const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? ''
 export const TRACE_VIEWER_URL = 'https://trace.localhost:8443/'
 export const TRACE_VIEWER_ENTRY = {
   title: 'Trace Viewer oeffnen',

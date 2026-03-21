@@ -426,6 +426,9 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
           nonce,
           decrypted: challengePayload
         }, null, 2),
+        // Trace-only inspection payload: the response body below returns only
+        // nonce/encryptedKey/encryptedData/iv/expiresAt, while this artifact
+        // also keeps the decrypted challenge payload for the trace explorer.
         explanation: 'Encrypted challenge stored with decrypted payload for demo inspection.'
       })
 
@@ -489,13 +492,12 @@ export async function finishLogin(input: FinishLoginInput): Promise<FinishLoginR
         encoding: 'base64url',
         direction: 'outbound',
         rawValue: loginToken,
+        // Trace artifact for inspection of the Keycloak handoff payload.
+        // This encoded value is sent only to Keycloak, not back to the client.
         explanation: 'Base64URL-encoded login token payload forwarded into Keycloak device authentication.'
       })
       const tokens = await authClient.authenticate(loginToken)
-      return {
-        ...tokens,
-        requiredAction: null
-      }
+      return tokens
     }
   )
 }

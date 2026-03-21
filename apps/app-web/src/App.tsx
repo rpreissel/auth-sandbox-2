@@ -4,10 +4,11 @@ import type { FormEvent } from 'react'
 import type {
   AssuranceFlowService,
   AssuranceFlowServiceOption,
-  FinishLoginResponse,
   MockApiMessageRecord,
   MockApiProfileResponse,
   PublicAssuranceFlowRecord,
+  SessionTokenBundle,
+  TokenDisplayBundle,
   StartLoginResponse
 } from '@auth-sandbox-2/shared-types'
 
@@ -41,6 +42,8 @@ type TraceState = {
   traceId: string
   sessionId: string
 }
+
+type AuthenticatedTokens = SessionTokenBundle & TokenDisplayBundle
 
 type PendingRegistration = {
   flowId: string
@@ -145,7 +148,7 @@ export function App() {
   const [busy, setBusy] = useState(false)
   const [device, setDevice] = useState<DeviceState | null>(null)
   const [challenge, setChallenge] = useState<StartLoginResponse | null>(null)
-  const [tokens, setTokens] = useState<FinishLoginResponse | null>(null)
+  const [tokens, setTokens] = useState<AuthenticatedTokens | null>(null)
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
   const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null)
@@ -158,10 +161,16 @@ export function App() {
     status: 'Waiting for an authenticated session'
   })
 
-  const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
-  const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
-  const userInfo = useMemo<ClaimRecord | null>(() => tokens?.userInfo ?? null, [tokens])
-  const tokenIntrospection = useMemo<ClaimRecord | null>(() => tokens?.tokenIntrospection ?? null, [tokens])
+  const tokenDisplay = useMemo<TokenDisplayBundle | null>(() => (tokens ? {
+    accessTokenClaims: tokens.accessTokenClaims,
+    idTokenClaims: tokens.idTokenClaims,
+    userInfo: tokens.userInfo,
+    tokenIntrospection: tokens.tokenIntrospection
+  } : null), [tokens])
+  const accessClaims = useMemo<ClaimRecord | null>(() => tokenDisplay?.accessTokenClaims ?? null, [tokenDisplay])
+  const idClaims = useMemo<ClaimRecord | null>(() => tokenDisplay?.idTokenClaims ?? null, [tokenDisplay])
+  const userInfo = useMemo<ClaimRecord | null>(() => tokenDisplay?.userInfo ?? null, [tokenDisplay])
+  const tokenIntrospection = useMemo<ClaimRecord | null>(() => tokenDisplay?.tokenIntrospection ?? null, [tokenDisplay])
   const sharedTokenClaimKeys = useMemo(() => buildSharedClaimKeys(accessClaims, idClaims), [accessClaims, idClaims])
   const challengeExpiresAt = useMemo(() => (challenge ? formatDateTime(challenge.expiresAt) : null), [challenge])
   const tokenLifetimeLabel = useMemo(() => (tokens ? formatLifetime(tokens.expiresIn) : null), [tokens])
@@ -268,6 +277,9 @@ export function App() {
 
     setTraceState(nextTrace)
 
+    // Artifacts sent here are emitted only to trace-api/client-events.
+    // They are not added to auth-api request bodies unless the caller also
+    // sends the same values explicitly in a separate business request.
     await api.sendClientEvent(
       {
         traceId: nextTrace.traceId,
@@ -303,6 +315,7 @@ export function App() {
     operation: string,
     artifacts?: Array<{ name: string; value: unknown; encoding?: string; contentType?: string }>
   ) {
+    // These event artifacts are trace-only telemetry for the demo trace explorer.
     await api.sendClientEvent(
       {
         traceId: flow.traceId,
@@ -342,6 +355,7 @@ export function App() {
     }))
 
     const flow = await createFlowTrace('mock_api_sync_started', [{
+      // Trace-only request summary; mock-api only receives the HTTP calls below.
       name: 'mock_api_request',
       value: {
         audience: 'mock-api',
@@ -356,6 +370,8 @@ export function App() {
         api.listMockMessages(tokens.accessToken, flow)
       ])
       await sendFlowEvent(flow, 'mock_api_sync_finished', [{
+        // Trace-only aggregate result for observability; this summary is not
+        // posted to auth-api or mock-api.
         name: 'mock_api_result',
         value: {
           audience: profile.audience,
@@ -400,6 +416,8 @@ export function App() {
 
       const flow = await createFlowTrace('mock_api_message_create_started', [{
         name: 'mock_api_message',
+        // Trace-only mirror of the note text; the actual mock-api write uses
+        // its own request body below.
         value: { text }
       }])
 
@@ -407,11 +425,12 @@ export function App() {
         setStatus('Geschützte Notiz wird an mock-api gesendet...')
         const created = await api.createMockMessage(tokens.accessToken, { text }, flow)
         const messages = await api.listMockMessages(tokens.accessToken, flow)
-        await sendFlowEvent(flow, 'mock_api_message_create_finished', [{
-          name: 'mock_api_message_result',
-          value: {
-            id: created.item.id,
-            messageCount: messages.items.length
+      await sendFlowEvent(flow, 'mock_api_message_create_finished', [{
+        name: 'mock_api_message_result',
+        // Trace-only write result summary for the explorer.
+        value: {
+          id: created.item.id,
+          messageCount: messages.items.length
           }
         }])
         setMockApi((current) => ({
@@ -439,7 +458,15 @@ export function App() {
     }
 
     setStatus('Verschlüsselte Challenge wird angefordert...')
-    const flow = traceState ?? await createFlowTrace('device_login_started', [{ name: 'device_binding', value: { publicKeyHash: device.publicKeyHash, userId: device.userId } }])
+      const flow = traceState ?? await createFlowTrace('device_login_started', [{
+        name: 'device_binding',
+        value: {
+          publicKeyHash: device.publicKeyHash,
+          // Trace-only context for the explorer; /api/device/login/start only
+          // receives publicKeyHash.
+          userId: device.userId
+        }
+      }])
     let result: StartLoginResponse
 
     try {
@@ -500,7 +527,12 @@ export function App() {
   }
 
   async function completeRegister() {
-    const flow = await createFlowTrace('device_registration_started', [{ name: 'registration_form', value: form }])
+    const flow = await createFlowTrace('device_registration_started', [{
+      name: 'registration_form',
+      // Trace-only snapshot of the full local form. The createFlow request below
+      // forwards only the selected fields needed by auth-api.
+      value: form
+    }])
     setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
     const signingKeys = await createSigningKeys()
     setStatus('Registrierungs-Flow wird angelegt...')
@@ -645,7 +677,12 @@ export function App() {
     event.preventDefault()
     if (!device) return
     await runAction(async () => {
-      const flow = traceState ?? await createFlowTrace('device_password_setup', [{ name: 'password_request', value: { userId: device.userId, password: form.password } }])
+      const flow = traceState ?? await createFlowTrace('device_password_setup', [{
+        name: 'password_request',
+        // Trace-only mirror of the password setup payload; the auth-api call
+        // below sends its own request body separately.
+        value: { userId: device.userId, password: form.password }
+      }])
       setStatus('Keycloak-Passwort wird gespeichert...')
       await api.setPassword({ userId: device.userId, password: form.password }, flow)
       await persistDeviceBinding(device, false)
@@ -663,7 +700,10 @@ export function App() {
   async function handleFinishLogin() {
     if (!device || !challenge) return
     await runAction(async () => {
-      const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{ name: 'challenge_payload', value: challenge }])
+      const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{
+        name: 'challenge_payload',
+        value: challenge
+      }])
       setStatus('Secure Element wird verwendet...')
       const signature = await signEncryptedData(challenge.encryptedData, device.privateKey)
       const result = await api.finishLogin({
@@ -673,11 +713,14 @@ export function App() {
         iv: challenge.iv,
         signature
       }, flow)
-      await sendFlowEvent(flow, 'device_login_finished', [{ name: 'token_bundle', value: {
-        tokenType: result.tokenType,
-        expiresIn: result.expiresIn,
-        scope: result.scope
-      } }])
+      await sendFlowEvent(flow, 'device_login_finished', [{
+        name: 'token_bundle',
+        value: {
+          tokenType: result.tokenType,
+          expiresIn: result.expiresIn,
+          scope: result.scope
+        }
+      }])
       setTraceState(null)
       setTokens(result)
       setChallenge(null)
@@ -690,15 +733,25 @@ export function App() {
   async function handleRefresh() {
     if (!tokens) return
     await runAction(async () => {
-      const flow = traceState ?? await createFlowTrace('device_token_refresh_started', [{ name: 'refresh_token', value: tokens.refreshToken, encoding: 'jwt', contentType: 'application/jwt' }])
+      const flow = traceState ?? await createFlowTrace('device_token_refresh_started', [{
+        name: 'refresh_token',
+        // Trace-only copy of the refresh token for trace inspection; the
+        // refresh request below sends the business payload separately.
+        value: tokens.refreshToken,
+        encoding: 'jwt',
+        contentType: 'application/jwt'
+      }])
       const refreshed = await api.refresh({ refreshToken: tokens.refreshToken }, flow)
-      await sendFlowEvent(flow, 'device_token_refresh_finished', [{ name: 'refresh_result', value: {
-        tokenType: refreshed.tokenType,
-        expiresIn: refreshed.expiresIn,
-        scope: refreshed.scope
-      } }])
+      await sendFlowEvent(flow, 'device_token_refresh_finished', [{
+        name: 'refresh_result',
+        value: {
+          tokenType: refreshed.tokenType,
+          expiresIn: refreshed.expiresIn,
+          scope: refreshed.scope
+        }
+      }])
       setTraceState(null)
-      setTokens({ ...refreshed, requiredAction: null })
+      setTokens(refreshed)
       setStatus('Tokens aktualisiert')
     })
   }
@@ -706,7 +759,14 @@ export function App() {
   async function handleLogout() {
     if (!tokens) return
     await runAction(async () => {
-      const flow = traceState ?? await createFlowTrace('device_logout_started', [{ name: 'refresh_token', value: tokens.refreshToken, encoding: 'jwt', contentType: 'application/jwt' }])
+      const flow = traceState ?? await createFlowTrace('device_logout_started', [{
+        name: 'refresh_token',
+        // Trace-only copy of the refresh token for trace inspection; the
+        // logout request below sends the business payload separately.
+        value: tokens.refreshToken,
+        encoding: 'jwt',
+        contentType: 'application/jwt'
+      }])
       await api.logout({ refreshToken: tokens.refreshToken }, flow)
       await sendFlowEvent(flow, 'device_logout_finished')
       setTraceState(null)
@@ -1028,19 +1088,16 @@ export function App() {
                           <h2>Sitzungstokens</h2>
                         </div>
                       </div>
-                      <TokenHero tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
-                      <ClaimHighlights accessClaims={accessClaims} idClaims={idClaims} />
-                      <div className="token-grid">
-                        <TokenComparisonPanel
-                          accessToken={tokens.accessToken}
+                      <div className="token-section-stack">
+                        <SessionTokensSection tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
+                        <TokenInspectionSection
+                          tokens={tokens}
                           accessClaims={accessClaims}
-                          idToken={tokens.idToken}
                           idClaims={idClaims}
                           claimKeys={sharedTokenClaimKeys}
+                          userInfo={userInfo}
+                          tokenIntrospection={tokenIntrospection}
                         />
-                        <JsonPanel title="Userinfo-Endpunkt" payload={userInfo} rawLabel="Userinfo Antwort JSON" />
-                        <JsonPanel title="Introspection-Endpunkt" payload={tokenIntrospection} rawLabel="Introspection Antwort JSON" />
-                        <TokenPanel title="Refresh-Token" token={tokens.refreshToken} rawLabel="Refresh-Token JWT" claims={null} />
                       </div>
                     </section>
                   ) : (
@@ -1244,7 +1301,7 @@ function SecureElementPrompt(props: {
   )
 }
 
-function TokenHero({ tokens, tokenLifetimeLabel }: { tokens: FinishLoginResponse; tokenLifetimeLabel: string | null }) {
+function TokenHero({ tokens, tokenLifetimeLabel }: { tokens: SessionTokenBundle; tokenLifetimeLabel: string | null }) {
   return (
     <section className="token-hero" aria-label="Authenticated token summary">
       <article>
@@ -1260,6 +1317,47 @@ function TokenHero({ tokens, tokenLifetimeLabel }: { tokens: FinishLoginResponse
         <strong>{tokenLifetimeLabel ?? `${tokens.expiresIn} Sekunden`}</strong>
       </article>
     </section>
+  )
+}
+
+function SessionTokensSection(props: {
+  tokens: SessionTokenBundle
+  tokenLifetimeLabel: string | null
+}) {
+  return (
+    <section className="token-section" aria-label="Session token section">
+      <div className="section-heading simple-heading">
+        <div>
+          <p className="section-label">Session</p>
+          <h3>Sitzung und Weiterverwendung</h3>
+        </div>
+      </div>
+      <p className="muted-copy">Diese Felder halten die aktive Gerätesitzung am Leben und werden für Refresh, Logout und geschützte API-Aufrufe verwendet.</p>
+      <TokenHero tokens={props.tokens} tokenLifetimeLabel={props.tokenLifetimeLabel} />
+      <div className="token-grid token-grid-session">
+        <SessionRawTokensPanel accessToken={props.tokens.accessToken} idToken={props.tokens.idToken} />
+        <TokenPanel title="Refresh-Token" token={props.tokens.refreshToken} rawLabel="Refresh-Token JWT" claims={null} />
+      </div>
+    </section>
+  )
+}
+
+function SessionRawTokensPanel(props: { accessToken: string; idToken: string }) {
+  return (
+    <article className="token-panel token-panel-comparison">
+      <h3>Access- und ID-Token</h3>
+      <p className="muted-copy">Die rohen JWTs der aktiven Gerätesitzung. Diese beiden Werte werden für authentifizierte Requests und Session-Fortsetzung verwendet.</p>
+      <div className="raw-token-grid">
+        <details className="token-raw" open>
+          <summary>Access-Token JWT</summary>
+          <textarea name="accessToken" value={props.accessToken} readOnly rows={8} />
+        </details>
+        <details className="token-raw" open>
+          <summary>ID-Token JWT</summary>
+          <textarea name="idToken" value={props.idToken} readOnly rows={8} />
+        </details>
+      </div>
+    </article>
   )
 }
 
@@ -1301,27 +1399,64 @@ function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord
   )
 }
 
+function TokenInspectionSection(props: {
+  tokens: SessionTokenBundle
+  accessClaims: ClaimRecord | null
+  idClaims: ClaimRecord | null
+  claimKeys: string[]
+  userInfo: ClaimRecord | null
+  tokenIntrospection: ClaimRecord | null
+}) {
+  return (
+    <section className="token-section" aria-label="Token inspection section">
+      <div className="section-heading simple-heading">
+        <div>
+          <p className="section-label">Anzeige</p>
+          <h3>Token-Inspektion und Hilfsansichten</h3>
+        </div>
+      </div>
+      <p className="muted-copy">Diese Daten dienen der Anzeige im Demo-Frontend. Sie helfen beim Verstehen der Tokens, werden aber nicht zum Abschluss von Registrierung oder Login benötigt.</p>
+      <ClaimHighlights accessClaims={props.accessClaims} idClaims={props.idClaims} />
+      <div className="token-grid">
+        <TokenComparisonPanel
+          accessToken={props.tokens.accessToken}
+          accessClaims={props.accessClaims}
+          idToken={props.tokens.idToken}
+          idClaims={props.idClaims}
+          claimKeys={props.claimKeys}
+          showRawTokens={false}
+        />
+        <JsonPanel title="Userinfo-Endpunkt" payload={props.userInfo} rawLabel="Userinfo Antwort JSON" />
+        <JsonPanel title="Introspection-Endpunkt" payload={props.tokenIntrospection} rawLabel="Introspection Antwort JSON" />
+      </div>
+    </section>
+  )
+}
+
 function TokenComparisonPanel(props: {
   accessToken: string
   accessClaims: ClaimRecord | null
   idToken: string
   idClaims: ClaimRecord | null
   claimKeys: string[]
+  showRawTokens?: boolean
 }) {
   return (
     <article className="token-panel token-panel-comparison">
       <h3>Access- und ID-Token</h3>
-      <p className="muted-copy">Live-JWT-Werte der aktiven Android-Sitzung. Öffne die dekodierten Details für die vollständige Claim-Ansicht.</p>
-      <div className="raw-token-grid">
-        <details className="token-raw" open>
-          <summary>Access-Token JWT</summary>
-          <textarea name="accessToken" value={props.accessToken} readOnly rows={8} />
-        </details>
-        <details className="token-raw" open>
-          <summary>ID-Token JWT</summary>
-          <textarea name="idToken" value={props.idToken} readOnly rows={8} />
-        </details>
-      </div>
+      <p className="muted-copy">{props.showRawTokens === false ? 'Dekodierte Claims der aktiven Android-Sitzung.' : 'Live-JWT-Werte der aktiven Android-Sitzung. Öffne die dekodierten Details für die vollständige Claim-Ansicht.'}</p>
+      {props.showRawTokens === false ? null : (
+        <div className="raw-token-grid">
+          <details className="token-raw" open>
+            <summary>Access-Token JWT</summary>
+            <textarea name="accessToken" value={props.accessToken} readOnly rows={8} />
+          </details>
+          <details className="token-raw" open>
+            <summary>ID-Token JWT</summary>
+            <textarea name="idToken" value={props.idToken} readOnly rows={8} />
+          </details>
+        </div>
+      )}
       <details className="token-details">
         <summary>Dekodierte Token-Details</summary>
         {props.accessClaims && props.idClaims ? (

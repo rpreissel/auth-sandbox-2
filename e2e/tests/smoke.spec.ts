@@ -393,9 +393,10 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
 
   await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Access- und ID-Token' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Token Sitzung' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tab', { name: 'Mock API Demo API' })).toHaveAttribute('aria-selected', 'false')
+  await expect(page.getByRole('heading', { name: 'Token-Inspektion und Hilfsansichten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Userinfo-Endpunkt' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Introspection-Endpunkt' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Refresh-Token' })).toBeVisible()
@@ -445,9 +446,9 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await waitForTrace(request, userId, 'mock_api_message_create_finished', 'mock-api')
 
   await page.getByRole('tab', { name: 'Token Sitzung' }).click()
-  await expect(page.getByRole('heading', { name: 'Access- und ID-Token' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
   await page.getByRole('button', { name: 'Tokens aktualisieren' }).click()
-  await expect(page.getByRole('heading', { name: 'Access- und ID-Token' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
 
   await page.getByRole('tab', { name: 'Mock API Demo API' }).click()
   await expect(mockApiPanel).toContainText('mock-api')

@@ -27,7 +27,7 @@ import type {
   TraceListResponse
 } from '@auth-sandbox-2/shared-types'
 
-const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? 'https://auth.localhost:8443'
+const API_BASE = import.meta.env.VITE_AUTH_API_URL ?? ''
 const TRACE_API_BASE = import.meta.env.VITE_TRACE_API_URL ?? '/trace-api'
 const MOCK_API_BASE = import.meta.env.VITE_MOCK_API_URL ?? '/mock-api'
 

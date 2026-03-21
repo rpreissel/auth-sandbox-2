@@ -652,6 +652,23 @@ button:disabled {
   gap: 0.9rem;
 }
 
+.token-section,
+.token-section-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.token-section {
+  padding: 1rem;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(244, 248, 255, 0.9));
+  border: 1px solid rgba(17, 76, 153, 0.08);
+}
+
+.token-grid-session {
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+}
+
 .session-stack {
   display: grid;
   gap: 0.95rem;

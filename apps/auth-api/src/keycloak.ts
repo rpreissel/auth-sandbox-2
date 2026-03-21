@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 
 import { buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
-import type { JsonObject, TokenBundle } from '@auth-sandbox-2/shared-types'
+import type { JsonObject, RefreshTokensResponse, TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { decodeTokenClaims } from './lib/jwt.js'
 
@@ -84,6 +84,8 @@ async function performObservedRequest<T>(input: string, init?: RequestInit) {
         requestContentType: requestHeaders.get('content-type'),
         responseContentType: response.headers.get('content-type')
       })
+      // The recorded HTTP exchange is trace-only observability data. It is not
+      // forwarded to business clients; it exists only for trace inspection.
 
       if (!response.ok && response.status !== 204 && response.status !== 201) {
         await recordArtifact({
@@ -94,6 +96,7 @@ async function performObservedRequest<T>(input: string, init?: RequestInit) {
           encoding: 'raw',
           direction: 'inbound',
           rawValue: responseText,
+          // Trace-only error copy for demo inspection.
           explanation: 'Keycloak returned a non-success HTTP status.'
         })
         throw new Error(`${method} ${input} failed: ${response.status} ${responseText}`)
@@ -113,6 +116,7 @@ async function performObservedRequest<T>(input: string, init?: RequestInit) {
           encoding: 'jwt',
           direction: 'inbound',
           rawValue: data.access_token,
+          // Trace-only copy of the inbound Keycloak token for the demo explorer.
           explanation: 'Decoded Keycloak access token stored for demo trace inspection.'
         })
       }
@@ -126,6 +130,7 @@ async function performObservedRequest<T>(input: string, init?: RequestInit) {
           encoding: 'jwt',
           direction: 'inbound',
           rawValue: data.id_token,
+          // Trace-only copy of the inbound Keycloak token for the demo explorer.
           explanation: 'Decoded Keycloak ID token stored for demo trace inspection.'
         })
       }
@@ -139,6 +144,7 @@ async function performObservedRequest<T>(input: string, init?: RequestInit) {
           encoding: 'jwt',
           direction: 'inbound',
           rawValue: data.refresh_token,
+          // Trace-only copy of the inbound Keycloak token for the demo explorer.
           explanation: 'Decoded Keycloak refresh token stored for demo trace inspection.'
         })
       }
@@ -468,7 +474,7 @@ export class KeycloakAuthClient {
     return response
   }
 
-  async toEnrichedTokenBundle(tokens: KeycloakTokenResponse) {
+  async toEnrichedTokenBundle(tokens: KeycloakTokenResponse): Promise<RefreshTokensResponse> {
     const [userInfo, tokenIntrospection] = await Promise.all([
       this.getUserInfo(tokens.access_token),
       this.introspectToken(tokens.access_token)
@@ -478,7 +484,7 @@ export class KeycloakAuthClient {
   }
 }
 
-function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, tokenIntrospection: JsonObject): TokenBundle {
+function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, tokenIntrospection: JsonObject): RefreshTokensResponse {
   const bundle = {
     accessToken: tokens.access_token,
     idToken: tokens.id_token,

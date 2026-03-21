@@ -71,6 +71,9 @@ async function sendClientEvent(input: {
     explanation?: string | null
   }>
 }) {
+  // Artifacts sent here are trace-only telemetry for trace-api/client-events.
+  // They do not become part of mock-api or Keycloak business payloads unless
+  // the same data is sent separately by another request.
   await fetch(`${TRACE_API_BASE}/client-events`, {
     method: 'POST',
     headers: {
@@ -256,6 +259,7 @@ function MockWebApp() {
           {
             artifactType: 'event_payload',
             name: 'mock_api_request_plan',
+            // Trace-only request plan for observability.
             rawValue: stringifyArtifact({ endpoints: ['profile', 'messages', 'assurance/1se', 'assurance/2se'] })
           }
         ]
@@ -285,16 +289,19 @@ function MockWebApp() {
           {
             artifactType: 'event_payload',
             name: 'mock_api_profile',
+            // Trace-only copy of the response payload for the trace explorer.
             rawValue: stringifyArtifact(profileResult)
           },
           {
             artifactType: 'event_payload',
             name: 'mock_api_messages',
+            // Trace-only copy of the response payload for the trace explorer.
             rawValue: stringifyArtifact(messagesResult)
           },
           {
             artifactType: 'event_payload',
             name: 'mock_api_assurance_1se',
+            // Trace-only copy of the response payload for the trace explorer.
             rawValue: stringifyArtifact(assurance1Result)
           }
         ]
@@ -337,6 +344,8 @@ function MockWebApp() {
           {
             artifactType: 'event_payload',
             name: 'mock_note_request',
+            // Trace-only mirror of the note payload; mock-api receives its own
+            // POST body in the request right below.
             rawValue: stringifyArtifact({ text: newNote.trim() })
           }
         ]
@@ -397,6 +406,7 @@ function MockWebApp() {
           {
             artifactType: 'event_payload',
             name: 'step_up_request',
+            // Trace-only note that the UI requested 2se step-up.
             rawValue: stringifyArtifact({ requestedAcr: '2se' })
           }
         ]
@@ -412,6 +422,8 @@ function MockWebApp() {
           {
             artifactType: 'event_payload',
             name: 'sms_tan_challenge',
+            // Trace-only UI state marker; the actual challenge happens in the
+            // Keycloak browser flow, not via this client-event payload.
             rawValue: stringifyArtifact({ mode: 'keycloak_inline' })
           }
         ]
