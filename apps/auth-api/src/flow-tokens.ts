@@ -55,25 +55,22 @@ function signPayload(payload: string) {
   return createHmac('sha256', getFlowTokenSecret()).update(payload).digest()
 }
 
-export function createFlowToken(flowId: string, expiresAt: string) {
-  const claims: FlowTokenClaims = { kind: 'flow', flowId, expiresAt }
+function createSignedToken<T extends BaseTokenClaims>(claims: T) {
   const payload = encodeBase64Url(JSON.stringify(claims))
   const signature = encodeBase64Url(signPayload(payload))
   return `${payload}.${signature}`
+}
+
+export function createFlowToken(flowId: string, expiresAt: string) {
+  return createSignedToken<FlowTokenClaims>({ kind: 'flow', flowId, expiresAt })
 }
 
 export function createServiceToken(flowId: string, service: string, serviceSessionId: string, expiresAt: string) {
-  const claims: ServiceTokenClaims = { kind: 'service', flowId, service, serviceSessionId, expiresAt }
-  const payload = encodeBase64Url(JSON.stringify(claims))
-  const signature = encodeBase64Url(signPayload(payload))
-  return `${payload}.${signature}`
+  return createSignedToken<ServiceTokenClaims>({ kind: 'service', flowId, service, serviceSessionId, expiresAt })
 }
 
 export function createServiceResultToken(flowId: string, service: string, serviceSessionId: string, achievedAcr: string, expiresAt: string) {
-  const claims: ServiceResultTokenClaims = { kind: 'service_result', flowId, service, serviceSessionId, achievedAcr, expiresAt }
-  const payload = encodeBase64Url(JSON.stringify(claims))
-  const signature = encodeBase64Url(signPayload(payload))
-  return `${payload}.${signature}`
+  return createSignedToken<ServiceResultTokenClaims>({ kind: 'service_result', flowId, service, serviceSessionId, achievedAcr, expiresAt })
 }
 
 export function verifyFlowToken(token: string, expectedFlowId: string): VerifyFlowTokenResult {

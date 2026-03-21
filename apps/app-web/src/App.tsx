@@ -43,6 +43,13 @@ type TraceState = {
   sessionId: string
 }
 
+type TraceArtifact = {
+  name: string
+  value: unknown
+  encoding?: string
+  contentType?: string
+}
+
 type PendingRegistration = {
   flowId: string
   // Flow-scoped bearer for the whole registration/assurance journey.
@@ -264,7 +271,34 @@ export function App() {
     }
   }
 
-  async function createFlowTrace(operation: string, artifacts?: Array<{ name: string; value: unknown; encoding?: string; contentType?: string }>) {
+  function buildTraceEvent(
+    operation: string,
+    trace: { traceId: string; sessionId: string },
+    artifacts?: TraceArtifact[]
+  ) {
+    return {
+      traceId: trace.traceId,
+      traceType: operation.startsWith('device_login') ? 'device_login_finish' : operation,
+      actorName: 'web-client',
+      operation,
+      status: 'success' as const,
+      timestamp: new Date().toISOString(),
+      userId: device?.userId ?? form.userId,
+      deviceId: device?.publicKeyHash ?? null,
+      sessionId: trace.sessionId,
+      artifacts: artifacts?.map((artifact) => ({
+        artifactType: 'event_payload',
+        name: artifact.name,
+        contentType: artifact.contentType ?? 'application/json',
+        encoding: artifact.encoding ?? 'json',
+        direction: 'outbound',
+        rawValue: typeof artifact.value === 'string' ? artifact.value : JSON.stringify(artifact.value, null, 2),
+        explanation: 'Client-side event payload captured by the demo trace explorer.'
+      }))
+    }
+  }
+
+  async function createFlowTrace(operation: string, artifacts?: TraceArtifact[]) {
     const nextTrace = {
       traceId: crypto.randomUUID(),
       sessionId: crypto.randomUUID()
@@ -275,32 +309,7 @@ export function App() {
     // Artifacts sent here are emitted only to trace-api/client-events.
     // They are not added to auth-api request bodies unless the caller also
     // sends the same values explicitly in a separate business request.
-    await api.sendClientEvent(
-      {
-        traceId: nextTrace.traceId,
-        traceType: operation,
-        actorName: 'web-client',
-        operation,
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        userId: device?.userId ?? form.userId,
-        deviceId: device?.publicKeyHash ?? null,
-        sessionId: nextTrace.sessionId,
-        artifacts: artifacts?.map((artifact) => ({
-          artifactType: 'event_payload',
-          name: artifact.name,
-          contentType: artifact.contentType ?? 'application/json',
-          encoding: artifact.encoding ?? 'json',
-          direction: 'outbound',
-          rawValue: typeof artifact.value === 'string' ? artifact.value : JSON.stringify(artifact.value, null, 2),
-          explanation: 'Client-side event payload captured by the demo trace explorer.'
-        }))
-      },
-      {
-        traceId: nextTrace.traceId,
-        sessionId: nextTrace.sessionId
-      }
-    )
+    await api.sendClientEvent(buildTraceEvent(operation, nextTrace, artifacts), nextTrace)
 
     return nextTrace
   }
@@ -308,35 +317,10 @@ export function App() {
   async function sendFlowEvent(
     flow: { traceId: string; sessionId: string },
     operation: string,
-    artifacts?: Array<{ name: string; value: unknown; encoding?: string; contentType?: string }>
+    artifacts?: TraceArtifact[]
   ) {
     // These event artifacts are trace-only telemetry for the demo trace explorer.
-    await api.sendClientEvent(
-      {
-        traceId: flow.traceId,
-        traceType: operation.startsWith('device_login') ? 'device_login_finish' : operation,
-        actorName: 'web-client',
-        operation,
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        userId: device?.userId ?? form.userId,
-        deviceId: device?.publicKeyHash ?? null,
-        sessionId: flow.sessionId,
-        artifacts: artifacts?.map((artifact) => ({
-          artifactType: 'event_payload',
-          name: artifact.name,
-          contentType: artifact.contentType ?? 'application/json',
-          encoding: artifact.encoding ?? 'json',
-          direction: 'outbound',
-          rawValue: typeof artifact.value === 'string' ? artifact.value : JSON.stringify(artifact.value, null, 2),
-          explanation: 'Client-side event payload captured by the demo trace explorer.'
-        }))
-      },
-      {
-        traceId: flow.traceId,
-        sessionId: flow.sessionId
-      }
-    )
+    await api.sendClientEvent(buildTraceEvent(operation, flow, artifacts), flow)
   }
 
   async function syncMockApi(nextStatus: string) {
@@ -1432,7 +1416,6 @@ function TokenInspectionSection(props: {
           idToken={props.tokens.idToken}
           idClaims={props.idClaims}
           claimKeys={props.claimKeys}
-          showRawTokens={false}
         />
         <JsonPanel title="Userinfo-Endpunkt" payload={props.userInfo} rawLabel="Userinfo Antwort JSON" />
         <JsonPanel title="Introspection-Endpunkt" payload={props.tokenIntrospection} rawLabel="Introspection Antwort JSON" />
@@ -1447,24 +1430,11 @@ function TokenComparisonPanel(props: {
   idToken: string
   idClaims: ClaimRecord | null
   claimKeys: string[]
-  showRawTokens?: boolean
 }) {
   return (
     <article className="token-panel token-panel-comparison">
       <h3>Access- und ID-Token</h3>
-      <p className="muted-copy">{props.showRawTokens === false ? 'Dekodierte Claims der aktiven Android-Sitzung.' : 'Live-JWT-Werte der aktiven Android-Sitzung. Öffne die dekodierten Details für die vollständige Claim-Ansicht.'}</p>
-      {props.showRawTokens === false ? null : (
-        <div className="raw-token-grid">
-          <details className="token-raw" open>
-            <summary>Access-Token JWT</summary>
-            <textarea name="accessToken" value={props.accessToken} readOnly rows={8} />
-          </details>
-          <details className="token-raw" open>
-            <summary>ID-Token JWT</summary>
-            <textarea name="idToken" value={props.idToken} readOnly rows={8} />
-          </details>
-        </div>
-      )}
+      <p className="muted-copy">Dekodierte Claims der aktiven Android-Sitzung.</p>
       <details className="token-details">
         <summary>Dekodierte Token-Details</summary>
         {props.accessClaims && props.idClaims ? (

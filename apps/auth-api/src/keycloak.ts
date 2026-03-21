@@ -255,10 +255,6 @@ export class KeycloakAdminClient {
     return users[0]
   }
 
-  async getUserById(userId: string) {
-    return this.getUserByUsername(userId)
-  }
-
   async getCredentials(userId: string) {
     const user = await this.getUserByUsername(userId)
     if (!user) {
@@ -355,16 +351,8 @@ export class KeycloakAdminClient {
 }
 
 export class KeycloakAuthClient {
-  async authenticate(loginToken: string) {
-    const body = createFormBody({
-      grant_type: 'urn:auth-sandbox-2:params:oauth:grant-type:device-login',
-      client_id: keycloakConfig.clientId,
-      client_secret: keycloakConfig.clientSecret,
-      scope: 'openid profile email offline_access',
-      login_token: loginToken
-    })
-
-    const response = await fetchJson<KeycloakTokenResponse>(
+  private async requestToken(body: string | URLSearchParams) {
+    return fetchJson<KeycloakTokenResponse>(
       `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`,
       {
         method: 'POST',
@@ -374,6 +362,18 @@ export class KeycloakAuthClient {
         body
       }
     )
+  }
+
+  async authenticate(loginToken: string) {
+    const body = createFormBody({
+      grant_type: 'urn:auth-sandbox-2:params:oauth:grant-type:device-login',
+      client_id: keycloakConfig.clientId,
+      client_secret: keycloakConfig.clientSecret,
+      scope: 'openid profile email offline_access',
+      login_token: loginToken
+    })
+
+    const response = await this.requestToken(body)
 
     return this.toEnrichedTokenBundle(response)
   }
@@ -386,16 +386,7 @@ export class KeycloakAuthClient {
       refresh_token: refreshToken
     })
 
-    const response = await fetchJson<KeycloakTokenResponse>(
-      `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded'
-        },
-        body
-      }
-    )
+    const response = await this.requestToken(body)
 
     return this.toEnrichedTokenBundle(response)
   }
@@ -426,16 +417,7 @@ export class KeycloakAuthClient {
       ...(refreshToken ? { refresh_token: refreshToken } : {})
     })
 
-    const response = await fetchJson<KeycloakTokenResponse>(
-      `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded'
-        },
-        body
-      }
-    )
+    const response = await this.requestToken(body)
 
     return this.toEnrichedTokenBundle(response)
   }
