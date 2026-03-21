@@ -229,6 +229,8 @@ Fuer Kommunikation `Keycloak <-> auth-api`, z. B.:
 - mTLS
 - oder signierte Service-zu-Service-Authentisierung
 
+Im aktuellen Demo-Setup wird diese interne Authentisierung durch einen dedizierten Keycloak-Service-Account fuer die internen Redeem- und Browser-Step-up-Endpunkte repraesentiert. Browserseitige Admin-, Passwort- und Trace-Aufrufe werden davon getrennt ueber exakte Proxy-Bearer-Tokens abgesichert, die Caddy injiziert.
+
 ## Wichtige Sicherheitsregeln
 
 Tokenpruefung allein reicht nicht. Zusaetzlich muss immer der Flow-Zustand geprueft werden:
@@ -290,6 +292,8 @@ Empfohlener Kanal fuer Browser:
 
 11. Keycloak validiert dieses Ergebnis und hebt Session bzw. Auth-Kontext an.
 12. Danach gibt Keycloak normale OIDC-Tokens mit aktualisiertem `acr`, `amr` und `auth_time` aus.
+
+Der fruehere Gedanke eines oeffentlichen Browser-Step-up-Startendpunkts wurde verworfen. Der Browser startet keinen separaten Public-Step-up-Shortcut mehr, sondern nur noch einen normalen Keycloak-Auth-Request mit hoeherem `acr_values`, worauf Keycloak intern den Step-up-Backchannel anstoesst.
 
 ### Warum dieses Rueckantwort-Muster?
 
@@ -380,6 +384,8 @@ Empfohlen:
 - Browser-Rueckantwort an Keycloak ueber `result_code` + serverseitiges Redeem
 - Mobile-Step-up/Bootstrap ueber Custom Grant + serverseitiges Redeem
 - finale Keycloak-Tokens immer nur aus Keycloak
+- browserseitige Demo-Schutzschicht ueber Caddy-injizierte Proxy-Tokens fuer Admin-, Passwort- und Trace-Routen
+- separate Trace-Absicherung fuer Browser-Lesezugriffe und interne Observability-Writes
 
 ### Nicht empfohlen
 
@@ -387,6 +393,46 @@ Empfohlen:
 - Step-up-Ergebnis ungeschuetzt ueber den Frontchannel zurueckgeben
 - Keycloak als zentrale Workflow-Engine fuer alle Methodenschritte nutzen
 - Required Actions fuer diesen Fachflow nutzen
+
+## Sicherheitsmatrix im laufenden Repo
+
+`POST /api/flows` ist jetzt purpose-spezifisch gehaertet: `registration` bleibt anonym bootstrap-bar, waehrend `step_up` und `account_upgrade` einen gueltigen Keycloak-User-Bearer der erlaubten Browser-/App-Clients verlangen. Wenn fuer diese geschuetzten Zwecke ein `subjectId` mitgegeben wird, muss er zum Bearer passen; sonst fuellt `auth-api` ihn aus dem Token.
+
+```mermaid
+flowchart TB
+  subgraph Public[Reachable without API bearer token]
+    P1[POST /api/flows]
+    P2[POST /api/device/login/start]
+    P3[POST /api/device/login/finish]
+    P4[POST /api/device/token/refresh]
+    P5[POST /api/device/logout]
+  end
+
+  subgraph FlowScoped[Flow-scoped tokens from auth-api]
+    F1[flowToken] --> F2[GET /api/flows/:flowId]
+    F1 --> F3[POST /api/flows/:flowId/select-service]
+    F1 --> F4[POST /api/flows/:flowId/finalize]
+    S1[serviceToken] --> S2[POST /api/identification/person-code/complete]
+    S1 --> S3[POST /api/identification/sms-tan/start]
+    S1 --> S4[POST /api/identification/sms-tan/resend]
+    S1 --> S5[POST /api/identification/sms-tan/complete]
+  end
+
+  subgraph ProxyScoped[Caddy-injected proxy tokens]
+    A1[admin proxy token] --> A2[/api/admin/*]
+    A3[app proxy token] --> A4[/api/device/set-password]
+    A3 --> A5[/api/step-up/mobile/complete]
+    T1[trace browser token] --> T2[/traces + trace detail routes]
+    T1 --> T3[/client-events]
+  end
+
+  subgraph Internal[Internal-only]
+    I1[Keycloak service-account bearer] --> I2[/api/internal/browser-step-up/start]
+    I1 --> I3[/api/internal/browser-step-up/complete]
+    I1 --> I4[/api/internal/flows/redeem]
+    I5[trace internal write token] --> I6[/internal/observability/*]
+  end
+```
 
 ## Offene Designfragen fuer die naechste Runde
 

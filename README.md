@@ -23,8 +23,11 @@ Explicitly out of scope:
 
 - `auth-api` - Node.js + TypeScript + Fastify
 - `app-web` - React + TypeScript device flow UI
-- `mock-api` - Fastify demo REST API protected by Keycloak JWKS and audience validation
 - `admin-web` - React + TypeScript admin UI
+- `mock-web` - React + TypeScript browser login and browser step-up demo
+- `mock-api` - Fastify demo REST API protected by Keycloak JWKS and audience validation
+- `trace-web` - React + TypeScript trace explorer UI
+- `trace-api` - Fastify trace and observability API
 - `home-web` - React + TypeScript landing page
 - `keycloak` - IAM and credential authority
 - `postgres` - shared storage for auth-api and Keycloak with separate schemas
@@ -36,8 +39,11 @@ Explicitly out of scope:
 - `https://home.localhost:8443` - landing page
 - `https://app.localhost:8443` - device app
 - `https://admin.localhost:8443` - admin app
+- `https://mock.localhost:8443` - browser step-up demo
+- `https://trace.localhost:8443` - trace viewer
 - `https://auth.localhost:8443/api/health` - auth API health
 - `https://mock.localhost:8443/health` - mock API health
+- `https://trace.localhost:8443/health` - trace API health
 - `https://keycloak.localhost:8443` - Keycloak
 - `https://db.localhost:8443` - Adminer Postgres viewer
 
@@ -59,69 +65,62 @@ Explicitly out of scope:
 sequenceDiagram
   autonumber
   actor Admin
-  participant App
+  participant Device as app-web
+  participant Browser as mock-web
+  participant Caddy
   participant Auth as auth-api
   participant DB
   participant KC as Keycloak
   participant Ext as KC extension
   participant Mock as mock-api
 
-  Admin->>Auth: Create registration code
+  Admin->>Caddy: Create registration identity
+  Caddy->>Auth: Forward with admin proxy token
   Auth->>DB: Store code
   Auth-->>Admin: Code issued
 
-  App->>Auth: Register device
+  Device->>Auth: Register device
   Auth->>DB: Create registration flow
   Auth->>KC: Ensure user + create device credential
   KC-->>Auth: OK
-  Auth-->>App: Device registered\n(password setup may be required)
+  Auth-->>Device: Device registered\n(password setup may be required)
 
-  App->>Auth: Start device login
+  Device->>Caddy: Set initial password
+  Caddy->>Auth: Forward with app proxy token
+  Auth->>KC: Set password via Admin API
+  KC-->>Auth: Password stored
+  Auth-->>Device: Password accepted
+
+  Device->>Auth: Start device login
   Auth->>DB: Store encrypted challenge
-  Auth-->>App: Challenge payload
+  Auth-->>Device: Challenge payload
 
-  App->>Auth: Finish device login with signature
+  Device->>Auth: Finish device login with signature
   Auth->>KC: Custom device-login grant
   KC-->>Auth: Token bundle
-  Auth-->>App: Access / ID / Refresh tokens
+  Auth-->>Device: Access / ID / Refresh tokens
 
-  App->>Mock: Call protected API with access token
+  Device->>Mock: Call protected API with access token
   Mock->>KC: Verify JWT via JWKS
-  Mock-->>App: Protected response
+  Mock-->>Device: Protected response
 
-  App->>Auth: Create step-up flow
-  Auth->>DB: Store flow
-  Auth-->>App: flowId + flowToken
+  Browser->>KC: Browser login with acr_values=1se
+  KC-->>Browser: Browser session / tokens
 
-  App->>Auth: Select sms_tan service\nwith flow bearer token
-  Auth-->>App: service token
-  App->>SMS: Start/complete SMS-TAN\nwith service bearer token
-  SMS-->>App: service result token
-  App->>Auth: Finalize flow\nwith flow bearer token + service result token
-  Auth->>DB: Verify service result and finalize flow
-
-  alt Browser step-up
-    App->>Auth: Finalize flow
-    Auth->>DB: Issue result_code
-    Auth-->>App: result_code
-    KC->>Ext: Redeem result_code
-    Ext->>Auth: Internal redeem with service token
-    Auth->>DB: Consume artifact
-    Auth-->>Ext: User + assurance context
-    Ext-->>KC: Complete authentication
-    KC-->>App: Browser session / tokens
-  else Mobile step-up
-    App->>Auth: Finalize flow
-    Auth->>DB: Issue assurance_handle
-    Auth-->>App: assurance_handle
-    App->>KC: Custom assurance-handle grant
-    KC->>Ext: Redeem assurance_handle
-    Ext->>Auth: Internal redeem with service token
-    Auth->>DB: Consume artifact
-    Auth-->>Ext: User + assurance context
-    Ext-->>KC: Issue upgraded tokens
-    KC-->>App: Upgraded token bundle
-  end
+  Browser->>KC: Fresh auth request with acr_values=2se
+  KC->>Ext: Start inline browser step-up
+  Ext->>Auth: POST /api/internal/browser-step-up/start\nBearer internal redeem token
+  Auth->>DB: Create step-up flow + SMS challenge
+  Auth-->>Ext: flowId + maskedTarget + demo TAN
+  Browser->>KC: Submit SMS-TAN in Keycloak form
+  KC->>Ext: Complete inline browser step-up
+  Ext->>Auth: POST /api/internal/browser-step-up/complete\nBearer internal redeem token
+  Auth->>DB: Finalize flow + issue result_code
+  Ext->>Auth: POST /api/internal/flows/redeem\nBearer internal redeem token
+  Auth->>DB: Consume result_code
+  Auth-->>Ext: achievedAcr + amr + authTime
+  Ext-->>KC: Upgrade browser session
+  KC-->>Browser: Upgraded browser session / tokens
 ```
 
 ## Architecture notes
@@ -136,12 +135,57 @@ sequenceDiagram
 
 ## Flow endpoint protection
 
-- `POST /api/flows` remains the public flow-creation entrypoint.
+- `POST /api/device/login/start`, `POST /api/device/login/finish`, `POST /api/device/token/refresh`, and `POST /api/device/logout` are reachable without a separate API bearer token.
+- `POST /api/device/login/start`, `POST /api/device/login/finish`, `POST /api/device/token/refresh`, and `POST /api/device/logout` are still proof-bound by device registration state, challenge validation, signatures, or refresh-token validity.
+- `POST /api/flows` is now purpose-gated: anonymous callers may bootstrap `registration`, while `step_up` and `account_upgrade` require a valid Keycloak user bearer token from the allowed browser/app clients.
+- Protected flow creation also binds `subjectId` to the bearer user: mismatches are rejected, and missing `subjectId` values are filled from the token.
 - `GET /api/flows/:flowId`, `POST /api/flows/:flowId/select-service`, and `POST /api/flows/:flowId/finalize` require `Authorization: Bearer <flowToken>`.
 - Direct identification endpoints require `Authorization: Bearer <serviceToken>` and return a `serviceResultToken` for finalization.
-- Flow, service, and service-result tokens are HMAC-signed by `auth-api`, scoped to their intended use, and expire with the flow record.
-- `POST /api/internal/flows/redeem` requires a Keycloak bearer token from the dedicated service-account client `auth-api-internal-redeem`.
-- Redeem artifacts remain single-use, kind-checked, and expiry-checked even after bearer-token validation.
+- `POST /api/admin/registration-identities`, `GET /api/admin/registration-identities`, `GET /api/admin/devices`, `DELETE /api/admin/devices/:id`, `POST /api/device/set-password`, and `POST /api/step-up/mobile/complete` are protected by exact proxy bearer tokens that Caddy injects for the demo browser apps.
+- `POST /api/internal/browser-step-up/start`, `POST /api/internal/browser-step-up/complete`, and `POST /api/internal/flows/redeem` require a Keycloak bearer token from the dedicated service-account client `auth-api-internal-redeem`.
+- `trace-api` browser reads and `client-events` require a dedicated browser proxy token, while `/internal/observability/*` requires a separate internal write token.
+- The old public browser shortcut `POST /api/step-up/browser/start` was removed. Browser step-up now starts only inside Keycloak through the internal backchannel flow.
+- Flow, service, and service-result tokens are HMAC-signed by `auth-api`, scoped to their intended use, and expire with the flow record. Redeem artifacts remain single-use, kind-checked, and expiry-checked after bearer-token validation.
+
+```mermaid
+flowchart TB
+  subgraph Public[Reachable without API bearer token]
+    P1[POST /api/flows]
+    P2[POST /api/device/login/start]
+    P3[POST /api/device/login/finish]
+    P4[POST /api/device/token/refresh]
+    P5[POST /api/device/logout]
+    P6[GET health endpoints]
+  end
+
+  subgraph Proxy[Browser routes protected by Caddy-injected demo bearer tokens]
+    AdminToken[admin proxy token] --> A1[/api/admin/*/]
+    AppToken[app proxy token] --> A2[/api/device/set-password/]
+    AppToken --> A3[/api/step-up/mobile/complete/]
+    TraceToken[trace browser proxy token] --> T1[/traces/]
+    TraceToken --> T2[/traces/:traceId/]
+    TraceToken --> T3[/spans/:spanId/]
+    TraceToken --> T4[/artifacts/:artifactId/]
+    TraceToken --> T5[/client-events/]
+  end
+
+  subgraph AuthTokens[Token-scoped auth-api routes]
+    FlowToken[flowToken] --> F1[/GET /api/flows/:flowId/]
+    FlowToken --> F2[/POST /api/flows/:flowId/select-service/]
+    FlowToken --> F3[/POST /api/flows/:flowId/finalize/]
+    ServiceToken[serviceToken] --> S1[/POST /api/identification/person-code/complete/]
+    ServiceToken --> S2[/POST /api/identification/sms-tan/start/]
+    ServiceToken --> S3[/POST /api/identification/sms-tan/resend/]
+    ServiceToken --> S4[/POST /api/identification/sms-tan/complete/]
+  end
+
+  subgraph Internal[Backchannel-only routes]
+    KCBearer[Keycloak service-account bearer] --> I1[/POST /api/internal/browser-step-up/start/]
+    KCBearer --> I2[/POST /api/internal/browser-step-up/complete/]
+    KCBearer --> I3[/POST /api/internal/flows/redeem/]
+    TraceWrite[trace internal write token] --> I4[/POST /internal/observability/*/]
+  end
+```
 
 ## Important paths
 
