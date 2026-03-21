@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose'
 import { z } from 'zod'
 
 import {
+  appConfig,
   keycloakConfig,
   withRequestTrace
 } from '@auth-sandbox-2/backend-core'
@@ -32,7 +33,6 @@ import {
   startKeycloakBrowserStepUp,
   startFlowService,
   setPassword,
-  startBrowserStepUpFlow,
   startLogin
 } from './services.js'
 
@@ -95,12 +95,6 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(1)
 })
 
-const browserStepUpSchema = z.object({
-  userId: z.string().min(1),
-  phoneNumber: z.string().min(1),
-  requiredAcr: z.enum(['level_1', 'level_2']).optional()
-})
-
 const mobileStepUpSchema = z.object({
   userId: z.string().min(1),
   phoneNumber: z.string().min(1),
@@ -118,6 +112,13 @@ const internalBrowserStepUpCompleteSchema = z.object({
 })
 
 const keycloakJwks = createRemoteJWKSet(new URL(`${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/certs`))
+
+type UserAccessTokenClaims = JWTPayload & {
+  azp?: string
+  client_id?: string
+  preferred_username?: string
+  userId?: string
+}
 
 function readTraceHeaders(request: FastifyRequest) {
   return {
@@ -143,6 +144,13 @@ function requireBearerToken(app: any, request: FastifyRequest) {
     throw app.httpErrors.unauthorized('Missing bearer token')
   }
   return authorization.slice('Bearer '.length)
+}
+
+function requireProxyBearerToken(app: any, request: FastifyRequest, expectedToken: string, label: string) {
+  const token = requireBearerToken(app, request)
+  if (token !== expectedToken) {
+    throw app.httpErrors.forbidden(`Invalid ${label} token`)
+  }
 }
 
 function requireFlowToken(app: any, request: FastifyRequest, flowId: string) {
@@ -188,6 +196,52 @@ async function requireInternalRedeemAccessToken(app: any, request: FastifyReques
 
   if (!isAllowedInternalRedeemTokenClaims(payload, keycloakConfig.internalRedeemClientId)) {
     throw app.httpErrors.forbidden('Bearer token is not allowed to redeem flow artifacts')
+  }
+}
+
+function getTokenClientId(claims: Pick<UserAccessTokenClaims, 'azp' | 'client_id'>) {
+  return claims.azp ?? claims.client_id ?? null
+}
+
+function getTokenUserId(claims: Pick<UserAccessTokenClaims, 'preferred_username' | 'userId' | 'sub'>) {
+  if (typeof claims.preferred_username === 'string' && claims.preferred_username.trim().length > 0) {
+    return claims.preferred_username
+  }
+  if (typeof claims.userId === 'string' && claims.userId.trim().length > 0) {
+    return claims.userId
+  }
+  if (typeof claims.sub === 'string' && claims.sub.trim().length > 0) {
+    return claims.sub
+  }
+  return null
+}
+
+async function requireUserAccessToken(app: any, request: FastifyRequest) {
+  const token = requireBearerToken(app, request)
+  let payload: UserAccessTokenClaims
+
+  try {
+    const verified = await jwtVerify(token, keycloakJwks, {
+      issuer: `${keycloakConfig.publicUrl}/realms/${keycloakConfig.realm}`
+    })
+    payload = verified.payload as UserAccessTokenClaims
+  } catch {
+    throw app.httpErrors.unauthorized('Invalid bearer token')
+  }
+
+  const clientId = getTokenClientId(payload)
+  if (clientId !== keycloakConfig.clientId && clientId !== keycloakConfig.browserClientId) {
+    throw app.httpErrors.forbidden('Bearer token is not allowed to create this flow')
+  }
+
+  const userId = getTokenUserId(payload)
+  if (!userId) {
+    throw app.httpErrors.forbidden('Bearer token is missing a user identity')
+  }
+
+  return {
+    claims: payload,
+    userId
   }
 }
 
@@ -238,16 +292,32 @@ export async function registerRoutes(app: any) {
 
   app.post('/api/flows', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = createFlowSchema.parse(request.body)
+    const needsUserBearer = body.purpose === 'step_up' || body.purpose === 'account_upgrade'
+    const authenticatedUser = needsUserBearer
+      ? await requireUserAccessToken(app, request)
+      : null
+
+    if (authenticatedUser && body.subjectId && body.subjectId !== authenticatedUser.userId) {
+      throw app.httpErrors.forbidden('Flow subject does not match bearer token user')
+    }
+
+    const createInput = authenticatedUser
+      ? {
+          ...body,
+          subjectId: body.subjectId ?? authenticatedUser.userId
+        }
+      : body
+
     const result = await tracedRoute({
       request,
       reply,
       traceType: 'generic_flow_create',
-      title: `Create ${body.purpose} flow`,
+      title: `Create ${createInput.purpose} flow`,
       summary: 'A client created a new generic assurance flow.',
-      userId: body.subjectId ?? null,
-      deviceId: body.deviceId ?? null,
-      body,
-      run: () => createPublicAssuranceFlow(body)
+      userId: createInput.subjectId ?? null,
+      deviceId: createInput.deviceId ?? null,
+      body: createInput,
+      run: () => createPublicAssuranceFlow(createInput)
     })
     reply.code(201)
     return result
@@ -398,6 +468,7 @@ export async function registerRoutes(app: any) {
   })
 
   app.post('/api/admin/registration-identities', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.adminProxyToken, 'admin proxy')
     const body = createRegistrationIdentitySchema.parse(request.body)
     const result = await tracedRoute({
       request,
@@ -418,7 +489,10 @@ export async function registerRoutes(app: any) {
     traceType: 'admin_registration_identities_list',
     title: 'Admin registration identities list',
     summary: 'Admin web requested the current registration identities inventory.',
-    run: () => listRegistrationIdentities()
+    run: async () => {
+      requireProxyBearerToken(app, request, appConfig.adminProxyToken, 'admin proxy')
+      return listRegistrationIdentities()
+    }
   }))
   app.get('/api/admin/devices', async (request: FastifyRequest, reply: FastifyReply) => tracedRoute({
     request,
@@ -426,9 +500,13 @@ export async function registerRoutes(app: any) {
     traceType: 'admin_devices_list',
     title: 'Admin device list',
     summary: 'Admin web requested the current device inventory.',
-    run: () => listDevices()
+    run: async () => {
+      requireProxyBearerToken(app, request, appConfig.adminProxyToken, 'admin proxy')
+      return listDevices()
+    }
   }))
   app.delete('/api/admin/devices/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.adminProxyToken, 'admin proxy')
     const params = z.object({ id: z.string().uuid() }).parse(request.params)
     await tracedRoute({
       request,
@@ -442,6 +520,7 @@ export async function registerRoutes(app: any) {
   })
 
   app.post('/api/device/set-password', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
     const body = setPasswordSchema.parse(request.body)
     return tracedRoute({
       request,
@@ -503,21 +582,8 @@ export async function registerRoutes(app: any) {
     })
   })
 
-  app.post('/api/step-up/browser/start', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = browserStepUpSchema.parse(request.body)
-    return tracedRoute({
-      request,
-      reply,
-      traceType: 'browser_step_up_start',
-      title: `Start browser step-up for ${body.userId}`,
-      summary: 'A browser-compatible step-up flow was created and finalized for backchannel redeem.',
-      userId: body.userId,
-      body,
-      run: () => startBrowserStepUpFlow(body)
-    })
-  })
-
   app.post('/api/step-up/mobile/complete', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
     const body = mobileStepUpSchema.parse(request.body)
     return tracedRoute({
       request,

@@ -1,3 +1,5 @@
+import { createHash, generateKeyPairSync, sign } from 'node:crypto'
+
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
 
@@ -10,11 +12,32 @@ const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_WEB_URL = 'https://trace.localhost:8443/'
 const MOCK_WEB_URL = 'https://mock.localhost:8443'
+const ADMIN_PROXY_HEADERS = { authorization: 'Bearer change-me-admin-proxy-token' }
+const APP_PROXY_HEADERS = { authorization: 'Bearer change-me-app-proxy-token' }
+const TRACE_BROWSER_HEADERS = { authorization: 'Bearer change-me-trace-browser-token' }
 
 type TraceListItem = {
   traceId: string
   traceType: string
   actors: string[]
+}
+
+function createSigningKeys() {
+  const pair = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+  })
+
+  return {
+    publicKey: pair.publicKey,
+    privateKey: pair.privateKey,
+    publicKeyHash: createHash('sha256').update(pair.publicKey).digest('hex')
+  }
+}
+
+function signEncryptedData(encryptedData: string, privateKeyPem: string) {
+  return sign('RSA-SHA256', Buffer.from(encryptedData, 'base64'), privateKeyPem).toString('base64')
 }
 
 async function waitForRuntimeReady(request: APIRequestContext) {
@@ -47,7 +70,9 @@ async function waitForTrace(request: APIRequestContext, userId: string, traceTyp
       page: '1',
       pageSize: '20'
     })
-    const response = await request.get(`${TRACE_API_URL}/traces?${params.toString()}`)
+    const response = await request.get(`${TRACE_API_URL}/traces?${params.toString()}`, {
+      headers: TRACE_BROWSER_HEADERS
+    })
 
     if (response.ok()) {
       const body = await response.json() as { items: TraceListItem[] }
@@ -67,6 +92,7 @@ async function createBrowserUser(request: APIRequestContext, suffix: string) {
   const userId = `mock-web-${suffix}-${Date.now()}`
   const password = 'ChangeMe123!'
   const response = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS,
     data: {
       userId,
       firstName: 'Mock',
@@ -79,6 +105,7 @@ async function createBrowserUser(request: APIRequestContext, suffix: string) {
   expect(response.ok()).toBeTruthy()
 
   const passwordResponse = await request.post(`${AUTH_API_URL}/api/device/set-password`, {
+    headers: APP_PROXY_HEADERS,
     data: {
       userId,
       password
@@ -118,6 +145,35 @@ async function getInternalRedeemAccessToken(request: APIRequestContext) {
   expect(response.ok()).toBeTruthy()
   const body = await response.json() as { access_token: string }
   return body.access_token
+}
+
+async function loginWithDevice(request: APIRequestContext, input: { publicKeyHash: string; privateKey: string }) {
+  const startLoginResponse = await request.post(`${AUTH_API_URL}/api/device/login/start`, {
+    data: {
+      publicKeyHash: input.publicKeyHash
+    }
+  })
+
+  expect(startLoginResponse.ok()).toBeTruthy()
+  const challenge = await startLoginResponse.json() as {
+    nonce: string
+    encryptedKey: string
+    encryptedData: string
+    iv: string
+  }
+
+  const finishLoginResponse = await request.post(`${AUTH_API_URL}/api/device/login/finish`, {
+    data: {
+      nonce: challenge.nonce,
+      encryptedKey: challenge.encryptedKey,
+      encryptedData: challenge.encryptedData,
+      iv: challenge.iv,
+      signature: signEncryptedData(challenge.encryptedData, input.privateKey)
+    }
+  })
+
+  expect(finishLoginResponse.ok()).toBeTruthy()
+  return finishLoginResponse.json() as Promise<{ accessToken: string; refreshToken: string }>
 }
 
 test.beforeEach(async ({ request }) => {
@@ -259,6 +315,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   test.setTimeout(45000)
   const userId = `e2e-user-${Date.now()}`
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS,
     data: {
       userId,
       firstName: 'E2E',
@@ -458,12 +515,13 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
 test('generic registration and step-up flow APIs support service selection, concrete service lifecycle, finalize, and redeem', async ({ request }) => {
   const userId = `e2e-flow-${Date.now()}`
   const registrationCode = `FLOW${Date.now().toString(36).toUpperCase()}`
-  const flowPublicKey = `-----BEGIN PUBLIC KEY-----\n${Buffer.from(`flow-test-public-key-${userId}`).toString('base64')}\n-----END PUBLIC KEY-----`
+  const signingKeys = createSigningKeys()
   const withBearer = (token: string) => ({
     authorization: `Bearer ${token}`
   })
 
   const registrationIdentityResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS,
     data: {
       userId,
       firstName: 'Flow',
@@ -487,7 +545,7 @@ test('generic registration and step-up flow APIs support service selection, conc
         lastName: 'User',
         birthDate: '1990-01-01',
         deviceName: 'Flow Device',
-        publicKey: flowPublicKey
+        publicKey: signingKeys.publicKey
       }
     }
   })
@@ -531,11 +589,36 @@ test('generic registration and step-up flow APIs support service selection, conc
     }
   })
   expect(finalizeRegistration.ok()).toBeTruthy()
-  const finalizedRegistration = await finalizeRegistration.json() as { finalization: { kind: string; userId: string } }
+  const finalizedRegistration = await finalizeRegistration.json() as { finalization: { kind: string; userId: string; publicKeyHash: string | null } }
   expect(finalizedRegistration.finalization.kind).toBe('registration_result')
   expect(finalizedRegistration.finalization.userId).toBe(userId)
+  expect(finalizedRegistration.finalization.publicKeyHash).toBe(signingKeys.publicKeyHash)
+
+  const setPasswordResponse = await request.post(`${AUTH_API_URL}/api/device/set-password`, {
+    headers: APP_PROXY_HEADERS,
+    data: {
+      userId,
+      password: 'ChangeMe123!'
+    }
+  })
+  expect(setPasswordResponse.ok()).toBeTruthy()
+
+  const anonymousStepUpFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+    data: {
+      purpose: 'step_up',
+      subjectId: userId,
+      requiredAcr: 'level_1'
+    }
+  })
+  expect(anonymousStepUpFlow.status()).toBe(401)
+
+  const deviceLogin = await loginWithDevice(request, {
+    publicKeyHash: signingKeys.publicKeyHash,
+    privateKey: signingKeys.privateKey
+  })
 
   const createStepUpFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+    headers: withBearer(deviceLogin.accessToken),
     data: {
       purpose: 'step_up',
       subjectId: userId,
@@ -623,6 +706,7 @@ test('missing saved device binding is cleared instead of failing with a server e
   const deviceName = 'Missing Device Test'
   const registrationCode = `MISS${Date.now().toString(36).toUpperCase()}`
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS,
     data: {
       userId,
       firstName: 'Missing',
@@ -661,14 +745,18 @@ test('missing saved device binding is cleared instead of failing with a server e
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Mit gespeichertem Gerät anmelden' })).toBeVisible()
 
-  const devicesResponse = await request.get(`${AUTH_API_URL}/api/admin/devices`)
+  const devicesResponse = await request.get(`${AUTH_API_URL}/api/admin/devices`, {
+    headers: ADMIN_PROXY_HEADERS
+  })
   expect(devicesResponse.ok()).toBeTruthy()
   const devices = await devicesResponse.json() as Array<{ id: string; userId: string; deviceName: string }>
   const device = devices.find((item) => item.userId === userId && item.deviceName === deviceName)
 
   expect(device).toBeTruthy()
 
-  const deleteResponse = await request.delete(`${AUTH_API_URL}/api/admin/devices/${device?.id}`)
+  const deleteResponse = await request.delete(`${AUTH_API_URL}/api/admin/devices/${device?.id}`, {
+    headers: ADMIN_PROXY_HEADERS
+  })
   expect(deleteResponse.status()).toBe(204)
 
   await page.getByRole('button', { name: 'Mit Gerät fortfahren' }).click()
