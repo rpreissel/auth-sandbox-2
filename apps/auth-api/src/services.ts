@@ -43,8 +43,6 @@ const adminClient = new KeycloakAdminClient()
 const authClient = new KeycloakAuthClient()
 
 type FlowServiceHandler = {
-  method: 'code' | 'sms'
-  selectionPayload: JsonObject
   start: (flowId: string) => Promise<Awaited<ReturnType<typeof startPublicAssuranceFlowMethod>>>
   complete: (flowId: string, payload: JsonObject) => Promise<Awaited<ReturnType<typeof completePublicAssuranceFlowMethod>>>
   resend?: (flowId: string) => Promise<Awaited<ReturnType<typeof startPublicAssuranceFlowMethod>>>
@@ -64,8 +62,6 @@ function badRequest(message: string) {
 
 const flowServiceRegistry: Record<AssuranceFlowService, FlowServiceHandler> = {
   person_code: {
-    method: 'code',
-    selectionPayload: { service: 'person_code' },
     start: (flowId) => startPublicAssuranceFlowMethod(flowId, 'code', {
       payload: { service: 'person_code' }
     }),
@@ -74,8 +70,6 @@ const flowServiceRegistry: Record<AssuranceFlowService, FlowServiceHandler> = {
     })
   },
   sms_tan: {
-    method: 'sms',
-    selectionPayload: { service: 'sms_tan' },
     start: (flowId) => startPublicAssuranceFlowMethod(flowId, 'sms', {
       payload: { service: 'sms_tan' }
     }),

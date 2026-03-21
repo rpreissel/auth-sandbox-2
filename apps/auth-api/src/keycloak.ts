@@ -502,6 +502,8 @@ function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, toke
 }
 
 function applyAppWebAssuranceClaims(bundle: TokenBundle): TokenBundle {
+  // Demo-only UI normalization: app-web expects the elevated assurance it just
+  // achieved to show up in its token-inspection panels immediately.
   const accessClientId = typeof bundle.accessTokenClaims.azp === 'string' ? bundle.accessTokenClaims.azp : null
   const idClientId = typeof bundle.idTokenClaims.azp === 'string' ? bundle.idTokenClaims.azp : null
   const introspectionClientId = typeof bundle.tokenIntrospection.client_id === 'string' ? bundle.tokenIntrospection.client_id : null

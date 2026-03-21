@@ -204,6 +204,8 @@ function getTokenClientId(claims: Pick<UserAccessTokenClaims, 'azp' | 'client_id
 }
 
 function getTokenUserId(claims: Pick<UserAccessTokenClaims, 'preferred_username' | 'userId' | 'sub'>) {
+  // Repo rule: Keycloak username equals userId. We still accept the legacy
+  // fallback claims because different token/userinfo views expose it differently.
   if (typeof claims.preferred_username === 'string' && claims.preferred_username.trim().length > 0) {
     return claims.preferred_username
   }

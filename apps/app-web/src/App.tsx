@@ -8,7 +8,7 @@ import type {
   MockApiProfileResponse,
   PublicAssuranceFlowRecord,
   SessionTokenBundle,
-  TokenDisplayBundle,
+  TokenBundle,
   StartLoginResponse
 } from '@auth-sandbox-2/shared-types'
 
@@ -43,16 +43,17 @@ type TraceState = {
   sessionId: string
 }
 
-type AuthenticatedTokens = SessionTokenBundle & TokenDisplayBundle
-
 type PendingRegistration = {
   flowId: string
+  // Flow-scoped bearer for the whole registration/assurance journey.
   flowToken: string
+  // Service-scoped bearer for the currently selected identification step.
   serviceToken?: string
   publicKey: string
   privateKey: CryptoKey
   availableServices: AssuranceFlowServiceOption[]
   selectedService: AssuranceFlowService
+  // Redacted SMS destination shown back to the user, e.g. ***1234.
   maskedTarget?: string | null
 }
 
@@ -148,7 +149,7 @@ export function App() {
   const [busy, setBusy] = useState(false)
   const [device, setDevice] = useState<DeviceState | null>(null)
   const [challenge, setChallenge] = useState<StartLoginResponse | null>(null)
-  const [tokens, setTokens] = useState<AuthenticatedTokens | null>(null)
+  const [tokens, setTokens] = useState<TokenBundle | null>(null)
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
   const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null)
@@ -161,16 +162,10 @@ export function App() {
     status: 'Waiting for an authenticated session'
   })
 
-  const tokenDisplay = useMemo<TokenDisplayBundle | null>(() => (tokens ? {
-    accessTokenClaims: tokens.accessTokenClaims,
-    idTokenClaims: tokens.idTokenClaims,
-    userInfo: tokens.userInfo,
-    tokenIntrospection: tokens.tokenIntrospection
-  } : null), [tokens])
-  const accessClaims = useMemo<ClaimRecord | null>(() => tokenDisplay?.accessTokenClaims ?? null, [tokenDisplay])
-  const idClaims = useMemo<ClaimRecord | null>(() => tokenDisplay?.idTokenClaims ?? null, [tokenDisplay])
-  const userInfo = useMemo<ClaimRecord | null>(() => tokenDisplay?.userInfo ?? null, [tokenDisplay])
-  const tokenIntrospection = useMemo<ClaimRecord | null>(() => tokenDisplay?.tokenIntrospection ?? null, [tokenDisplay])
+  const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
+  const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
+  const userInfo = useMemo<ClaimRecord | null>(() => tokens?.userInfo ?? null, [tokens])
+  const tokenIntrospection = useMemo<ClaimRecord | null>(() => tokens?.tokenIntrospection ?? null, [tokens])
   const sharedTokenClaimKeys = useMemo(() => buildSharedClaimKeys(accessClaims, idClaims), [accessClaims, idClaims])
   const challengeExpiresAt = useMemo(() => (challenge ? formatDateTime(challenge.expiresAt) : null), [challenge])
   const tokenLifetimeLabel = useMemo(() => (tokens ? formatLifetime(tokens.expiresIn) : null), [tokens])
@@ -425,12 +420,12 @@ export function App() {
         setStatus('Geschützte Notiz wird an mock-api gesendet...')
         const created = await api.createMockMessage(tokens.accessToken, { text }, flow)
         const messages = await api.listMockMessages(tokens.accessToken, flow)
-      await sendFlowEvent(flow, 'mock_api_message_create_finished', [{
-        name: 'mock_api_message_result',
-        // Trace-only write result summary for the explorer.
-        value: {
-          id: created.item.id,
-          messageCount: messages.items.length
+        await sendFlowEvent(flow, 'mock_api_message_create_finished', [{
+          name: 'mock_api_message_result',
+          // Trace-only write result summary for the explorer.
+          value: {
+            id: created.item.id,
+            messageCount: messages.items.length
           }
         }])
         setMockApi((current) => ({
@@ -458,7 +453,7 @@ export function App() {
     }
 
     setStatus('Verschlüsselte Challenge wird angefordert...')
-      const flow = traceState ?? await createFlowTrace('device_login_started', [{
+    const flow = traceState ?? await createFlowTrace('device_login_started', [{
         name: 'device_binding',
         value: {
           publicKeyHash: device.publicKeyHash,
@@ -607,7 +602,7 @@ export function App() {
 
     const started = form.selectedService === 'sms_tan'
       ? await api.startSmsTan(serviceToken, traceState ?? undefined)
-      : { maskedTarget: null, devCode: null }
+      : { maskedTarget: null }
 
     setPendingRegistration((current) => current
       ? {
@@ -1104,7 +1099,7 @@ export function App() {
                     <MockApiPanel
                       mockApi={mockApi}
                       busy={busy}
-                      onReload={() => void runAction(async () => { await syncMockApi('Protected mock API synchronized') })}
+                      onReload={() => void runAction(async () => { await syncMockApi('Geschützte Mock-API synchronisiert') })}
                       onSubmit={handleCreateMockMessage}
                       onDraftChange={(draft) => setMockApi((current) => ({ ...current, draft }))}
                     />
@@ -1230,19 +1225,19 @@ function MockApiPanel(props: {
         <div className="device-summary mock-api-summary">
           <div>
             <span className="field-label">Audience</span>
-            <strong>{props.mockApi.profile?.audience.join(', ') ?? 'Not loaded'}</strong>
+            <strong>{props.mockApi.profile?.audience.join(', ') ?? 'Noch nicht geladen'}</strong>
           </div>
           <div>
             <span className="field-label">Benutzername</span>
-            <strong>{props.mockApi.profile?.username ?? 'Not loaded'}</strong>
+            <strong>{props.mockApi.profile?.username ?? 'Noch nicht geladen'}</strong>
           </div>
           <div>
             <span className="field-label">Client</span>
-            <strong>{props.mockApi.profile?.clientId ?? 'Not loaded'}</strong>
+            <strong>{props.mockApi.profile?.clientId ?? 'Noch nicht geladen'}</strong>
           </div>
           <div>
             <span className="field-label">Berechtigungen</span>
-            <strong>{props.mockApi.profile?.scope.join(', ') ?? 'Not loaded'}</strong>
+            <strong>{props.mockApi.profile?.scope.join(', ') ?? 'Noch nicht geladen'}</strong>
           </div>
         </div>
         <p className="mock-api-status">{props.mockApi.status}</p>
@@ -1336,7 +1331,7 @@ function SessionTokensSection(props: {
       <TokenHero tokens={props.tokens} tokenLifetimeLabel={props.tokenLifetimeLabel} />
       <div className="token-grid token-grid-session">
         <SessionRawTokensPanel accessToken={props.tokens.accessToken} idToken={props.tokens.idToken} />
-        <TokenPanel title="Refresh-Token" token={props.tokens.refreshToken} rawLabel="Refresh-Token JWT" claims={null} />
+        <RefreshTokenPanel refreshToken={props.tokens.refreshToken} />
       </div>
     </section>
   )
@@ -1357,6 +1352,19 @@ function SessionRawTokensPanel(props: { accessToken: string; idToken: string }) 
           <textarea name="idToken" value={props.idToken} readOnly rows={8} />
         </details>
       </div>
+    </article>
+  )
+}
+
+function RefreshTokenPanel(props: { refreshToken: string }) {
+  return (
+    <article className="token-panel">
+      <h3>Refresh-Token</h3>
+      <p className="muted-copy">Der Refresh-Token verlängert die bestehende Gerätesitzung, ohne die Registrierung oder Gerätebindung erneut auszuführen.</p>
+      <details className="token-raw">
+        <summary>Refresh-Token JWT</summary>
+        <textarea name="Refresh-Token JWT" value={props.refreshToken} readOnly rows={8} />
+      </details>
     </article>
   )
 }
@@ -1464,19 +1472,6 @@ function TokenComparisonPanel(props: {
         ) : (
           <p className="muted-copy">Dekodierte Claims sind nicht verfügbar.</p>
         )}
-      </details>
-    </article>
-  )
-}
-
-function TokenPanel({ title, token, rawLabel, claims }: { title: string; token: string; rawLabel: string; claims: ClaimRecord | null }) {
-  return (
-    <article className="token-panel">
-      <h3>{title}</h3>
-      {claims ? <ClaimsTable title={title} claims={claims} /> : <p className="muted-copy">Keine dekodierten Claims für dieses Token verfügbar.</p>}
-      <details className="token-raw">
-        <summary>{rawLabel}</summary>
-        <textarea name={rawLabel} value={token} readOnly rows={8} />
       </details>
     </article>
   )
@@ -1590,7 +1585,7 @@ function readErrorMessage(error: unknown) {
     return error.message
   }
 
-  return 'Something went wrong during the device flow'
+  return 'Im Geräte-Flow ist ein unerwarteter Fehler aufgetreten'
 }
 
 function readString(claims: ClaimRecord | null, key: string) {

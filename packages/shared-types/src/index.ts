@@ -60,6 +60,9 @@ export type CreateRegistrationIdentityInput = {
   phoneNumber?: string
 }
 
+// `registration` bootstraps a new device/account flow.
+// `account_upgrade` adds durable assurance to an existing account.
+// `step_up` raises the auth strength for a concrete action/session.
 export type AssuranceFlowPurpose = 'registration' | 'account_upgrade' | 'step_up'
 
 export type AssuranceFlowStatus =
@@ -167,23 +170,11 @@ export type ServiceResultEnvelope = {
   serviceResultToken: string
 }
 
-export type PersonCodeCompleteInput = {
-  code: string
-}
-
-export type SmsTanStartInput = JsonObject
-
 export type SmsTanStartResponse = {
   status: 'challenge_sent'
   maskedTarget: string | null
-}
-
-export type SmsTanCompleteInput = {
-  tan: string
-}
-
-export type CompleteFlowServiceInput = {
-  payload?: JsonObject
+  // Dev/demo fallback code returned only in sandbox flows.
+  devCode?: string | null
 }
 
 export type FinalizeFlowInput = {
@@ -268,10 +259,10 @@ export type TokenDisplayBundle = {
 export type TokenBundle = SessionTokenBundle & TokenDisplayBundle
 
 // Demo login response: session-critical fields plus token-display data.
-export type FinishLoginResponse = SessionTokenBundle & TokenDisplayBundle
+export type FinishLoginResponse = TokenBundle
 
 // Demo refresh response: session-critical fields plus token-display data.
-export type RefreshTokensResponse = SessionTokenBundle & TokenDisplayBundle
+export type RefreshTokensResponse = TokenBundle
 
 export type LogoutResponse = {
   logout: true

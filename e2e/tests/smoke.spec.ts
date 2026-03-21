@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
+import type { SmsTanStartResponse } from '@auth-sandbox-2/shared-types'
 
 const AUTH_API_URL = 'https://auth.localhost:8443'
 const MOCK_API_URL = 'https://mock.localhost:8443'
@@ -349,7 +350,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByRole('button', { name: 'SMS-TAN senden', exact: true }).click()
   const startSmsTanResponse = await startSmsTanResponsePromise
   expect(startSmsTanResponse.ok()).toBeTruthy()
-  const startSmsTanBody = await startSmsTanResponse.json() as { devCode?: string | null }
+  const startSmsTanBody = await startSmsTanResponse.json() as SmsTanStartResponse
   expect(startSmsTanBody.devCode).toMatch(/^\d{6}$/)
   await expect(page.getByRole('button', { name: 'Neue SMS-TAN senden' })).toBeVisible()
   await page.getByRole('textbox', { name: 'SMS-TAN' }).fill(startSmsTanBody.devCode ?? '')
