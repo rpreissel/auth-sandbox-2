@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { ClientEventInput } from '@auth-sandbox-2/shared-types'
 
 import {
+  appConfig,
   completeSpan,
   completeTrace,
   ensureTrace,
@@ -14,6 +15,21 @@ import {
   recordArtifact,
   startSpan
 } from '@auth-sandbox-2/backend-core'
+
+function requireBearerToken(app: any, request: FastifyRequest) {
+  const authorization = request.headers.authorization
+  if (!authorization?.startsWith('Bearer ')) {
+    throw app.httpErrors.unauthorized('Missing bearer token')
+  }
+  return authorization.slice('Bearer '.length)
+}
+
+function requireExactToken(app: any, request: FastifyRequest, expectedToken: string, label: string) {
+  const token = requireBearerToken(app, request)
+  if (token !== expectedToken) {
+    throw app.httpErrors.forbidden(`Invalid ${label} token`)
+  }
+}
 
 const observabilityTraceListSchema = z.object({
   status: z.string().optional(),
@@ -114,11 +130,13 @@ export async function registerTraceRoutes(app: any) {
   app.get('/health', async () => ({ status: 'ok', service: 'trace-api' }))
 
   app.post('/internal/observability/traces/ensure', async (request: FastifyRequest) => {
+    requireExactToken(app, request, appConfig.traceInternalWriteToken, 'trace internal write')
     const body = ensureTraceSchema.parse(request.body)
     return ensureTrace(body)
   })
 
   app.post('/internal/observability/spans/start', async (request: FastifyRequest) => {
+    requireExactToken(app, request, appConfig.traceInternalWriteToken, 'trace internal write')
     const body = startSpanSchema.parse(request.body)
     const result = await startSpan(body)
     return {
@@ -128,29 +146,34 @@ export async function registerTraceRoutes(app: any) {
   })
 
   app.post('/internal/observability/spans/complete', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireExactToken(app, request, appConfig.traceInternalWriteToken, 'trace internal write')
     const body = completeSpanSchema.parse(request.body)
     await completeSpan(body)
     reply.code(204)
   })
 
   app.post('/internal/observability/traces/complete', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireExactToken(app, request, appConfig.traceInternalWriteToken, 'trace internal write')
     const body = completeTraceSchema.parse(request.body)
     await completeTrace(body.traceId, body.status, body.summary ?? null)
     reply.code(204)
   })
 
   app.post('/internal/observability/artifacts/record', async (request: FastifyRequest) => {
+    requireExactToken(app, request, appConfig.traceInternalWriteToken, 'trace internal write')
     const body = recordArtifactSchema.parse(request.body)
     const artifactId = await recordArtifact(body)
     return { artifactId }
   })
 
   app.get('/traces', async (request: FastifyRequest) => {
+    requireExactToken(app, request, appConfig.traceBrowserProxyToken, 'trace browser proxy')
     const query = observabilityTraceListSchema.parse(request.query)
     return listTraces(query)
   })
 
   app.get('/traces/:traceId', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireExactToken(app, request, appConfig.traceBrowserProxyToken, 'trace browser proxy')
     const { traceId } = z.object({ traceId: z.string().uuid() }).parse(request.params)
     const result = await getTraceDetail(traceId)
     if (!result) {
@@ -161,6 +184,7 @@ export async function registerTraceRoutes(app: any) {
   })
 
   app.get('/spans/:spanId', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireExactToken(app, request, appConfig.traceBrowserProxyToken, 'trace browser proxy')
     const { spanId } = z.object({ spanId: z.string().uuid() }).parse(request.params)
     const result = await getSpanDetail(spanId)
     if (!result) {
@@ -171,6 +195,7 @@ export async function registerTraceRoutes(app: any) {
   })
 
   app.get('/artifacts/:artifactId', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireExactToken(app, request, appConfig.traceBrowserProxyToken, 'trace browser proxy')
     const { artifactId } = z.object({ artifactId: z.string().uuid() }).parse(request.params)
     const result = await getArtifactDetail(artifactId)
     if (!result) {
@@ -181,6 +206,7 @@ export async function registerTraceRoutes(app: any) {
   })
 
   app.post('/client-events', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireExactToken(app, request, appConfig.traceBrowserProxyToken, 'trace browser proxy')
     const body = clientEventSchema.parse(request.body) as ClientEventInput
     const result = await ingestClientEvent(body)
     reply.code(201)

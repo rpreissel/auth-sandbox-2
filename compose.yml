@@ -86,6 +86,8 @@ services:
       AUTH_API_PORT: 3000
       AUTH_API_PUBLIC_URL: https://auth.localhost:8443
       AUTH_API_FLOW_TOKEN_SECRET: ${AUTH_API_FLOW_TOKEN_SECRET:-change-me-flow-token-secret}
+      AUTH_API_APP_PROXY_TOKEN: ${AUTH_API_APP_PROXY_TOKEN:-change-me-app-proxy-token}
+      AUTH_API_ADMIN_PROXY_TOKEN: ${AUTH_API_ADMIN_PROXY_TOKEN:-change-me-admin-proxy-token}
       OBSERVABILITY_SERVICE_NAME: auth-api
       OBSERVABILITY_WRITE_MODE: http
       TRACE_API_INTERNAL_URL: http://trace-api:3001
@@ -138,6 +140,8 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
       KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      TRACE_API_BROWSER_PROXY_TOKEN: ${TRACE_API_BROWSER_PROXY_TOKEN:-change-me-trace-browser-token}
+      TRACE_API_INTERNAL_WRITE_TOKEN: ${TRACE_API_INTERNAL_WRITE_TOKEN:-change-me-trace-internal-token}
       CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443
       CI: 'true'
     depends_on:
@@ -158,6 +162,7 @@ services:
       OBSERVABILITY_SERVICE_NAME: mock-api
       OBSERVABILITY_WRITE_MODE: http
       TRACE_API_INTERNAL_URL: http://trace-api:3001
+      TRACE_API_INTERNAL_WRITE_TOKEN: ${TRACE_API_INTERNAL_WRITE_TOKEN:-change-me-trace-internal-token}
       DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
       DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
       KEYCLOAK_BASE_URL: http://keycloak:8080

@@ -40,6 +40,7 @@ https://app.localhost:8443 {
   log_append method {http.request.method}
   log_append uri {http.request.uri}
   handle_path /trace-api/* {
+    request_header Authorization "Bearer change-me-trace-browser-token"
     reverse_proxy trace-api:3001
   }
   handle_path /mock-api/* {
@@ -65,6 +66,7 @@ https://admin.localhost:8443 {
   redir /trace https://trace.localhost:8443/ 308
   redir /trace/ https://trace.localhost:8443/ 308
   handle_path /trace-api/* {
+    request_header Authorization "Bearer change-me-trace-browser-token"
     reverse_proxy trace-api:3001
   }
   handle /trace/* {
@@ -94,6 +96,16 @@ https://auth.localhost:8443 {
   log_append upstream_host {rp.upstream.host}
   log_append upstream_duration_ms {rp.upstream.duration_ms}
   log_append upstream_latency_ms {rp.upstream.latency_ms}
+  @admin_api path /api/admin/*
+  handle @admin_api {
+    request_header Authorization "Bearer change-me-admin-proxy-token"
+    reverse_proxy auth-api:3000
+  }
+  @set_password path /api/device/set-password
+  handle @set_password {
+    request_header Authorization "Bearer change-me-app-proxy-token"
+    reverse_proxy auth-api:3000
+  }
   reverse_proxy auth-api:3000
 }
 
@@ -111,10 +123,12 @@ https://trace.localhost:8443 {
   log_append method {http.request.method}
   log_append uri {http.request.uri}
   handle_path /trace-api/* {
+    request_header Authorization "Bearer change-me-trace-browser-token"
     reverse_proxy trace-api:3001
   }
-  @trace_api path /health /traces /traces/* /spans/* /artifacts/* /client-events /internal/*
+  @trace_api path /health /traces /traces/* /spans/* /artifacts/* /client-events
   handle @trace_api {
+    request_header Authorization "Bearer change-me-trace-browser-token"
     log_append upstream_host {rp.upstream.host}
     log_append upstream_duration_ms {rp.upstream.duration_ms}
     log_append upstream_latency_ms {rp.upstream.latency_ms}
@@ -148,6 +162,7 @@ https://mock.localhost:8443 {
     reverse_proxy mock-api:3002
   }
   handle_path /trace-api/* {
+    request_header Authorization "Bearer change-me-trace-browser-token"
     log_append upstream_host {rp.upstream.host}
     log_append upstream_duration_ms {rp.upstream.duration_ms}
     log_append upstream_latency_ms {rp.upstream.latency_ms}

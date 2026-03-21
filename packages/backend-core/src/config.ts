@@ -25,6 +25,10 @@ const envSchema = z.object({
   KEYCLOAK_ADMIN_USERNAME: z.string().default('admin'),
   KEYCLOAK_ADMIN_PASSWORD: z.string().default('admin'),
   AUTH_API_FLOW_TOKEN_SECRET: z.string().min(16).default('change-me-flow-token-secret'),
+  AUTH_API_APP_PROXY_TOKEN: z.string().min(16).default('change-me-app-proxy-token'),
+  AUTH_API_ADMIN_PROXY_TOKEN: z.string().min(16).default('change-me-admin-proxy-token'),
+  TRACE_API_BROWSER_PROXY_TOKEN: z.string().min(16).default('change-me-trace-browser-token'),
+  TRACE_API_INTERNAL_WRITE_TOKEN: z.string().min(16).default('change-me-trace-internal-token'),
   CORS_ORIGIN: z.string().default('https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().default(300)
 })
@@ -44,6 +48,10 @@ export const appConfig = {
   observabilityWriteMode: env.OBSERVABILITY_WRITE_MODE ?? defaultObservabilityWriteMode,
   challengeTtlSeconds: env.CHALLENGE_TTL_SECONDS,
   flowTokenSecret: env.AUTH_API_FLOW_TOKEN_SECRET,
+  appProxyToken: env.AUTH_API_APP_PROXY_TOKEN,
+  adminProxyToken: env.AUTH_API_ADMIN_PROXY_TOKEN,
+  traceBrowserProxyToken: env.TRACE_API_BROWSER_PROXY_TOKEN,
+  traceInternalWriteToken: env.TRACE_API_INTERNAL_WRITE_TOKEN,
   corsOrigins: env.CORS_ORIGIN.split(',').map((value) => value.trim())
 }
 

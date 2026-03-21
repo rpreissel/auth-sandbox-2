@@ -115,7 +115,8 @@ async function postObservabilityWrite<T>(path: string, payload: unknown, expects
   const response = await fetch(`${appConfig.traceApiInternalUrl}${path}`, {
     method: 'POST',
     headers: {
-      'content-type': 'application/json'
+      'content-type': 'application/json',
+      authorization: `Bearer ${appConfig.traceInternalWriteToken}`
     },
     body: JSON.stringify(payload)
   })

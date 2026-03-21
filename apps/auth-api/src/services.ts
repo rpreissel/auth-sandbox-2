@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import { appConfig, logger, pool, recordArtifact, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
   AssuranceFlowService,
-  CreateFlowInput,
   CreateRegistrationIdentityInput,
   DeviceRecord,
   FinishLoginInput,
@@ -528,27 +527,6 @@ export async function logout(input: RefreshTokensInput): Promise<LogoutResponse>
       return { logout: true }
     }
   )
-}
-
-export async function startBrowserStepUpFlow(input: {
-  userId: string
-  phoneNumber: string
-  requiredAcr?: 'level_1' | 'level_2'
-}) {
-  const created = await createPublicAssuranceFlow({
-    purpose: 'step_up',
-    subjectId: input.userId,
-    requiredAcr: input.requiredAcr ?? 'level_1',
-    context: {
-      phoneNumber: input.phoneNumber
-    }
-  } satisfies CreateFlowInput)
-  await selectPublicAssuranceFlowService(created.flowId, 'sms_tan')
-  const started = await startFlowService(created.flowId, 'sms_tan')
-  const completed = await completeFlowService(created.flowId, 'sms_tan', {
-    tan: started.devCode ?? '000000'
-  })
-  return finalizePublicAssuranceFlow(created.flowId, { serviceResultToken: completed.serviceResultToken, channel: 'browser' })
 }
 
 export async function completeMobileStepUp(input: {
