@@ -1070,7 +1070,6 @@ export function App() {
                       <div className="token-section-stack">
                         <SessionTokensSection tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
                         <TokenInspectionSection
-                          tokens={tokens}
                           accessClaims={accessClaims}
                           idClaims={idClaims}
                           claimKeys={sharedTokenClaimKeys}
@@ -1392,7 +1391,6 @@ function ClaimHighlights({ accessClaims, idClaims }: { accessClaims: ClaimRecord
 }
 
 function TokenInspectionSection(props: {
-  tokens: SessionTokenBundle
   accessClaims: ClaimRecord | null
   idClaims: ClaimRecord | null
   claimKeys: string[]
@@ -1411,9 +1409,7 @@ function TokenInspectionSection(props: {
       <ClaimHighlights accessClaims={props.accessClaims} idClaims={props.idClaims} />
       <div className="token-grid">
         <TokenComparisonPanel
-          accessToken={props.tokens.accessToken}
           accessClaims={props.accessClaims}
-          idToken={props.tokens.idToken}
           idClaims={props.idClaims}
           claimKeys={props.claimKeys}
         />
@@ -1425,9 +1421,7 @@ function TokenInspectionSection(props: {
 }
 
 function TokenComparisonPanel(props: {
-  accessToken: string
   accessClaims: ClaimRecord | null
-  idToken: string
   idClaims: ClaimRecord | null
   claimKeys: string[]
 }) {

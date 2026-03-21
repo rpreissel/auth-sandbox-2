@@ -177,12 +177,7 @@ function requireServiceToken(app: any, request: FastifyRequest, service: 'person
 }
 
 async function requireInternalRedeemAccessToken(app: any, request: FastifyRequest) {
-  const authorization = request.headers.authorization
-  if (!authorization?.startsWith('Bearer ')) {
-    throw app.httpErrors.unauthorized('Missing bearer token')
-  }
-
-  const token = authorization.slice('Bearer '.length)
+  const token = requireBearerToken(app, request)
   let payload: InternalRedeemAccessTokenClaims
 
   try {

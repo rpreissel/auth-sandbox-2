@@ -154,15 +154,9 @@ export type PublicAssuranceFlowRecord = AssuranceFlowRecord & {
   serviceToken?: string
 }
 
-export type CreateFlowResponse = PublicAssuranceFlowRecord
-
-export type GetFlowResponse = PublicAssuranceFlowRecord
-
 export type SelectFlowServiceInput = {
   service: AssuranceFlowService
 }
-
-export type SelectFlowServiceResponse = PublicAssuranceFlowRecord
 
 export type ServiceResultEnvelope = {
   status: 'verified'
@@ -181,8 +175,6 @@ export type FinalizeFlowInput = {
   serviceResultToken?: string
   channel?: FinalizeFlowChannel
 }
-
-export type FinalizeFlowResponse = PublicAssuranceFlowRecord
 
 export type RedeemFlowArtifactResponse = {
   flowId: string
@@ -219,10 +211,6 @@ export type FinishLoginInput = {
 }
 
 export type RefreshTokensInput = {
-  refreshToken: string
-}
-
-export type LogoutInput = {
   refreshToken: string
 }
 

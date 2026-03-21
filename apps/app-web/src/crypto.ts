@@ -10,12 +10,6 @@ async function exportPrivateKey(privateKey: CryptoKey) {
   return btoa(String.fromCharCode(...new Uint8Array(exported)))
 }
 
-function pemToArrayBuffer(pem: string) {
-  const body = pem.replace('-----BEGIN PUBLIC KEY-----', '').replace('-----END PUBLIC KEY-----', '').replace(/\s+/g, '')
-  const raw = atob(body)
-  return Uint8Array.from(raw, (char) => char.charCodeAt(0)).buffer
-}
-
 function base64ToArrayBuffer(value: string) {
   const raw = atob(value)
   return Uint8Array.from(raw, (char) => char.charCodeAt(0)).buffer
@@ -54,19 +48,6 @@ export async function importPrivateKey(serializedKey: string) {
 }
 
 export { exportPrivateKey }
-
-export async function importPemPublicKey(pem: string) {
-  return crypto.subtle.importKey(
-    'spki',
-    pemToArrayBuffer(pem),
-    {
-      name: 'RSA-OAEP',
-      hash: 'SHA-256'
-    },
-    false,
-    ['encrypt']
-  )
-}
 
 export async function signEncryptedData(encryptedData: string, privateKey: CryptoKey) {
   const payload = Uint8Array.from(atob(encryptedData), (char) => char.charCodeAt(0))

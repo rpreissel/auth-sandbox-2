@@ -11,12 +11,9 @@ import type {
   PublicAssuranceFlowRecord,
   AssuranceFlowService,
   AssuranceFlowServiceOption,
-  CreateFlowResponse,
   AssuranceFlowResultSummary,
   CreateFlowInput,
   FinalizeFlowChannel,
-  FinalizeFlowResponse,
-  GetFlowResponse,
   RedeemFlowArtifactResponse,
   JsonObject
 } from '@auth-sandbox-2/shared-types'
