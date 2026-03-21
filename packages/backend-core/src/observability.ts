@@ -101,6 +101,19 @@ type TraceListFilters = {
 
 type QueryParamValue = string | number
 
+type DerivedArtifactValue = JsonObject & {
+  decoded?: unknown
+  decodedSource?: string
+  decrypted?: unknown
+  nestedDecoded?: NestedArtifactView[]
+}
+
+type NestedArtifactView = {
+  source: string
+  encoding?: string
+  value: unknown
+}
+
 const traceStorage = new AsyncLocalStorage<TraceContext>()
 
 function usesDirectTraceWrites() {
@@ -356,7 +369,7 @@ export async function completeTrace(traceId: string, status: TraceStatus, summar
 
 async function recordArtifactDirect(input: ArtifactRecordInput) {
   const artifactId = randomUUID()
-  const derived = decodeArtifact(input.rawValue, input.encoding, input.contentType)
+  const derived = decodeArtifact(input.rawValue, input.encoding, input.contentType, input.name)
   const explanation = input.explanation ?? derived.explanation ?? null
 
   await pool.query(
@@ -818,11 +831,11 @@ export async function getArtifactDetail(artifactId: string): Promise<ArtifactDet
     explanation: string
   }>('select field_path, label, raw_value, normalized_value, explanation from observability.field_explanations where artifact_id = $1 order by field_path asc', [artifactId])
 
-  const derivedValue = isRecord(artifact.derived_value) ? artifact.derived_value : null
+  const derivedValue = isRecord(artifact.derived_value) ? artifact.derived_value as DerivedArtifactValue : null
 
   const decryptedView = await resolveArtifactDecryptedView(artifact, derivedValue)
   const preparedRawView = prepareArtifactViewForResponse(parseJson(artifact.raw_value))
-  const preparedDecodedView = prepareArtifactViewForResponse(derivedValue?.decoded ?? derivedValue)
+  const preparedDecodedView = prepareArtifactViewForResponse(buildArtifactDecodedView(derivedValue))
   const preparedDecryptedView = prepareArtifactViewForResponse(decryptedView)
 
   return {
@@ -941,17 +954,19 @@ export async function getOrCreateClientTrace(args: {
   })
 }
 
-function decodeArtifact(rawValue: string, encoding?: string | null, contentType?: string | null) {
-  const derivedValue: JsonObject = {}
+function decodeArtifact(rawValue: string, encoding?: string | null, contentType?: string | null, artifactName?: string | null) {
+  const derivedValue: DerivedArtifactValue = {}
   const fields: FieldExplanation[] = []
 
   const normalizedEncoding = encoding?.toLowerCase() ?? ''
   const normalizedContentType = contentType?.toLowerCase() ?? ''
   const parsedJson = parseJson(rawValue)
+  const parsedParams = parseParameterString(rawValue)
 
   if (normalizedEncoding === 'jwt' || looksLikeJwt(rawValue)) {
     const decoded = decodeJwt(rawValue)
     derivedValue.decoded = decoded
+    derivedValue.decodedSource = inferArtifactSource(artifactName, 'decoded')
     derivedValue.decrypted = null
     fields.push(...explainKnownFields(decoded.header, 'header'))
     fields.push(...explainKnownFields(decoded.payload, 'payload'))
@@ -966,6 +981,7 @@ function decodeArtifact(rawValue: string, encoding?: string | null, contentType?
     const buffer = Buffer.from(rawValue, normalizedEncoding === 'base64url' ? 'base64url' : 'base64')
     const text = buffer.toString('utf8')
     derivedValue.decoded = text
+    derivedValue.decodedSource = inferArtifactSource(artifactName, 'decoded')
     if (parsedJsonValue(text)) {
       derivedValue.decoded = parsedJsonValue(text)
       fields.push(...explainKnownFields(parsedJsonValue(text), 'decoded'))
@@ -977,11 +993,43 @@ function decodeArtifact(rawValue: string, encoding?: string | null, contentType?
     }
   }
 
+  if (normalizedEncoding === 'form-urlencoded' || normalizedEncoding === 'query' || (!parsedJson && parsedParams)) {
+    const decoded = parsedParams
+    const source = normalizedEncoding === 'form-urlencoded' || normalizedContentType.includes('application/x-www-form-urlencoded')
+      ? 'form'
+      : 'query'
+
+    derivedValue.decoded = decoded
+    derivedValue.decodedSource = inferArtifactSource(artifactName, source)
+    if (decoded) {
+      const explanationSource = inferArtifactSource(artifactName, source)
+      fields.push(...explainKnownFields(decoded, explanationSource))
+      const nestedDecoded = collectNestedDecodedViews(decoded, explanationSource)
+      if (nestedDecoded.length > 0) {
+        derivedValue.nestedDecoded = nestedDecoded
+      }
+    }
+
+    return {
+      derivedValue,
+      fields,
+      explanation: source === 'form'
+        ? 'Form payload parsed and nested encoded values decoded for demo observability.'
+        : 'Query payload parsed and nested encoded values decoded for demo observability.'
+    }
+  }
+
   if (normalizedContentType.includes('application/json') || normalizedEncoding === 'json' || parsedJson) {
     const decoded = parsedJson ?? parseJson(rawValue)
     derivedValue.decoded = decoded
+    derivedValue.decodedSource = inferArtifactSource(artifactName, 'body')
     if (decoded) {
-      fields.push(...explainKnownFields(decoded, 'body'))
+      const explanationSource = inferArtifactSource(artifactName, 'body')
+      fields.push(...explainKnownFields(decoded, explanationSource))
+      const nestedDecoded = collectNestedDecodedViews(decoded, explanationSource)
+      if (nestedDecoded.length > 0) {
+        derivedValue.nestedDecoded = nestedDecoded
+      }
     }
     if (decoded && isEncryptedChallenge(decoded)) {
       derivedValue.decrypted = extractDecryptedValue(decoded)
@@ -994,6 +1042,7 @@ function decodeArtifact(rawValue: string, encoding?: string | null, contentType?
   }
 
   derivedValue.decoded = rawValue
+  derivedValue.decodedSource = inferArtifactSource(artifactName, 'raw')
   return {
     derivedValue,
     fields,
@@ -1098,8 +1147,193 @@ function parsedJsonValue(value: string) {
   return parseJson(value)
 }
 
+function parseParameterString(value: string) {
+  const trimmedValue = value.trim()
+  const normalizedValue = trimmedValue.startsWith('?') ? trimmedValue.slice(1) : trimmedValue
+  const looksLikeKeyValuePayload = /^[-._~A-Za-z0-9%]+=[^=]/.test(normalizedValue)
+
+  if (!normalizedValue || !normalizedValue.includes('=') || (!trimmedValue.startsWith('?') && !normalizedValue.includes('&') && !looksLikeKeyValuePayload)) {
+    return null
+  }
+
+  const params = new URLSearchParams(normalizedValue)
+  const entries = [...params.entries()]
+  if (entries.length === 0) {
+    return null
+  }
+
+  const result: JsonObject = {}
+  for (const [key, entry] of entries) {
+    const currentValue = result[key]
+
+    if (currentValue === undefined) {
+      result[key] = entry
+      continue
+    }
+
+    if (Array.isArray(currentValue)) {
+      currentValue.push(entry)
+      continue
+    }
+
+    result[key] = [currentValue, entry]
+  }
+
+  return result
+}
+
+function inferArtifactSource(artifactName: string | null | undefined, fallback: string) {
+  if (!artifactName) {
+    return fallback
+  }
+
+  if (artifactName.includes('header')) {
+    return fallback === 'body' ? 'headers' : `headers.${fallback}`
+  }
+
+  if (artifactName.includes('query')) {
+    return 'query'
+  }
+
+  return fallback
+}
+
+function collectNestedDecodedViews(value: unknown, source: string) {
+  const nestedViews: NestedArtifactView[] = []
+  appendNestedDecodedViews(value, source, nestedViews)
+  return nestedViews
+}
+
+function appendNestedDecodedViews(value: unknown, source: string, nestedViews: NestedArtifactView[]) {
+  if (typeof value === 'string') {
+    const decodedValue = decodeNestedString(value)
+    if (!decodedValue) {
+      return
+    }
+
+    nestedViews.push({
+      source,
+      encoding: decodedValue.encoding,
+      value: decodedValue.value
+    })
+
+    appendNestedDecodedViews(decodedValue.value, `decoded(${source})`, nestedViews)
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => {
+      appendNestedDecodedViews(entry, `${source}[${index}]`, nestedViews)
+    })
+    return
+  }
+
+  if (!isRecord(value)) {
+    return
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    appendNestedDecodedViews(entry, `${source}.${key}`, nestedViews)
+  }
+}
+
+function decodeNestedString(value: string) {
+  const candidate = extractEncodedCandidate(value)
+
+  const decodedQuery = decodeUrlQueryValue(candidate)
+  if (decodedQuery) {
+    return decodedQuery
+  }
+
+  if (looksLikeJwt(candidate)) {
+    return {
+      encoding: 'jwt',
+      value: decodeJwt(candidate)
+    }
+  }
+
+  const decodedBase64Url = decodeBase64JsonValue(candidate, 'base64url')
+  if (decodedBase64Url) {
+    return decodedBase64Url
+  }
+
+  return decodeBase64JsonValue(candidate, 'base64')
+}
+
+function extractEncodedCandidate(value: string) {
+  const trimmedValue = value.trim()
+  const bearerMatch = /^(?:bearer|dpop)\s+(.+)$/i.exec(trimmedValue)
+
+  return bearerMatch?.[1]?.trim() ?? trimmedValue
+}
+
+function decodeUrlQueryValue(value: string) {
+  try {
+    const url = new URL(value)
+    const query = url.search.length > 1 ? parseParameterString(url.search) : null
+    if (!query) {
+      return null
+    }
+
+    return {
+      encoding: 'query',
+      value: query
+    }
+  } catch {
+    return null
+  }
+}
+
+function decodeBase64JsonValue(value: string, encoding: 'base64' | 'base64url') {
+  if (!looksLikeBase64Value(value, encoding)) {
+    return null
+  }
+
+  try {
+    const text = Buffer.from(value, encoding).toString('utf8')
+    const parsed = parseJson(text)
+    if (!parsed || (!isRecord(parsed) && !Array.isArray(parsed))) {
+      return null
+    }
+
+    return {
+      encoding,
+      value: parsed
+    }
+  } catch {
+    return null
+  }
+}
+
+function looksLikeBase64Value(value: string, encoding: 'base64' | 'base64url') {
+  const trimmedValue = value.trim()
+  if (trimmedValue.length < 16 || trimmedValue.length % 4 === 1) {
+    return false
+  }
+
+  const pattern = encoding === 'base64url'
+    ? /^[A-Za-z0-9_-]+={0,2}$/
+    : /^[A-Za-z0-9+/]+={0,2}$/
+
+  return pattern.test(trimmedValue)
+}
+
 function normalizeArtifactViewValue(value: unknown) {
   return value === null ? undefined : value
+}
+
+function buildArtifactDecodedView(derivedValue: DerivedArtifactValue | null) {
+  const decodedValue = derivedValue?.decoded ?? derivedValue
+  const nestedDecoded = Array.isArray(derivedValue?.nestedDecoded) ? derivedValue.nestedDecoded : []
+
+  if (nestedDecoded.length === 0) {
+    return decodedValue
+  }
+
+  return {
+    value: decodedValue,
+    nestedDecoded
+  }
 }
 
 function prepareArtifactViewForResponse(value: unknown): unknown {
@@ -1170,7 +1404,7 @@ function extractDecryptedValue(value: unknown) {
 
 async function resolveArtifactDecryptedView(
   artifact: { raw_value: string; name: string },
-  derivedValue: JsonObject | null
+  derivedValue: DerivedArtifactValue | null
 ) {
   const embeddedDecrypted = derivedValue && 'decrypted' in derivedValue ? derivedValue.decrypted : null
   if (embeddedDecrypted !== null && embeddedDecrypted !== undefined && !isDecryptableChallengeEnvelope(embeddedDecrypted)) {
@@ -1185,14 +1419,113 @@ async function resolveArtifactDecryptedView(
       ? parsedRawValue
       : null
 
+  const nestedDecrypted = await collectNestedDecryptedViews(derivedValue, parsedRawValue)
+
   if (!challengeEnvelope) {
-    return embeddedDecrypted
+    if (nestedDecrypted.length === 0) {
+      return embeddedDecrypted
+    }
+
+    return {
+      nestedDecrypted
+    }
   }
 
   const storedChallenge = await queryLoginChallenge(challengeEnvelope.nonce)
 
   if (!storedChallenge) {
-    return embeddedDecrypted
+    if (nestedDecrypted.length === 0) {
+      return embeddedDecrypted
+    }
+
+    return {
+      nestedDecrypted
+    }
+  }
+
+  const decryptedValue = {
+    userId: storedChallenge.user_id,
+    nonce: storedChallenge.nonce,
+    exp: Math.floor(new Date(storedChallenge.expires_at).getTime() / 1000),
+    deviceId: storedChallenge.device_id
+  }
+
+  if (nestedDecrypted.length === 0) {
+    return decryptedValue
+  }
+
+  return {
+    value: decryptedValue,
+    nestedDecrypted
+  }
+}
+
+async function collectNestedDecryptedViews(derivedValue: DerivedArtifactValue | null, parsedRawValue: unknown) {
+  const nestedViews: NestedArtifactView[] = []
+  const seenSources = new Set<string>()
+
+  const decodedSource = typeof derivedValue?.decodedSource === 'string' ? derivedValue.decodedSource : 'decoded'
+  const decodedValue = derivedValue?.decoded
+  if ((decodedSource === 'body' || decodedSource === 'form' || decodedSource === 'query') && decodedValue !== undefined) {
+    await appendNestedDecryptedViews(decodedValue, decodedSource, nestedViews, seenSources, false)
+  } else if (isRecord(parsedRawValue) || Array.isArray(parsedRawValue)) {
+    await appendNestedDecryptedViews(parsedRawValue, 'body', nestedViews, seenSources, false)
+  }
+
+  const nestedDecoded = Array.isArray(derivedValue?.nestedDecoded) ? derivedValue.nestedDecoded : []
+  for (const entry of nestedDecoded) {
+    await appendNestedDecryptedViews(entry.value, `decoded(${entry.source})`, nestedViews, seenSources, true)
+  }
+
+  return nestedViews
+}
+
+async function appendNestedDecryptedViews(
+  value: unknown,
+  source: string,
+  nestedViews: NestedArtifactView[],
+  seenSources: Set<string>,
+  includeSelf: boolean
+) {
+  if (includeSelf && isDecryptableChallengeEnvelope(value)) {
+    const decryptedValue = await resolveChallengeEnvelopeDecryptedValue(value)
+    if (decryptedValue !== null && !seenSources.has(source)) {
+      seenSources.add(source)
+      nestedViews.push({
+        source,
+        value: decryptedValue
+      })
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) {
+      await appendNestedDecryptedViews(entry, `${source}[${index}]`, nestedViews, seenSources, true)
+    }
+    return
+  }
+
+  if (!isRecord(value)) {
+    return
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    await appendNestedDecryptedViews(entry, `${source}.${key}`, nestedViews, seenSources, true)
+  }
+}
+
+async function resolveChallengeEnvelopeDecryptedValue(value: {
+  nonce: string
+  encryptedData?: string
+  encryptedKey?: string
+  iv?: string
+  exp?: number
+  expiresAt?: string
+}) {
+  const storedChallenge = await queryLoginChallenge(value.nonce)
+
+  if (!storedChallenge) {
+    return null
   }
 
   return {
@@ -1247,7 +1580,12 @@ function decodeJwt(token: string) {
 }
 
 function looksLikeJwt(value: string) {
-  return value.split('.').length === 3
+  const segments = value.split('.')
+  if (segments.length !== 3) {
+    return false
+  }
+
+  return segments.every((segment) => segment.length > 0)
 }
 
 function isEncryptedChallenge(value: unknown) {
@@ -1260,13 +1598,29 @@ function isRecord(value: unknown): value is JsonObject {
 
 export async function recordHttpExchange(args: {
   spanId: string
+  requestUrl?: string | null
   requestHeaders?: HeadersInit | Record<string, string> | null
   requestBody?: string | null
+  responseUrl?: string | null
   responseHeaders?: Headers | Record<string, string> | null
   responseBody?: string | null
   requestContentType?: string | null
   responseContentType?: string | null
 }) {
+  const requestUrlQuery = extractUrlQuery(args.requestUrl)
+  if (requestUrlQuery) {
+    await recordArtifact({
+      spanId: args.spanId,
+      artifactType: 'request_query',
+      name: 'request_query',
+      contentType: 'application/x-www-form-urlencoded',
+      encoding: 'query',
+      direction: 'outbound',
+      rawValue: requestUrlQuery,
+      explanation: 'Captured outbound HTTP request query string.'
+    })
+  }
+
   if (args.requestHeaders) {
     await recordArtifact({
       spanId: args.spanId,
@@ -1303,6 +1657,20 @@ export async function recordHttpExchange(args: {
       direction: 'inbound',
       rawValue: JSON.stringify(normalizeHeaders(args.responseHeaders), null, 2),
       explanation: 'Captured inbound HTTP response headers.'
+    })
+  }
+
+  const responseUrlQuery = extractUrlQuery(args.responseUrl)
+  if (responseUrlQuery) {
+    await recordArtifact({
+      spanId: args.spanId,
+      artifactType: 'response_query',
+      name: 'response_query',
+      contentType: 'application/x-www-form-urlencoded',
+      encoding: 'query',
+      direction: 'inbound',
+      rawValue: responseUrlQuery,
+      explanation: 'Captured inbound HTTP response query string.'
     })
   }
 
@@ -1343,6 +1711,19 @@ function inferEncoding(rawValue: string, contentType?: string | null) {
     return 'form-urlencoded'
   }
   return 'raw'
+}
+
+function extractUrlQuery(requestUrl?: string | null) {
+  if (!requestUrl) {
+    return null
+  }
+
+  try {
+    const url = new URL(requestUrl)
+    return url.search.length > 1 ? url.search.slice(1) : null
+  } catch {
+    return null
+  }
 }
 
 export async function withRequestTrace<T>(args: {

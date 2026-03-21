@@ -128,16 +128,118 @@ function formatTraceStatus(status: TraceListItem['status']) {
   }
 }
 
+type NestedArtifactEntry = {
+  source: string
+  encoding?: string
+  value: unknown
+}
+
+type CompositeArtifactView = {
+  value?: unknown
+  nestedDecoded: NestedArtifactEntry[]
+  nestedDecrypted: NestedArtifactEntry[]
+}
+
 function formatArtifactView(value: unknown, emptyLabel: string) {
   if (value === undefined) {
-    return emptyLabel
+    return <pre>{emptyLabel}</pre>
   }
 
+  const compositeView = parseCompositeArtifactView(value)
+  if (!compositeView) {
+    return <pre>{formatArtifactScalar(value)}</pre>
+  }
+
+  return (
+    <div className="artifact-view-stack">
+      {compositeView.value !== undefined && (
+        <section className="artifact-nested-panel">
+          <div className="artifact-nested-header">
+            <strong>Hauptansicht</strong>
+          </div>
+          <pre>{formatArtifactScalar(compositeView.value)}</pre>
+        </section>
+      )}
+      {renderNestedArtifactEntries('Verschachtelt decodiert', compositeView.nestedDecoded)}
+      {renderNestedArtifactEntries('Verschachtelt entschluesselt', compositeView.nestedDecrypted)}
+    </div>
+  )
+}
+
+function formatArtifactScalar(value: unknown) {
   if (typeof value === 'string') {
     return value
   }
 
   return JSON.stringify(value, null, 2)
+}
+
+function renderNestedArtifactEntries(title: string, entries: NestedArtifactEntry[]) {
+  if (entries.length === 0) {
+    return null
+  }
+
+  return (
+    <section className="artifact-nested-group">
+      <div className="artifact-nested-header">
+        <strong>{title}</strong>
+        <span>{entries.length} Fundstellen</span>
+      </div>
+      <div className="artifact-nested-list">
+        {entries.map((entry) => (
+          <article key={`${title}-${entry.source}-${entry.encoding ?? 'raw'}`} className="artifact-nested-panel">
+            <div className="artifact-nested-header">
+              <strong>{entry.source}</strong>
+              {entry.encoding && <span className="trace-chip">{entry.encoding}</span>}
+            </div>
+            <pre>{formatArtifactScalar(entry.value)}</pre>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function parseCompositeArtifactView(value: unknown): CompositeArtifactView | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const nestedDecoded = parseNestedArtifactEntries(value.nestedDecoded)
+  const nestedDecrypted = parseNestedArtifactEntries(value.nestedDecrypted)
+  const hasCompositeShape = 'value' in value || nestedDecoded.length > 0 || nestedDecrypted.length > 0
+
+  if (!hasCompositeShape) {
+    return null
+  }
+
+  return {
+    value: value.value,
+    nestedDecoded,
+    nestedDecrypted
+  }
+}
+
+function parseNestedArtifactEntries(value: unknown) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.source !== 'string') {
+      return []
+    }
+
+    return [{
+      source: entry.source,
+      encoding: typeof entry.encoding === 'string' ? entry.encoding : undefined,
+      value: entry.value
+    }]
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 function isChallengeEnvelope(value: unknown) {
@@ -632,11 +734,11 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                   </div>
                   <div className="artifact-block">
                     <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Decodiertes Transport-Envelope' : 'Decodiert'}</span>
-                    <pre>{formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfügbar.')}</pre>
+                    {formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfügbar.')}
                   </div>
                   <div className="artifact-block">
                     <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Entschlüsselte Payload' : 'Entschlüsselt'}</span>
-                    <pre>{formatArtifactView(selectedArtifact.views.decrypted, 'Kein entschlüsselter Klartext verfügbar.')}</pre>
+                    {formatArtifactView(selectedArtifact.views.decrypted, 'Kein entschlüsselter Klartext verfügbar.')}
                   </div>
                   <div className="artifact-block">
                     <span>Erläutert</span>

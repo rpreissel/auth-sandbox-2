@@ -512,6 +512,22 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(artifactViewer).toContainText('Erläutert')
   await expect(artifactViewer).toContainText('Subject')
   await expect(artifactViewer).toContainText('Audience')
+
+  await timeline.getByRole('button', { name: /keycloak POST \/realms\/auth-sandbox-2\/protocol\/openid-connect\/token/i }).first().click()
+  await expect(artifactList).toContainText('request_body')
+
+  await artifactList.getByRole('button', { name: /^request_body/i }).click()
+  await expect(artifactViewer).toContainText('form.login_token')
+  await expect(artifactViewer).toContainText(userId)
+
+  await artifactList.getByRole('button', { name: /^request_headers/i }).click()
+  await expect(artifactViewer).toContainText('headers.x-trace-id')
+
+  await artifactList.getByRole('button', { name: /^response_body/i }).click()
+  await expect(artifactViewer).toContainText('body.access_token')
+
+  await artifactList.getByRole('button', { name: /^response_headers/i }).click()
+  await expect(artifactViewer).toContainText('headers.content-type')
 })
 
 test('generic registration and step-up flow APIs support service selection, concrete service lifecycle, finalize, and redeem', async ({ request }) => {

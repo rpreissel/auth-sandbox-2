@@ -77,8 +77,10 @@ async function performObservedRequest<T>(input: string, init?: RequestInit) {
 
       await recordHttpExchange({
         spanId,
+        requestUrl: input,
         requestHeaders,
         requestBody: bodyText,
+        responseUrl: response.url,
         responseHeaders: response.headers,
         responseBody: responseText,
         requestContentType: requestHeaders.get('content-type'),

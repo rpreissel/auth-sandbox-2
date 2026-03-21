@@ -346,6 +346,34 @@ button {
   gap: 0.45rem;
 }
 
+.artifact-view-stack,
+.artifact-nested-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.artifact-nested-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.artifact-nested-panel {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.artifact-nested-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: rgba(14, 34, 52, 0.74);
+ }
+
+.artifact-nested-header strong {
+  color: #0e2234;
+}
+
 .artifact-block > span {
   text-transform: uppercase;
   letter-spacing: 0.08em;
