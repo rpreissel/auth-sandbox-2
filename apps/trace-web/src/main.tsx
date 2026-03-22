@@ -247,8 +247,14 @@ function hasDistinctDecodedView(rawView: string, decodedView: unknown) {
     return false
   }
 
+  const parsedRawView = parseJsonString(rawView)
+
   const compositeView = parseCompositeArtifactView(decodedView)
   if (!compositeView) {
+    if (parsedRawView !== null) {
+      return !isStructurallyEqual(parsedRawView, decodedView)
+    }
+
     return formatArtifactScalar(decodedView) !== rawView
   }
 
@@ -260,7 +266,42 @@ function hasDistinctDecodedView(rawView: string, decodedView: unknown) {
     return false
   }
 
+  if (parsedRawView !== null) {
+    return !isStructurallyEqual(parsedRawView, compositeView.value)
+  }
+
   return formatArtifactScalar(compositeView.value) !== rawView
+}
+
+function parseJsonString(value: string) {
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return null
+  }
+}
+
+function isStructurallyEqual(left: unknown, right: unknown): boolean {
+  if (left === right) {
+    return true
+  }
+
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((entry, index) => isStructurallyEqual(entry, right[index]))
+  }
+
+  if (!isRecord(left) || !isRecord(right)) {
+    return false
+  }
+
+  const leftKeys = Object.keys(left).sort()
+  const rightKeys = Object.keys(right).sort()
+
+  if (leftKeys.length !== rightKeys.length) {
+    return false
+  }
+
+  return leftKeys.every((key, index) => key === rightKeys[index] && isStructurallyEqual(left[key], right[key]))
 }
 
 function summarizeSpan(span: TraceDetailResponse['spans'][number]) {
