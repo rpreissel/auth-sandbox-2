@@ -242,18 +242,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isChallengeEnvelope(value: unknown) {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    'encryptedData' in value &&
-    'encryptedKey' in value &&
-    'iv' in value
-  )
-}
+function hasDistinctDecodedView(rawView: string, decodedView: unknown) {
+  if (decodedView === undefined) {
+    return false
+  }
 
-function isEncryptedChallengeArtifact(artifact: ArtifactDetailResponse) {
-  return artifact.artifact.name === 'encrypted_challenge' || isChallengeEnvelope(artifact.views.decoded)
+  const compositeView = parseCompositeArtifactView(decodedView)
+  if (!compositeView) {
+    return formatArtifactScalar(decodedView) !== rawView
+  }
+
+  if (compositeView.nestedDecoded.length > 0 || compositeView.nestedDecrypted.length > 0) {
+    return true
+  }
+
+  if (compositeView.value === undefined) {
+    return false
+  }
+
+  return formatArtifactScalar(compositeView.value) !== rawView
 }
 
 function summarizeSpan(span: TraceDetailResponse['spans'][number]) {
@@ -721,23 +728,20 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
               </div>
               {selectedArtifact && (
                 <section className="artifact-viewer" aria-label="Artifact viewer">
-                  {isEncryptedChallengeArtifact(selectedArtifact) && (
-                    <p className="section-copy">
-                      Rohdaten und Decodiert zeigen das Transport-Envelope, das an den Client zurückgeht. Entschlüsselt zeigt die rekonstruierte Challenge im Klartext.
-                    </p>
-                  )}
                   <h3>{selectedArtifact.artifact.name}</h3>
                   <p>{selectedArtifact.artifact.explanation}</p>
                   <div className="artifact-block">
-                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Rohes Transport-Envelope' : 'Rohdaten'}</span>
+                    <span>Rohdaten</span>
                     <pre>{selectedArtifact.views.raw}</pre>
                   </div>
+                  {hasDistinctDecodedView(selectedArtifact.views.raw, selectedArtifact.views.decoded) && (
+                    <div className="artifact-block">
+                      <span>Decodiert</span>
+                      {formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfügbar.')}
+                    </div>
+                  )}
                   <div className="artifact-block">
-                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Decodiertes Transport-Envelope' : 'Decodiert'}</span>
-                    {formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfügbar.')}
-                  </div>
-                  <div className="artifact-block">
-                    <span>{isEncryptedChallengeArtifact(selectedArtifact) ? 'Entschlüsselte Payload' : 'Entschlüsselt'}</span>
+                    <span>Entschlüsselt</span>
                     {formatArtifactView(selectedArtifact.views.decrypted, 'Kein entschlüsselter Klartext verfügbar.')}
                   </div>
                   <div className="artifact-block">

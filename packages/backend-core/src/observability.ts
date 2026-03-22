@@ -1743,6 +1743,7 @@ export async function withRequestTrace<T>(args: {
   route?: string | null
   body?: unknown
   headers?: Record<string, string>
+  getResponseHeaders?: () => Record<string, string>
 }, fn: (spanId: string) => Promise<T>) {
   const trace = await ensureTrace({
     traceId: args.traceId,
@@ -1810,6 +1811,20 @@ export async function withRequestTrace<T>(args: {
   return withTraceContext(context, async () => {
     try {
       const result = await fn(lifecycle.spanId)
+      const responseHeaders = args.getResponseHeaders?.() ?? null
+      if (responseHeaders) {
+        await recordArtifact({
+          spanId: lifecycle.spanId,
+          artifactType: 'response_headers',
+          name: 'outgoing_response_headers',
+          contentType: 'application/json',
+          encoding: 'json',
+          direction: 'outbound',
+          rawValue: JSON.stringify(responseHeaders, null, 2),
+          explanation: 'HTTP response headers returned by auth-api.'
+        })
+      }
+
       const responseRawValue = result === undefined ? 'null' : JSON.stringify(result, null, 2)
       await recordArtifact({
         spanId: lifecycle.spanId,

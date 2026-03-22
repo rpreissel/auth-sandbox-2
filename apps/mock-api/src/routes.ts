@@ -88,7 +88,11 @@ async function tracedRoute<T>(args: {
       url: args.request.url,
       route: args.request.routeOptions.url,
       body: args.body,
-      headers: Object.fromEntries(Object.entries(args.request.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)]))
+      headers: Object.fromEntries(Object.entries(args.request.headers).map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)])),
+      getResponseHeaders: () => Object.fromEntries(
+        Object.entries(args.reply.getHeaders())
+          .map(([key, value]) => [key, Array.isArray(value) ? value.join(',') : String(value)])
+      )
     },
     args.run
   )
