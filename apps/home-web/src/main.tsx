@@ -10,85 +10,264 @@ type SequenceStep = {
   detail: string
 }
 
-const registrationActors = ['Admin Web', 'Auth API', 'Postgres', 'Keycloak', 'App Web']
+type SequenceDiagramDefinition = {
+  title: string
+  summary: string
+  actors: string[]
+  steps: SequenceStep[]
+}
 
-const registrationSteps: SequenceStep[] = [
+const sequenceDiagrams: SequenceDiagramDefinition[] = [
   {
-    from: 'Admin Web',
-    to: 'Auth API',
-    label: 'Create registration code',
-    detail: 'Admin enters a userId and asks the backend for an activation code.'
+    title: 'Admin provisioning and registration identity',
+    summary: 'Admin Web prepares the reusable person, code, and phone records before a device starts enrollment.',
+    actors: ['Admin Web', 'Auth API', 'Keycloak', 'Postgres'],
+    steps: [
+      {
+        from: 'Admin Web',
+        to: 'Auth API',
+        label: 'Create registration identity',
+        detail: 'Admin submits userId, person data, optional activation code, and optional phone number.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Ensure Keycloak user exists',
+        detail: 'The backend keeps the Keycloak username equal to userId and creates the user only when needed.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Postgres',
+        label: 'Upsert person, code, and SMS records',
+        detail: 'Registration identities are stored as reusable records that later flows can verify against.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Admin Web',
+        label: 'Return prepared identity',
+        detail: 'Admin can review the created registration inputs and use them for later device enrollment.'
+      }
+    ]
   },
   {
-    from: 'Auth API',
-    to: 'Keycloak',
-    label: 'Ensure Keycloak user exists',
-    detail: 'The backend keeps username equal to userId and creates the user when needed.'
+    title: 'Device registration and password bootstrap',
+    summary: 'App Web runs the registration flow, stores the custom device credential, and triggers backend password setup when the user still has none.',
+    actors: ['App Web', 'Auth API', 'Postgres', 'Keycloak'],
+    steps: [
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Start registration flow with device material',
+        detail: 'The app sends userId, device name, and the public signing key so auth-api can create a registration flow.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Postgres',
+        label: 'Create flow and available services',
+        detail: 'The backend persists the registration flow state and exposes code or SMS-TAN verification options.'
+      },
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Complete code or SMS verification',
+        detail: 'The user finishes the selected registration service and proves control over the prepared identity.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Create device credential',
+        detail: 'Auth-api creates the custom device credential in Keycloak while keeping the credential concept intact.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Postgres',
+        label: 'Persist device and password status',
+        detail: 'Device metadata, public-key hashes, and the password-setup-required flag are stored in the auth database.'
+      },
+      {
+        from: 'Auth API',
+        to: 'App Web',
+        label: 'Return registration result',
+        detail: 'The app learns whether it can continue directly or must ask the backend to set an initial password.'
+      },
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Submit initial password when required',
+        detail: 'If the user has no password yet, the app submits one through the backend instead of using Keycloak required actions.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Set password via Admin API',
+        detail: 'The backend resets the Keycloak password directly and then the saved device binding is ready for automatic login.'
+      }
+    ]
   },
   {
-    from: 'Auth API',
-    to: 'Postgres',
-    label: 'Store code metadata',
-    detail: 'The activation code, expiry, and usage counters are persisted for later device registration.'
+    title: 'Encrypted device login and protected API use',
+    summary: 'A saved device turns the encrypted challenge into OIDC tokens and immediately uses them against the protected mock API.',
+    actors: ['App Web', 'Auth API', 'Postgres', 'Keycloak', 'Mock API'],
+    steps: [
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Request encrypted challenge',
+        detail: 'The app starts login by sending the stored public-key hash from the saved device binding.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Postgres',
+        label: 'Load device and persist nonce',
+        detail: 'Auth-api looks up the device, creates a short-lived encrypted challenge, and stores the nonce for verification.'
+      },
+      {
+        from: 'Auth API',
+        to: 'App Web',
+        label: 'Return encrypted payload',
+        detail: 'Only the registered device key can sign the payload that comes back to the browser.'
+      },
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Submit signature over challenge',
+        detail: 'The browser signs the encrypted data locally and sends the signature back without exporting the private key.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Exchange custom device-login grant',
+        detail: 'After signature validation, auth-api exchanges the verified login with Keycloak for access, ID, and refresh tokens.'
+      },
+      {
+        from: 'Auth API',
+        to: 'App Web',
+        label: 'Return token bundle',
+        detail: 'The app receives the full token set plus decoded claims for inspection in the UI.'
+      },
+      {
+        from: 'App Web',
+        to: 'Mock API',
+        label: 'Call protected endpoint',
+        detail: 'The access token is used immediately against the demo API to prove the issued session is usable.'
+      },
+      {
+        from: 'Mock API',
+        to: 'Keycloak',
+        label: 'Validate JWT through JWKS',
+        detail: 'Mock-api verifies the token signature and audience before returning the protected response.'
+      }
+    ]
   },
   {
-    from: 'App Web',
-    to: 'Auth API',
-    label: 'Register device with code + key',
-    detail: 'The app submits userId, device name, activation code, and the public signing key.'
+    title: 'Refresh and logout lifecycle',
+    summary: 'The device session stays renewable through Keycloak refresh tokens and can be revoked again through the logout endpoint.',
+    actors: ['App Web', 'Auth API', 'Keycloak'],
+    steps: [
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Refresh token bundle',
+        detail: 'The app sends the current refresh token when the demo session should continue without a new device signature.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Redeem refresh token',
+        detail: 'Auth-api exchanges the refresh token at the Keycloak token endpoint and receives a renewed session bundle.'
+      },
+      {
+        from: 'Auth API',
+        to: 'App Web',
+        label: 'Return rotated tokens',
+        detail: 'The app updates its token wallet, decoded claims, and downstream API state with the fresh credentials.'
+      },
+      {
+        from: 'App Web',
+        to: 'Auth API',
+        label: 'Request logout',
+        detail: 'The demo ends the current device session by sending the remaining refresh token to auth-api.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Revoke session at logout endpoint',
+        detail: 'The backend calls the Keycloak logout endpoint so the refresh token and server-side session are invalidated.'
+      },
+      {
+        from: 'Auth API',
+        to: 'App Web',
+        label: 'Confirm local session clear',
+        detail: 'The UI drops its local tokens but keeps the device binding so a new encrypted login can start again later.'
+      }
+    ]
   },
   {
-    from: 'Auth API',
-    to: 'Keycloak',
-    label: 'Create device credential',
-    detail: 'The backend stores the custom credential in Keycloak and checks whether a password already exists.'
-  },
-  {
-    from: 'Auth API',
-    to: 'Postgres',
-    label: 'Persist device record',
-    detail: 'Device metadata, key hashes, and encrypted challenge material are stored in the auth database.'
-  }
-]
-
-const loginActors = ['App Web', 'Auth API', 'Postgres', 'Keycloak']
-
-const loginSteps: SequenceStep[] = [
-  {
-    from: 'App Web',
-    to: 'Auth API',
-    label: 'Request encrypted challenge',
-    detail: 'The app starts login by sending the stored public-key hash.'
-  },
-  {
-    from: 'Auth API',
-    to: 'Postgres',
-    label: 'Load device and save challenge',
-    detail: 'The backend finds the device, creates a short-lived encrypted challenge, and persists the nonce.'
-  },
-  {
-    from: 'Auth API',
-    to: 'App Web',
-    label: 'Return encrypted payload',
-    detail: 'The app receives encrypted data that only the registered device key can sign.'
-  },
-  {
-    from: 'App Web',
-    to: 'Auth API',
-    label: 'Submit signed challenge',
-    detail: 'The browser signs the encrypted payload locally and sends the signature back to the backend.'
-  },
-  {
-    from: 'Auth API',
-    to: 'Keycloak',
-    label: 'Exchange login token for OIDC tokens',
-    detail: 'The backend turns the verified device login into Keycloak access, ID, and refresh tokens.'
-  },
-  {
-    from: 'Keycloak',
-    to: 'App Web',
-    label: 'Use tokens, refresh, and logout',
-    detail: 'The app shows token claims, can refresh the session, and can revoke it again via logout.'
+    title: 'Browser login and inline 2se step-up',
+    summary: 'Mock Web starts at 1se, then Keycloak upgrades the browser session through the inline SMS-TAN backchannel flow.',
+    actors: ['Mock Web', 'Keycloak', 'KC Extension', 'Auth API', 'Postgres'],
+    steps: [
+      {
+        from: 'Mock Web',
+        to: 'Keycloak',
+        label: 'Sign in with acr_values=1se',
+        detail: 'The browser login begins at the weaker level and returns a normal Keycloak browser session.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'Mock Web',
+        label: 'Return 1se session and tokens',
+        detail: 'Mock Web can inspect the current acr and shows that stronger endpoints still require a step-up.'
+      },
+      {
+        from: 'Mock Web',
+        to: 'Keycloak',
+        label: 'Start fresh auth with acr_values=2se',
+        detail: 'The browser explicitly asks for a stronger assurance level instead of using a public shortcut endpoint.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'KC Extension',
+        label: 'Enter inline browser step-up branch',
+        detail: 'LoA conditions route the request into the custom Keycloak extension that drives the backchannel flow.'
+      },
+      {
+        from: 'KC Extension',
+        to: 'Auth API',
+        label: 'Start internal browser step-up',
+        detail: 'The extension calls auth-api with its internal service-account bearer to create the SMS-TAN challenge.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Postgres',
+        label: 'Create flow, challenge, and result code',
+        detail: 'Auth-api stores the step-up flow state and the SMS challenge artifacts that Keycloak will display inline.'
+      },
+      {
+        from: 'Auth API',
+        to: 'KC Extension',
+        label: 'Return masked target and demo TAN',
+        detail: 'The extension gets the inline challenge payload and renders the SMS-TAN form directly inside Keycloak.'
+      },
+      {
+        from: 'Mock Web',
+        to: 'Keycloak',
+        label: 'Submit SMS-TAN in Keycloak form',
+        detail: 'The user completes the stronger factor without leaving the Keycloak browser flow.'
+      },
+      {
+        from: 'KC Extension',
+        to: 'Auth API',
+        label: 'Complete and redeem step-up result',
+        detail: 'The extension finalizes the flow and redeems the result code so Keycloak receives the upgraded assurance context.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'Mock Web',
+        label: 'Return upgraded 2se session',
+        detail: 'The browser session and tokens now satisfy the stronger endpoint requirements.'
+      }
+    ]
   }
 ]
 
@@ -139,26 +318,26 @@ function HomeApp() {
       <section className="panel">
         <h2>Sequence diagrams</h2>
         <p className="panel-copy">
-          The sandbox has two important sequences: provisioning a device and then turning that device into a Keycloak session.
+          The homepage now maps the full sandbox journey: admin provisioning, device enrollment, backend-driven password setup,
+          encrypted login, token lifecycle, and browser 2se step-up.
         </p>
         <div className="sequence-stack">
-          <SequenceDiagram
-            title="Registration and device setup"
-            actors={registrationActors}
-            steps={registrationSteps}
-          />
-          <SequenceDiagram
-            title="Encrypted login and token lifecycle"
-            actors={loginActors}
-            steps={loginSteps}
-          />
+          {sequenceDiagrams.map((diagram) => (
+            <SequenceDiagram
+              key={diagram.title}
+              title={diagram.title}
+              summary={diagram.summary}
+              actors={diagram.actors}
+              steps={diagram.steps}
+            />
+          ))}
         </div>
       </section>
     </main>
   )
 }
 
-function SequenceDiagram(props: { title: string; actors: string[]; steps: SequenceStep[] }) {
+function SequenceDiagram(props: { title: string; summary: string; actors: string[]; steps: SequenceStep[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const diagramId = useId().replace(/:/g, '-')
   const definition = useMemo(() => buildSequenceDefinition(props.actors, props.steps), [props.actors, props.steps])
@@ -196,6 +375,7 @@ function SequenceDiagram(props: { title: string; actors: string[]; steps: Sequen
     <article className="sequence-card">
       <header>
         <h3>{props.title}</h3>
+        <p className="sequence-summary">{props.summary}</p>
         <div className="sequence-actors" aria-label={`${props.title} actors`}>
           {props.actors.map((actor) => (
             <span key={actor}>{actor}</span>

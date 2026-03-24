@@ -246,8 +246,16 @@ test('homepage contains key links', async ({ page }) => {
   await expect(page.getByText('auth_sandbox_2')).toBeVisible()
   await expect(page.getByText('auth_api, keycloak')).toBeVisible()
   await expect(page.getByRole('heading', { name: /sequence diagrams/i })).toBeVisible()
-  await expect(page.getByText('Registration and device setup')).toBeVisible()
-  await expect(page.getByText('Encrypted login and token lifecycle')).toBeVisible()
+  await expect(page.getByText('Admin provisioning and registration identity')).toBeVisible()
+  await expect(page.getByText('Device registration and password bootstrap')).toBeVisible()
+  await expect(page.getByText('Encrypted device login and protected API use')).toBeVisible()
+  await expect(page.getByText('Refresh and logout lifecycle')).toBeVisible()
+  await expect(page.getByText('Browser login and inline 2se step-up')).toBeVisible()
+  const passwordBootstrapCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Device registration and password bootstrap' }) })
+  await expect(passwordBootstrapCard).toContainText(/backend password setup/i)
+  await expect(page.getByLabel('Browser login and inline 2se step-up actors')).toContainText('KC Extension')
+  await expect(page.getByLabel('Device registration and password bootstrap mermaid sequence diagram')).toBeVisible()
+  await expect(page.getByLabel('Refresh and logout lifecycle mermaid sequence diagram')).toBeVisible()
 })
 
 test('mock web homepage serves the browser step-up app shell', async ({ page }) => {
