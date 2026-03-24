@@ -489,23 +489,22 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(timeline).toContainText('web-client')
   await expect(timeline.getByText(/\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
 
-  const artifactList = page.getByRole('list', { name: 'Artifact list' })
   await timeline.getByRole('button', { name: /auth-api start_login/i }).click()
-  await expect(artifactList).toContainText('encrypted_challenge')
-  await artifactList.getByRole('button', { name: /encrypted_challenge/i }).click()
+  const artifactTabs = page.getByRole('tablist', { name: 'Artifact quick access' })
+  await expect(artifactTabs).toContainText('encrypted_challenge')
+  await artifactTabs.getByRole('tab', { name: /encrypted_challenge/i }).click()
 
   const artifactViewer = page.getByLabel('Artifact viewer')
   await expect(artifactViewer).toBeVisible({ timeout: 10000 })
-  const challengeArtifactBlocks = artifactViewer.locator('.artifact-block')
-  await expect(challengeArtifactBlocks).toHaveCount(4)
-  await expect(challengeArtifactBlocks.nth(0)).toContainText(/"exp": "\d{10} \/\* .* UTC \*\/"/)
-  await expect(challengeArtifactBlocks.nth(1)).toContainText(/"exp": "\d{10} \/\* .* UTC \*\/"/)
-  await expect(challengeArtifactBlocks.nth(2)).toContainText(/"exp": "\d{10} \/\* .* UTC \*\/"/)
+  await expect(artifactViewer).toContainText('Rohdaten')
+  await expect(artifactViewer).toContainText('Entschluesselt')
+  await expect(artifactViewer).toContainText('UTC */')
+  await expect(artifactViewer.locator('textarea').first()).toBeVisible()
 
   await timeline.getByRole('button', { name: /keycloak/i }).first().click()
 
-  await expect(artifactList).toContainText('id_token')
-  await artifactList.getByRole('button', { name: /id_token/i }).click()
+  await expect(artifactTabs).toContainText('id_token')
+  await artifactTabs.getByRole('tab', { name: /id_token/i }).click()
 
   await expect(artifactViewer).toBeVisible({ timeout: 10000 })
   await expect(artifactViewer).toContainText('Decodiert')
@@ -514,19 +513,21 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(artifactViewer).toContainText('Audience')
 
   await timeline.getByRole('button', { name: /keycloak POST \/realms\/auth-sandbox-2\/protocol\/openid-connect\/token/i }).first().click()
-  await expect(artifactList).toContainText('request_body')
+  await expect(artifactTabs).toContainText('request_body')
 
-  await artifactList.getByRole('button', { name: /^request_body/i }).click()
+  await artifactTabs.getByRole('tab', { name: /^request_body/i }).click()
   await expect(artifactViewer).toContainText('form.login_token')
   await expect(artifactViewer).toContainText(userId)
 
-  await artifactList.getByRole('button', { name: /^request_headers/i }).click()
+  await artifactTabs.getByRole('tab', { name: /^request_headers/i }).click()
   await expect(artifactViewer).toContainText('headers.x-trace-id')
 
-  await artifactList.getByRole('button', { name: /^response_body/i }).click()
+  await artifactTabs.getByRole('tab', { name: /^response_body/i }).click()
   await expect(artifactViewer).toContainText('body.access_token')
+  await expect(artifactViewer.locator('textarea').first()).toBeVisible()
+  await expect(artifactViewer).toContainText('Verschachtelt decodiert: body.access_token')
 
-  await artifactList.getByRole('button', { name: /^response_headers/i }).click()
+  await artifactTabs.getByRole('tab', { name: /^response_headers/i }).click()
   await expect(artifactViewer).toContainText('headers.content-type')
 })
 

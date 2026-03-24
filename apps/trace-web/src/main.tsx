@@ -140,30 +140,15 @@ type CompositeArtifactView = {
   nestedDecrypted: NestedArtifactEntry[]
 }
 
-function formatArtifactView(value: unknown, emptyLabel: string) {
-  if (value === undefined) {
-    return <pre>{emptyLabel}</pre>
-  }
+type ArtifactSection = {
+  id: string
+  title: string
+  text: string
+  rows: number
+}
 
-  const compositeView = parseCompositeArtifactView(value)
-  if (!compositeView) {
-    return <pre>{formatArtifactScalar(value)}</pre>
-  }
-
-  return (
-    <div className="artifact-view-stack">
-      {compositeView.value !== undefined && (
-        <section className="artifact-nested-panel">
-          <div className="artifact-nested-header">
-            <strong>Hauptansicht</strong>
-          </div>
-          <pre>{formatArtifactScalar(compositeView.value)}</pre>
-        </section>
-      )}
-      {renderNestedArtifactEntries('Verschachtelt decodiert', compositeView.nestedDecoded)}
-      {renderNestedArtifactEntries('Verschachtelt entschluesselt', compositeView.nestedDecrypted)}
-    </div>
-  )
+type ArtifactSectionsProps = {
+  sections: ArtifactSection[]
 }
 
 function formatArtifactScalar(value: unknown) {
@@ -174,29 +159,24 @@ function formatArtifactScalar(value: unknown) {
   return JSON.stringify(value, null, 2)
 }
 
-function renderNestedArtifactEntries(title: string, entries: NestedArtifactEntry[]) {
-  if (entries.length === 0) {
-    return null
-  }
+function getValueFieldRows(value: unknown) {
+  const text = formatArtifactScalar(value)
+  const lineCount = text.split('\n').length
+  return Math.min(18, Math.max(4, lineCount))
+}
 
+function ArtifactSections(props: ArtifactSectionsProps) {
   return (
-    <section className="artifact-nested-group">
-      <div className="artifact-nested-header">
-        <strong>{title}</strong>
-        <span>{entries.length} Fundstellen</span>
-      </div>
-      <div className="artifact-nested-list">
-        {entries.map((entry) => (
-          <article key={`${title}-${entry.source}-${entry.encoding ?? 'raw'}`} className="artifact-nested-panel">
-            <div className="artifact-nested-header">
-              <strong>{entry.source}</strong>
-              {entry.encoding && <span className="trace-chip">{entry.encoding}</span>}
-            </div>
-            <pre>{formatArtifactScalar(entry.value)}</pre>
-          </article>
-        ))}
-      </div>
-    </section>
+    <div className="artifact-json-sections">
+      {props.sections.map((section) => (
+        <section key={section.id} className="artifact-json-section">
+          <div className="artifact-json-section-header">
+            <strong>{section.title}</strong>
+          </div>
+          <textarea className="artifact-json-field" readOnly value={section.text} rows={section.rows} />
+        </section>
+      ))}
+    </div>
   )
 }
 
@@ -271,6 +251,63 @@ function hasDistinctDecodedView(rawView: string, decodedView: unknown) {
   }
 
   return formatArtifactScalar(compositeView.value) !== rawView
+}
+
+function createArtifactSections(artifact: ArtifactDetailResponse) {
+  const sections: ArtifactSection[] = [{
+    id: 'raw',
+    title: 'Rohdaten',
+    text: formatArtifactScalar(parseJsonString(artifact.views.raw) ?? artifact.views.raw),
+    rows: getValueFieldRows(parseJsonString(artifact.views.raw) ?? artifact.views.raw)
+  }]
+
+  const decodedComposite = parseCompositeArtifactView(artifact.views.decoded)
+  if (hasDistinctDecodedView(artifact.views.raw, artifact.views.decoded)) {
+    if (decodedComposite) {
+      if (decodedComposite.value !== undefined) {
+        sections.push({
+          id: 'decoded',
+          title: 'Decodiert',
+          text: formatArtifactScalar(decodedComposite.value),
+          rows: getValueFieldRows(decodedComposite.value)
+        })
+      }
+
+      decodedComposite.nestedDecoded.forEach((entry, index) => {
+        sections.push({
+          id: `nested-decoded-${index}`,
+          title: `Verschachtelt decodiert: ${entry.source}`,
+          text: formatArtifactScalar(entry.value),
+          rows: getValueFieldRows(entry.value)
+        })
+      })
+
+      decodedComposite.nestedDecrypted.forEach((entry, index) => {
+        sections.push({
+          id: `nested-decrypted-${index}`,
+          title: `Verschachtelt entschluesselt: ${entry.source}`,
+          text: formatArtifactScalar(entry.value),
+          rows: getValueFieldRows(entry.value)
+        })
+      })
+    } else {
+      sections.push({
+        id: 'decoded',
+        title: 'Decodiert',
+        text: formatArtifactScalar(artifact.views.decoded),
+        rows: getValueFieldRows(artifact.views.decoded)
+      })
+    }
+  }
+
+  sections.push({
+    id: 'decrypted',
+    title: 'Entschluesselt',
+    text: formatArtifactScalar(artifact.views.decrypted ?? 'Kein entschluesselter Klartext verfuegbar.'),
+    rows: getValueFieldRows(artifact.views.decrypted ?? 'Kein entschluesselter Klartext verfuegbar.')
+  })
+
+  return sections
 }
 
 function parseJsonString(value: string) {
@@ -604,6 +641,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
   const [traceDetail, setTraceDetail] = useState<TraceDetailResponse | null>(null)
   const [selectedSpan, setSelectedSpan] = useState<SpanDetailResponse | null>(null)
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactDetailResponse | null>(null)
+  const [artifactLoading, setArtifactLoading] = useState(false)
   const [proxyLogs, setProxyLogs] = useState<ProxyLogRecord[]>([])
   const [traceLoading, setTraceLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -652,12 +690,30 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
   async function handleSelectSpan(spanId: string) {
     const detail = await request<SpanDetailResponse>(`/spans/${spanId}`)
     setSelectedSpan(detail)
-    setSelectedArtifact(null)
+
+    const initialArtifactId = detail.artifacts[0]?.artifactId
+    if (!initialArtifactId) {
+      setSelectedArtifact(null)
+      return
+    }
+
+    setArtifactLoading(true)
+    try {
+      const initialArtifact = await request<ArtifactDetailResponse>(`/artifacts/${initialArtifactId}`)
+      setSelectedArtifact(initialArtifact)
+    } finally {
+      setArtifactLoading(false)
+    }
   }
 
   async function handleSelectArtifact(artifactId: string) {
+    setArtifactLoading(true)
     const detail = await request<ArtifactDetailResponse>(`/artifacts/${artifactId}`)
-    setSelectedArtifact(detail)
+    try {
+      setSelectedArtifact(detail)
+    } finally {
+      setArtifactLoading(false)
+    }
   }
 
   return (
@@ -753,38 +809,27 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
                 </div>
                 {selectedSpan.span.notes && <p className="trace-summary-lead trace-summary-lead-compact">{selectedSpan.span.notes}</p>}
               </div>
-              <div className="artifact-list" role="list" aria-label="Artifact list">
+              <div className="artifact-tab-bar" role="tablist" aria-label="Artifact quick access">
                 {selectedSpan.artifacts.map((artifact) => (
                   <button
                     key={artifact.artifactId}
                     type="button"
-                    className={`trace-list-item artifact-item${selectedArtifact?.artifact.artifactId === artifact.artifactId ? ' is-active' : ''}`}
+                    role="tab"
+                    aria-selected={selectedArtifact?.artifact.artifactId === artifact.artifactId}
+                    className={`artifact-tab${selectedArtifact?.artifact.artifactId === artifact.artifactId ? ' is-active' : ''}`}
                     onClick={() => void handleSelectArtifact(artifact.artifactId)}
                   >
                     <strong>{artifact.name}</strong>
                     <span>{artifact.artifactType}</span>
-                    <span>{artifact.summary ?? 'Öffnen, um Rohdaten und decodierte Ansicht zu prüfen'}</span>
                   </button>
                 ))}
               </div>
-              {selectedArtifact && (
+              {artifactLoading && <p>Artefakt wird geladen...</p>}
+              {selectedArtifact && !artifactLoading && (
                 <section className="artifact-viewer" aria-label="Artifact viewer">
                   <h3>{selectedArtifact.artifact.name}</h3>
                   <p>{selectedArtifact.artifact.explanation}</p>
-                  <div className="artifact-block">
-                    <span>Rohdaten</span>
-                    <pre>{selectedArtifact.views.raw}</pre>
-                  </div>
-                  {hasDistinctDecodedView(selectedArtifact.views.raw, selectedArtifact.views.decoded) && (
-                    <div className="artifact-block">
-                      <span>Decodiert</span>
-                      {formatArtifactView(selectedArtifact.views.decoded, 'Keine decodierte Ansicht verfügbar.')}
-                    </div>
-                  )}
-                  <div className="artifact-block">
-                    <span>Entschlüsselt</span>
-                    {formatArtifactView(selectedArtifact.views.decrypted, 'Kein entschlüsselter Klartext verfügbar.')}
-                  </div>
+                  <ArtifactSections sections={createArtifactSections(selectedArtifact)} />
                   <div className="artifact-block">
                     <span>Erläutert</span>
                     <div className="explanation-list">
