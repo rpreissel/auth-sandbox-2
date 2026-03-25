@@ -22,10 +22,10 @@ Explicitly out of scope:
 ## Stack
 
 - `auth-api` - Node.js + TypeScript + Fastify
-- `app-web` - React + TypeScript device flow UI
+- `appmock-web` - React + TypeScript device flow UI
 - `admin-web` - React + TypeScript admin UI
-- `mock-web` - React + TypeScript browser login and browser step-up demo
-- `mock-api` - Fastify demo REST API protected by Keycloak JWKS and audience validation
+- `webmock-web` - React + TypeScript browser login and browser step-up demo
+- `servicemock-api` - Fastify demo REST API protected by Keycloak JWKS and audience validation
 - `trace-web` - React + TypeScript trace explorer UI
 - `trace-api` - Fastify trace and observability API
 - `home-web` - React + TypeScript landing page
@@ -37,12 +37,12 @@ Explicitly out of scope:
 ## Local URLs
 
 - `https://home.localhost:8443` - landing page
-- `https://app.localhost:8443` - device app
+- `https://appmock.localhost:8443` - device app
 - `https://admin.localhost:8443` - admin app
-- `https://mock.localhost:8443` - browser step-up demo
+- `https://webmock.localhost:8443` - browser step-up demo
 - `https://trace.localhost:8443` - trace viewer
 - `https://auth.localhost:8443/api/health` - auth API health
-- `https://mock.localhost:8443/health` - mock API health
+- `https://webmock.localhost:8443/health` - mock API health
 - `https://trace.localhost:8443/health` - trace API health
 - `https://keycloak.localhost:8443` - Keycloak
 - `https://db.localhost:8443` - Adminer Postgres viewer
@@ -57,7 +57,7 @@ Explicitly out of scope:
 6. Device app requests an encrypted challenge from `auth-api`.
 7. Device app signs the encrypted payload and sends it back.
 8. `auth-api` exchanges the signed challenge at the Keycloak token endpoint with a custom OAuth grant, and Keycloak validates the custom device credential before issuing OIDC tokens.
-9. App uses the access token to call `mock-api`, which verifies the token with Keycloak JWKS and the expected audience.
+9. App uses the access token to call `servicemock-api`, which verifies the token with Keycloak JWKS and the expected audience.
 10. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
 11. App can refresh tokens and log out.
 
@@ -65,14 +65,14 @@ Explicitly out of scope:
 sequenceDiagram
   autonumber
   actor Admin
-  participant Device as app-web
-  participant Browser as mock-web
+  participant Device as appmock-web
+  participant Browser as webmock-web
   participant Caddy
   participant Auth as auth-api
   participant DB
   participant KC as Keycloak
   participant Ext as KC extension
-  participant Mock as mock-api
+  participant Mock as servicemock-api
 
   Admin->>Caddy: Create registration identity
   Caddy->>Auth: Forward with admin proxy token
@@ -190,8 +190,8 @@ flowchart TB
 ## Important paths
 
 - `apps/auth-api` - backend API, DB migrations, Keycloak integration
-- `apps/app-web` - device registration, login, claims, refresh, logout
-- `apps/mock-api` - OIDC/JWKS protected mock REST endpoints for app-web
+- `apps/appmock-web` - device registration, login, claims, refresh, logout
+- `apps/servicemock-api` - OIDC/JWKS protected mock REST endpoints for appmock-web
 - `apps/admin-web` - registration code and device admin UI
 - `apps/home-web` - landing page with links and flow diagram
 - `packages/shared-types` - shared request and response types
@@ -252,8 +252,8 @@ Use the `auth_api` and `keycloak` schemas to inspect app data separately inside 
 ```bash
 pnpm --filter auth-api test
 pnpm --filter auth-api build
-pnpm --filter mock-api build
-pnpm --filter app-web build
+pnpm --filter servicemock-api build
+pnpm --filter appmock-web build
 pnpm --filter admin-web build
 pnpm --filter home-web build
 pnpm --filter @auth-sandbox-2/e2e test

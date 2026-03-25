@@ -25,20 +25,20 @@ apply_config() {
     -var="keycloak_admin_password=${KEYCLOAK_ADMIN_PASSWORD}" \
     -var="realm_name=${KEYCLOAK_REALM}" \
     -var="app_client_secret=${KEYCLOAK_CLIENT_SECRET}" \
-    -var="browser_client_id=${KEYCLOAK_BROWSER_CLIENT_ID:-browser-app}" \
+    -var="browser_client_id=${KEYCLOAK_BROWSER_CLIENT_ID:-webmock-web}" \
     -var="browser_client_secret=${KEYCLOAK_BROWSER_CLIENT_SECRET:-change-me-browser}" \
     -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}" \
     -var="internal_redeem_client_id=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}" \
     -var="internal_redeem_client_secret=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}" \
-    -var="mock_api_audience=${MOCK_API_AUDIENCE:-mock-api}" \
+    -var="servicemock_api_audience=${SERVICEMOCK_API_AUDIENCE:-servicemock-api}" \
     "$@"
 }
 
 while true; do
   if tofu state list -state="${STATE_PATH}" 2>/dev/null | grep -qx 'keycloak_authentication_flow.device_login_flow'; then
-    echo "migrating app-web away from legacy device-login browser flow"
+    echo "migrating appmock-web away from legacy device-login browser flow"
     if ! apply_config -target=keycloak_openid_client.app_web; then
-      echo "targeted app-web migration failed on attempt ${attempt}; retrying in 5 seconds"
+      echo "targeted appmock-web migration failed on attempt ${attempt}; retrying in 5 seconds"
       attempt=$((attempt + 1))
       sleep 5
       continue

@@ -1,0 +1,218 @@
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: #102033;
+  background:
+    radial-gradient(circle at top left, rgba(215, 119, 38, 0.18), transparent 24%),
+    radial-gradient(circle at right center, rgba(39, 122, 107, 0.14), transparent 30%),
+    linear-gradient(180deg, #fff7ef 0%, #eef6f7 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+.shell {
+  width: min(1160px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.hero,
+.card {
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 28px;
+  border: 1px solid rgba(16, 32, 51, 0.1);
+  box-shadow: 0 24px 80px rgba(16, 32, 51, 0.08);
+}
+
+.hero,
+.card {
+  padding: 1.4rem;
+}
+
+.hero h1,
+.card h2,
+.card h3 {
+  margin: 0;
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #b24a1f;
+}
+
+.shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+}
+
+.stack,
+.status-list,
+.token-grid,
+.button-row,
+.stepup-grid,
+.api-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.status-list,
+.token-grid,
+.api-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.status-item,
+.token-item,
+.api-card,
+.tan-card,
+.stepup-card {
+  padding: 1rem;
+  border-radius: 22px;
+  background: rgba(16, 32, 51, 0.04);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.status-item span,
+.token-item span,
+.api-card span,
+.tan-card span {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b24a1f;
+}
+
+.status-item strong,
+.token-item strong,
+.api-card strong,
+.tan-card strong {
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.button-row {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+button,
+.button-link {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 3rem;
+  border-radius: 999px;
+  border: 0;
+  padding: 0.85rem 1.1rem;
+  background: linear-gradient(135deg, #102033 0%, #275b72 100%);
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.secondary,
+.button-link.secondary {
+  background: rgba(16, 32, 51, 0.08);
+  color: #102033;
+  border: 1px solid rgba(16, 32, 51, 0.12);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.card p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.text-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(16, 32, 51, 0.12);
+  background: #fff;
+  padding: 0.8rem 0.9rem;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.message {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(16, 32, 51, 0.1);
+}
+
+.message.info {
+  background: rgba(39, 122, 107, 0.08);
+}
+
+.message.warn {
+  background: rgba(215, 119, 38, 0.12);
+}
+
+.message.error {
+  background: rgba(179, 58, 58, 0.12);
+}
+
+.json-block {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(16, 32, 51, 0.95);
+  color: #f6f9fb;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    width: min(100vw - 1rem, 1160px);
+  }
+
+  .shell-grid {
+    grid-template-columns: 1fr;
+  }
+}

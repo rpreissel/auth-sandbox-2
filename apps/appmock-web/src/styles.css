@@ -1,0 +1,931 @@
+:root {
+  font-family: "IBM Plex Sans", "SF Pro Text", "Segoe UI", sans-serif;
+  color: #102033;
+  background:
+    radial-gradient(circle at top left, rgba(51, 168, 255, 0.2), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(141, 210, 255, 0.22), transparent 28%),
+    linear-gradient(180deg, #d6e6f7 0%, #edf4fb 100%);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.phone-shell {
+  position: relative;
+  width: min(100%, 430px);
+}
+
+.phone-frame {
+  position: relative;
+  padding: 0.85rem;
+  border-radius: 34px;
+  background: linear-gradient(180deg, #232a35 0%, #10161f 100%);
+  box-shadow: 0 30px 72px rgba(10, 19, 28, 0.28);
+}
+
+.phone-frame::before {
+  content: "";
+  position: absolute;
+  top: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2.6rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: rgba(74, 83, 97, 0.96);
+  z-index: 3;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem 0.75rem;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.status-icons {
+  display: flex;
+  gap: 0.28rem;
+}
+
+.status-icons span {
+  width: 0.82rem;
+  height: 0.82rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.app-shell {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 0.95rem;
+  min-height: 82vh;
+  padding: 0.35rem 0.85rem 1.2rem;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.42), transparent 24%),
+    linear-gradient(180deg, #f7fbff 0%, #eef4fb 52%, #e9f0f7 100%);
+}
+
+.card {
+  background: rgba(248, 251, 255, 0.82);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  border-radius: 24px;
+  padding: 1rem;
+  box-shadow: 0 16px 32px rgba(16, 32, 51, 0.07);
+  backdrop-filter: blur(14px);
+}
+
+.hero h1,
+.card h2,
+.card h3,
+.challenge-card strong,
+.binding-stack strong,
+.token-empty h3,
+.prompt-sheet h3 {
+  font-family: "IBM Plex Serif", Georgia, serif;
+}
+
+.hero h1,
+.card h2,
+.card h3,
+.token-empty h3,
+.prompt-sheet h3,
+.challenge-card strong,
+.binding-stack strong {
+  margin: 0;
+}
+
+.hero-card,
+.status-card,
+.flow-card,
+.token-card,
+.session-stack,
+.servicemock-api-shell,
+.binding-stack,
+.challenge-card,
+.token-empty,
+.token-panel,
+.android-intro,
+.token-overview article,
+.status-strip,
+.prompt-helper,
+.prompt-sheet {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.eyebrow,
+.section-label,
+.field-label,
+.claim-summary span,
+.endpoint-summary span,
+.token-hero span,
+.claims-table thead th,
+.prompt-caption {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+
+.eyebrow,
+.section-label,
+.field-label,
+.claim-summary span,
+.endpoint-summary span,
+.token-hero span,
+.claims-table thead th,
+.prompt-caption {
+  color: #0d63c9;
+}
+
+.lede,
+.muted-copy,
+.binding-note,
+.token-empty p,
+.challenge-card p,
+.device-details p,
+.prompt-sheet p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.muted-copy {
+  color: rgba(16, 32, 51, 0.66);
+  font-size: 0.94rem;
+}
+
+.status-strip {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 0.55rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(11, 87, 208, 0.1);
+  color: #0b57d0;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.simple-heading {
+  display: block;
+}
+
+.android-intro {
+  padding: 0.95rem;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(11, 87, 208, 0.08), rgba(81, 145, 255, 0.12));
+  border: 1px solid rgba(11, 87, 208, 0.1);
+}
+
+.binding-stack {
+  padding: 0.95rem;
+  border-radius: 22px;
+  background: rgba(243, 248, 254, 0.92);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.device-summary,
+.token-hero,
+.claim-summary,
+.endpoint-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.device-summary div,
+.token-hero article,
+.claim-summary article,
+.endpoint-summary article {
+  display: grid;
+  gap: 0.28rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(16, 32, 51, 0.06);
+}
+
+.claim-summary article:last-child,
+.endpoint-summary article:last-child {
+  grid-column: 1 / -1;
+}
+
+.binding-notice {
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: rgba(229, 241, 255, 0.9);
+  border: 1px solid rgba(13, 99, 201, 0.12);
+}
+
+.device-details,
+.token-details,
+.token-raw {
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.85rem 0.95rem;
+}
+
+.device-details summary,
+.token-details summary,
+.token-raw summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.device-details p {
+  margin-top: 0.7rem;
+  overflow-wrap: anywhere;
+  color: rgba(16, 32, 51, 0.68);
+}
+
+.grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.grid label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(16, 32, 51, 0.12);
+  background: rgba(255, 255, 255, 0.98);
+  padding: 0.95rem 1rem;
+  color: inherit;
+}
+
+textarea {
+  min-height: 10rem;
+}
+
+button {
+  width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.95rem 1.1rem;
+  background: linear-gradient(135deg, #0b57d0 0%, #2b7bff 100%);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 12px 24px rgba(11, 87, 208, 0.22);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.button-secondary {
+  background: rgba(11, 87, 208, 0.1);
+  color: #0b57d0;
+  box-shadow: none;
+}
+
+.actions,
+.stacked-actions,
+.action-sheet {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.challenge-card {
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(16, 32, 51, 0.07);
+}
+
+.authenticated-card {
+  background: rgba(227, 240, 255, 0.96);
+}
+
+.servicemock-api-card {
+  background: linear-gradient(180deg, rgba(9, 20, 34, 0.82), rgba(14, 30, 48, 0.9));
+  border: 1px solid rgba(126, 200, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.servicemock-api-console-chrome {
+  display: grid;
+  grid-template-columns: repeat(3, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 16px;
+  background: rgba(5, 14, 24, 0.72);
+  border: 1px solid rgba(126, 200, 255, 0.14);
+}
+
+.servicemock-api-console-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 50%;
+  background: #4eb6ff;
+  box-shadow: 0 0 12px rgba(78, 182, 255, 0.42);
+}
+
+.servicemock-api-console-url {
+  margin-left: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(228, 243, 255, 0.76);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.servicemock-api-hero {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.servicemock-api-badge-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.servicemock-api-badge-stack span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(78, 182, 255, 0.1);
+  border: 1px solid rgba(126, 200, 255, 0.14);
+  color: #9fd8ff;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.android-tabs-shell {
+  padding: 0.65rem;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top left, rgba(94, 174, 255, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(223, 234, 247, 0.98), rgba(234, 241, 250, 0.95));
+  border: 1px solid rgba(11, 87, 208, 0.08);
+  box-shadow: 0 14px 28px rgba(16, 32, 51, 0.08);
+}
+
+.android-tabs-header {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.45rem 0.35rem 0.55rem;
+}
+
+.android-tabs-header strong {
+  font-family: "IBM Plex Serif", Georgia, serif;
+  font-size: 1rem;
+}
+
+.android-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  padding: 0.2rem 0.34rem 0.34rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(233, 241, 250, 0.96), rgba(221, 232, 245, 0.92));
+  border: 1px solid rgba(16, 32, 51, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.android-tab {
+  display: grid;
+  justify-items: start;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon label"
+    "icon title"
+    "track track";
+  column-gap: 0.7rem;
+  row-gap: 0.18rem;
+  width: 100%;
+  padding: 0.78rem 0.95rem 0.82rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(243, 248, 253, 0.98), rgba(233, 240, 248, 0.95));
+  color: #22364d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(134, 158, 186, 0.28);
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.android-tab[aria-selected="false"] {
+  background: linear-gradient(180deg, rgba(239, 245, 251, 0.94), rgba(229, 237, 246, 0.9));
+  border-color: rgba(134, 158, 186, 0.24);
+}
+
+.android-tab-active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 249, 255, 0.97));
+  color: #0f2137;
+  box-shadow:
+    0 10px 20px rgba(11, 87, 208, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(11, 87, 208, 0.18);
+}
+
+.android-tab:hover {
+  border-color: rgba(11, 87, 208, 0.18);
+}
+
+.android-tab:focus-visible {
+  outline: none;
+  border-color: rgba(11, 87, 208, 0.38);
+  box-shadow:
+    0 0 0 3px rgba(11, 87, 208, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.android-tab-track {
+  grid-area: track;
+  width: 100%;
+  height: 0.24rem;
+  margin-top: 0.24rem;
+  border-radius: 999px;
+  background: rgba(106, 132, 163, 0.16);
+  overflow: hidden;
+}
+
+.android-tab-indicator {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+  transition: width 160ms ease, background 160ms ease;
+}
+
+.android-tab-active .android-tab-indicator {
+  width: 100%;
+  background: linear-gradient(90deg, #0b57d0 0%, #5f9bff 100%);
+}
+
+.android-tab-icon {
+  grid-area: icon;
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: rgba(11, 87, 208, 0.12);
+  color: #0b57d0;
+  font-size: 0.95rem;
+}
+
+.android-tab-active .android-tab-icon {
+  background: rgba(11, 87, 208, 0.18);
+}
+
+.android-tab-label,
+.android-tab strong {
+  text-align: left;
+}
+
+.android-tab-label {
+  grid-area: label;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5a6d82;
+  position: relative;
+  z-index: 1;
+}
+
+.android-tab strong {
+  grid-area: title;
+  font-size: 0.98rem;
+  line-height: 1.2;
+  color: #102033;
+  position: relative;
+  z-index: 1;
+}
+
+.servicemock-api-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.servicemock-api-summary div,
+.servicemock-api-composer,
+.message-item {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(126, 200, 255, 0.12);
+}
+
+.servicemock-api-status {
+  margin: 0;
+  color: #9fd8ff;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.servicemock-api-actions,
+.servicemock-api-composer {
+  padding: 0.85rem;
+  border-radius: 18px;
+  border: 1px solid rgba(126, 200, 255, 0.1);
+}
+
+.servicemock-api-composer textarea {
+  background: rgba(7, 18, 30, 0.76);
+  border-color: rgba(126, 200, 255, 0.18);
+  color: #eef8ff;
+}
+
+.servicemock-api-composer textarea::placeholder {
+  color: rgba(228, 243, 255, 0.45);
+}
+
+.message-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.message-item {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(126, 200, 255, 0.12);
+}
+
+.message-item p {
+  margin: 0;
+  line-height: 1.5;
+  color: rgba(228, 243, 255, 0.78);
+}
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7ec8ff;
+}
+
+.token-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.token-overview article {
+  padding: 0.9rem;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(235, 243, 255, 0.88));
+  border: 1px solid rgba(11, 87, 208, 0.08);
+}
+
+.token-overview span {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+  color: #0d63c9;
+}
+
+.token-overview strong {
+  font-size: 1rem;
+}
+
+.token-overview p {
+  margin: 0;
+  color: rgba(16, 32, 51, 0.64);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.token-grid,
+.raw-token-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.token-section,
+.token-section-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.token-section {
+  padding: 1rem;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(244, 248, 255, 0.9));
+  border: 1px solid rgba(17, 76, 153, 0.08);
+}
+
+.token-grid-session {
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+}
+
+.session-stack {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.servicemock-api-shell {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(58, 167, 255, 0.2), transparent 30%),
+    linear-gradient(180deg, rgba(12, 26, 44, 0.98), rgba(18, 39, 64, 0.96));
+  border-color: rgba(110, 192, 255, 0.18);
+  box-shadow: 0 20px 44px rgba(5, 15, 28, 0.34);
+}
+
+.servicemock-api-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(110, 192, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(110, 192, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+}
+
+.servicemock-api-shell .section-label,
+.servicemock-api-shell .field-label,
+.servicemock-api-shell .message-meta {
+  color: #7ec8ff;
+}
+
+.servicemock-api-shell h2,
+.servicemock-api-shell strong,
+.servicemock-api-shell .servicemock-api-status,
+.servicemock-api-shell .message-item strong {
+  color: #f4fbff;
+}
+
+.servicemock-api-shell .muted-copy,
+.servicemock-api-shell .message-item p,
+.servicemock-api-shell .servicemock-api-console-url {
+  color: rgba(228, 243, 255, 0.78);
+}
+
+.token-panel {
+  padding: 1rem;
+  border-radius: 22px;
+  background: rgba(249, 250, 252, 0.86);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.claims-table-wrap {
+  border-radius: 18px;
+  border: 1px solid rgba(16, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  overflow: auto;
+}
+
+.claims-table {
+  width: 100%;
+  min-width: 540px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.claims-table th,
+.claims-table td {
+  padding: 0.8rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.claims-table tbody th {
+  width: 28%;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.claims-table-comparison thead th:nth-child(2),
+.claims-table-comparison thead th:nth-child(3) {
+  width: 36%;
+}
+
+.claims-table tbody tr:nth-child(even) {
+  background: rgba(16, 32, 51, 0.025);
+}
+
+.claim-value {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.claim-primary {
+  overflow-wrap: anywhere;
+}
+
+.claim-missing {
+  color: rgba(16, 32, 51, 0.4);
+}
+
+.claim-secondary {
+  color: rgba(16, 32, 51, 0.6);
+  font-size: 0.86rem;
+}
+
+.claim-structured {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 14px;
+  background: rgba(16, 32, 51, 0.04);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+
+.claims-row-compact th,
+.claims-row-compact td {
+  padding-top: 0.68rem;
+  padding-bottom: 0.68rem;
+}
+
+.claims-table tbody tr:last-child th,
+.claims-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.token-raw textarea {
+  margin-top: 0.8rem;
+}
+
+.prompt-backdrop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding: 1.25rem;
+  background: rgba(8, 17, 28, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.prompt-sheet {
+  width: 100%;
+  padding: 1.1rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 22px 48px rgba(16, 32, 51, 0.22);
+}
+
+.prompt-icon {
+  width: 4rem;
+  height: 4rem;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.2rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(11, 87, 208, 0.12), rgba(43, 123, 255, 0.2));
+  color: #0b57d0;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.prompt-helper {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  padding: 0.85rem 0.9rem;
+  border-radius: 18px;
+  background: rgba(11, 87, 208, 0.06);
+}
+
+.prompt-helper-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  margin-top: 0.35rem;
+  border-radius: 50%;
+  background: #0b57d0;
+}
+
+@media (min-width: 960px) {
+  .phone-shell {
+    width: min(100%, 1180px);
+  }
+
+  .phone-frame {
+    padding: 0.85rem;
+  }
+
+  .app-shell {
+    grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .hero-card,
+  .status-card,
+  .flow-card {
+    grid-column: 1;
+  }
+
+  .session-stack {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+  }
+
+  .stacked-actions,
+  .raw-token-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .token-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .android-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .claim-summary article:last-child {
+    grid-column: auto;
+  }
+
+  .prompt-backdrop {
+    place-items: center;
+  }
+
+  .prompt-sheet {
+    max-width: 360px;
+  }
+}
+
+@media (max-width: 420px) {
+  .shell {
+    padding: 0.5rem;
+  }
+
+  .phone-frame {
+    border-radius: 34px;
+    padding: 0.7rem;
+  }
+
+  .app-shell {
+    border-radius: 28px;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .device-summary,
+  .token-hero,
+  .claim-summary,
+  .endpoint-summary,
+  .token-overview,
+  .status-strip,
+  .android-tabs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .claims-table {
+    min-width: 500px;
+  }
+}

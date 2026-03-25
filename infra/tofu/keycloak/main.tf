@@ -98,10 +98,10 @@ resource "keycloak_openid_client_scope" "profile_scope" {
   include_in_token_scope = true
 }
 
-resource "keycloak_openid_client_scope" "mock_api_scope" {
+resource "keycloak_openid_client_scope" "servicemock_api_scope" {
   realm_id               = keycloak_realm.realm.id
-  name                   = "mock-api-access"
-  description            = "Audience scope for mock-api"
+  name                   = "servicemock-api-access"
+  description            = "Audience scope for servicemock-api"
   include_in_token_scope = true
 }
 
@@ -204,21 +204,21 @@ resource "keycloak_authentication_execution" "browser_step_up_sms" {
   priority          = 20
 }
 
-resource "keycloak_openid_audience_protocol_mapper" "mock_api_audience" {
+resource "keycloak_openid_audience_protocol_mapper" "servicemock_api_audience" {
   realm_id        = keycloak_realm.realm.id
-  client_scope_id = keycloak_openid_client_scope.mock_api_scope.id
-  name            = "mock-api-audience"
+  client_scope_id = keycloak_openid_client_scope.servicemock_api_scope.id
+  name            = "servicemock-api-audience"
 
   add_to_access_token = true
   add_to_id_token     = false
 
-  included_custom_audience = var.mock_api_audience
+  included_custom_audience = var.servicemock_api_audience
 }
 
 resource "keycloak_openid_client" "app_web" {
   realm_id                     = keycloak_realm.realm.id
-  client_id                    = "app-web"
-  name                         = "app-web"
+  client_id                    = "appmock-web"
+  name                         = "appmock-web"
   access_type                  = "CONFIDENTIAL"
   standard_flow_enabled        = false
   direct_access_grants_enabled = false
@@ -236,8 +236,8 @@ resource "keycloak_openid_client" "browser_app" {
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
   service_accounts_enabled     = false
-  valid_redirect_uris          = ["https://mock.localhost:8443/*"]
-  web_origins                  = ["https://mock.localhost:8443"]
+  valid_redirect_uris          = ["https://webmock.localhost:8443/*"]
+  web_origins                  = ["https://webmock.localhost:8443"]
 
   extra_config = {
     "default.acr.values" = "1se"
@@ -257,7 +257,7 @@ resource "keycloak_openid_client_default_scopes" "browser_default_scopes" {
     "profile",
     "email",
     keycloak_openid_client_scope.profile_scope.name,
-    keycloak_openid_client_scope.mock_api_scope.name
+    keycloak_openid_client_scope.servicemock_api_scope.name
   ]
 }
 
@@ -269,7 +269,7 @@ resource "keycloak_openid_client_default_scopes" "app_default_scopes" {
     "profile",
     "email",
     keycloak_openid_client_scope.profile_scope.name,
-    keycloak_openid_client_scope.mock_api_scope.name
+    keycloak_openid_client_scope.servicemock_api_scope.name
   ]
 }
 

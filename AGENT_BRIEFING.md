@@ -39,7 +39,7 @@ Geplant ist ein bewusst kleiner Stack:
 - `postgres`
 - `keycloak`
 - `auth-api` (Node.js + TypeScript)
-- `app-web` (React + TypeScript) - simuliert das Device / die Mobile-App im Browser
+- `appmock-web` (React + TypeScript) - simuliert das Device / die Mobile-App im Browser
 - `admin-web` (React + TypeScript) - verwaltet Registration Codes und Devices
 - `caddy`
 
@@ -68,7 +68,7 @@ auth-sandbox-2/
   SETUP.md
   apps/
     auth-api/
-    app-web/
+    appmock-web/
     admin-web/
   packages/
     shared-types/
@@ -88,7 +88,7 @@ Ziel:
 Die effektive Runtime soll minimal bleiben:
 
 - `auth-api` als **einzige Node-Server-App**
-- `app-web` und `admin-web` als React-Apps
+- `appmock-web` und `admin-web` als React-Apps
 - Frontends im produktionsnahen Setup als **statische Builds ueber Caddy** ausliefern
 - Keycloak, Postgres und Caddy als eigene Container
 
@@ -152,7 +152,7 @@ Diese Teile sollen **nicht** in `auth-sandbox-2` landen:
 
 ## Zielbild der Anwendungen
 
-## 1. `app-web`
+## 1. `appmock-web`
 
 Zweck:
 - Browserbasierte Minimal-App, die ein Device simuliert
@@ -445,7 +445,7 @@ Caddy soll TLS fuer lokale `*.localhost`-Domains uebernehmen.
 Vorschlag fuer Hosts:
 - `keycloak.localhost`
 - `auth.localhost`
-- `app.localhost`
+- `appmock.localhost`
 - `admin.localhost`
 
 Der Agent kann die Namen anpassen, wenn das Setup konsistent bleibt.
@@ -525,7 +525,7 @@ Der Agent soll so vorgehen:
 4. Monorepo-Struktur mit Workspaces aufsetzen
 5. minimale Infrastruktur mit Compose, Caddy, Keycloak und Postgres aufbauen
 6. `auth-api` in Node.js + TypeScript umsetzen
-7. `app-web` und `admin-web` in React + TypeScript umsetzen
+7. `appmock-web` und `admin-web` in React + TypeScript umsetzen
 8. Keycloak minimal integrieren
 9. encrypteten Challenge-Flow implementieren
 10. backend-gesteuerte Passwort-Setzung nach Registrierung implementieren

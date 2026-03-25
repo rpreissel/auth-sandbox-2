@@ -233,7 +233,7 @@ export type SessionTokenBundle = {
   scope: string
 }
 
-// Demo token-inspection data used by app-web to render decoded token details.
+// Demo token-inspection data used by appmock-web to render decoded token details.
 // These fields are not required to complete registration or login themselves.
 export type TokenDisplayBundle = {
   accessTokenClaims: JwtClaims
@@ -243,7 +243,7 @@ export type TokenDisplayBundle = {
 }
 
 // Combined demo transport returned by auth-api. Business flows only need the
-// session fields, while app-web also reads the display bundle for token panels.
+// session fields, while appmock-web also reads the display bundle for token panels.
 export type TokenBundle = SessionTokenBundle & TokenDisplayBundle
 
 // Demo login response: session-critical fields plus token-display data.
@@ -439,12 +439,12 @@ export type ClientEventInput = {
 }
 
 // Business responses may carry these IDs only as trace correlation metadata.
-export type MockApiTraceEnvelope = {
+export type ServiceMockApiTraceEnvelope = {
   traceId: string | null
   correlationId: string | null
 }
 
-export type MockApiProfileResponse = MockApiTraceEnvelope & {
+export type ServiceMockApiProfileResponse = ServiceMockApiTraceEnvelope & {
   subject: string
   userId: string
   username: string
@@ -456,9 +456,9 @@ export type MockApiProfileResponse = MockApiTraceEnvelope & {
   expiresAt: IsoDateTime | null
 }
 
-export type MockApiAssuranceLevel = '1se' | '2se'
+export type ServiceMockApiAssuranceLevel = '1se' | '2se'
 
-export type MockApiAssuranceResponse = MockApiTraceEnvelope & {
+export type ServiceMockApiAssuranceResponse = ServiceMockApiTraceEnvelope & {
   subject: string
   userId: string
   username: string
@@ -470,12 +470,12 @@ export type MockApiAssuranceResponse = MockApiTraceEnvelope & {
   expiresAt: IsoDateTime | null
   tokenAcr: string | null
   tokenAmr: string[]
-  requiredLevel: MockApiAssuranceLevel
+  requiredLevel: ServiceMockApiAssuranceLevel
   accessGranted: true
   message: string
 }
 
-export type MockApiMessageRecord = {
+export type ServiceMockApiMessageRecord = {
   id: string
   text: string
   authorUserId: string
@@ -483,14 +483,14 @@ export type MockApiMessageRecord = {
   category: 'seed' | 'note'
 }
 
-export type MockApiMessagesResponse = MockApiTraceEnvelope & {
-  items: MockApiMessageRecord[]
+export type ServiceMockApiMessagesResponse = ServiceMockApiTraceEnvelope & {
+  items: ServiceMockApiMessageRecord[]
 }
 
-export type MockApiCreateMessageInput = {
+export type ServiceMockApiCreateMessageInput = {
   text: string
 }
 
-export type MockApiCreateMessageResponse = MockApiTraceEnvelope & {
-  item: MockApiMessageRecord
+export type ServiceMockApiCreateMessageResponse = ServiceMockApiTraceEnvelope & {
+  item: ServiceMockApiMessageRecord
 }

@@ -23,7 +23,7 @@ variable "app_client_secret" {
 
 variable "browser_client_id" {
   type    = string
-  default = "browser-app"
+  default = "webmock-web"
 }
 
 variable "browser_client_secret" {
@@ -51,7 +51,7 @@ variable "internal_redeem_client_secret" {
   sensitive = true
 }
 
-variable "mock_api_audience" {
+variable "servicemock_api_audience" {
   type    = string
-  default = "mock-api"
+  default = "servicemock-api"
 }

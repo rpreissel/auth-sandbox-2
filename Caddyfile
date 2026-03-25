@@ -26,14 +26,14 @@ https://home.localhost:8443 {
   file_server
 }
 
-http://app.localhost:8088 {
-  redir https://app.localhost:8443{uri}
+http://appmock.localhost:8088 {
+  redir https://appmock.localhost:8443{uri}
 }
 
-https://app.localhost:8443 {
+https://appmock.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   log
-  log_append host app.localhost
+  log_append host appmock.localhost
   log_append correlation_id {http.request.header.X-Correlation-Id}
   log_append trace_id {http.request.header.X-Trace-Id}
   log_append client_name {http.request.header.X-Client-Name}
@@ -50,10 +50,10 @@ https://app.localhost:8443 {
   handle /api/* {
     reverse_proxy auth-api:3000
   }
-  handle_path /mock-api/* {
-    reverse_proxy mock-api:3002
+  handle_path /servicemock-api/* {
+    reverse_proxy servicemock-api:3002
   }
-  root * /srv/app-web
+  root * /srv/appmock-web
   file_server
 }
 
@@ -153,24 +153,24 @@ https://trace.localhost:8443 {
   file_server
 }
 
-http://mock.localhost:8088 {
-  redir https://mock.localhost:8443{uri}
+http://webmock.localhost:8088 {
+  redir https://webmock.localhost:8443{uri}
 }
 
-https://mock.localhost:8443 {
+https://webmock.localhost:8443 {
   tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
   log
-  log_append host mock.localhost
+  log_append host webmock.localhost
   log_append correlation_id {http.request.header.X-Correlation-Id}
   log_append trace_id {http.request.header.X-Trace-Id}
   log_append client_name {http.request.header.X-Client-Name}
   log_append method {http.request.method}
   log_append uri {http.request.uri}
-  handle_path /mock-api/* {
+  handle_path /servicemock-api/* {
     log_append upstream_host {rp.upstream.host}
     log_append upstream_duration_ms {rp.upstream.duration_ms}
     log_append upstream_latency_ms {rp.upstream.latency_ms}
-    reverse_proxy mock-api:3002
+    reverse_proxy servicemock-api:3002
   }
   handle_path /trace-api/* {
     request_header Authorization "Bearer change-me-trace-browser-token"
@@ -183,9 +183,9 @@ https://mock.localhost:8443 {
     log_append upstream_host {rp.upstream.host}
     log_append upstream_duration_ms {rp.upstream.duration_ms}
     log_append upstream_latency_ms {rp.upstream.latency_ms}
-    reverse_proxy mock-api:3002
+    reverse_proxy servicemock-api:3002
   }
-  root * /srv/mock-web
+  root * /srv/webmock-web
   file_server
 }
 

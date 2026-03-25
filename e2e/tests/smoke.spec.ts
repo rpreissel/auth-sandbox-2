@@ -5,14 +5,14 @@ import type { APIRequestContext } from '@playwright/test'
 import type { SmsTanStartResponse } from '@auth-sandbox-2/shared-types'
 
 const AUTH_API_URL = 'https://auth.localhost:8443'
-const MOCK_API_URL = 'https://mock.localhost:8443'
+const SERVICEMOCK_API_URL = 'https://webmock.localhost:8443'
 const TRACE_API_URL = 'https://trace.localhost:8443'
 const KEYCLOAK_METADATA_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/.well-known/openid-configuration'
 const KEYCLOAK_TOKEN_URL = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect/token'
 const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_WEB_URL = 'https://trace.localhost:8443/'
-const MOCK_WEB_URL = 'https://mock.localhost:8443'
+const MOCK_WEB_URL = 'https://webmock.localhost:8443'
 const ADMIN_PROXY_HEADERS = { authorization: 'Bearer change-me-admin-proxy-token' }
 const APP_PROXY_HEADERS = { authorization: 'Bearer change-me-app-proxy-token' }
 const TRACE_BROWSER_HEADERS = { authorization: 'Bearer change-me-trace-browser-token' }
@@ -45,7 +45,7 @@ async function waitForRuntimeReady(request: APIRequestContext) {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const [healthResponse, mockHealthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
       request.get(`${AUTH_API_URL}/api/health`),
-      request.get(`${MOCK_API_URL}/health`),
+      request.get(`${SERVICEMOCK_API_URL}/health`),
       request.get(`${TRACE_API_URL}/health`),
       request.get(KEYCLOAK_METADATA_URL)
     ])
@@ -90,7 +90,7 @@ async function waitForTrace(request: APIRequestContext, userId: string, traceTyp
 }
 
 async function createBrowserUser(request: APIRequestContext, suffix: string) {
-  const userId = `mock-web-${suffix}-${Date.now()}`
+  const userId = `webmock-web-${suffix}-${Date.now()}`
   const password = 'ChangeMe123!'
   const response = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     headers: ADMIN_PROXY_HEADERS,
@@ -117,7 +117,7 @@ async function createBrowserUser(request: APIRequestContext, suffix: string) {
   return { userId, password }
 }
 
-async function loginMockWeb(page: import('@playwright/test').Page, userId: string, password: string) {
+async function loginWebMockWeb(page: import('@playwright/test').Page, userId: string, password: string) {
   await page.context().clearCookies()
   await page.goto(MOCK_WEB_URL)
   await expect(page.getByRole('button', { name: /mit keycloak 1se anmelden/i })).toBeVisible()
@@ -184,7 +184,7 @@ test.beforeEach(async ({ request }) => {
 test('shared postgres runtime exposes auth, trace, and keycloak endpoints', async ({ request }) => {
   const [healthResponse, mockHealthResponse, traceHealthResponse, metadataResponse] = await Promise.all([
     request.get(`${AUTH_API_URL}/api/health`),
-    request.get(`${MOCK_API_URL}/health`),
+    request.get(`${SERVICEMOCK_API_URL}/health`),
     request.get(`${TRACE_API_URL}/health`),
     request.get(KEYCLOAK_METADATA_URL)
   ])
@@ -233,14 +233,14 @@ test('admin overview shows save errors instead of opaque network failures', asyn
 test('homepage contains key links', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: /minimal device-login sandbox/i })).toBeVisible()
-  const appWebLink = page.getByRole('link', { name: /app web/i })
-  const mockWebLink = page.getByRole('link', { name: /mock web/i })
+  const appMockWebLink = page.getByRole('link', { name: /appmock web/i })
+  const webMockWebLink = page.getByRole('link', { name: /webmock web/i })
   const dbViewerLink = page.getByRole('link', { name: /db viewer/i })
-  await expect(appWebLink).toBeVisible()
-  await expect(mockWebLink).toBeVisible()
+  await expect(appMockWebLink).toBeVisible()
+  await expect(webMockWebLink).toBeVisible()
   await expect(dbViewerLink).toBeVisible()
-  await expect(appWebLink).toHaveAttribute('target', '_blank')
-  await expect(mockWebLink).toHaveAttribute('target', '_blank')
+  await expect(appMockWebLink).toHaveAttribute('target', '_blank')
+  await expect(webMockWebLink).toHaveAttribute('target', '_blank')
   await expect(dbViewerLink).toHaveAttribute('target', '_blank')
   await expect(page.getByRole('heading', { name: /db viewer login/i })).toBeVisible()
   await expect(page.getByText('auth_sandbox_2')).toBeVisible()
@@ -258,21 +258,21 @@ test('homepage contains key links', async ({ page }) => {
   await expect(page.getByLabel('Refresh and logout lifecycle mermaid sequence diagram')).toBeVisible()
 })
 
-test('mock web homepage serves the browser step-up app shell', async ({ page }) => {
-  await page.goto('https://mock.localhost:8443')
+test('webmock web homepage serves the browser step-up app shell', async ({ page }) => {
+  await page.goto('https://webmock.localhost:8443')
   await expect(page.getByRole('heading', { name: /browser login starts with 1se/i })).toBeVisible()
   await expect(page.getByRole('button', { name: /mit keycloak 1se anmelden/i })).toBeVisible()
   await expect(page.getByRole('button', { name: /step-up auf 2se starten/i })).toBeVisible()
   await expect(page.getByText(/trigger a fresh auth request with/i)).toBeVisible()
 })
 
-test('mock web browser login, step-up, and tracing work end to end', async ({ page, request }) => {
+test('webmock web browser login, step-up, and tracing work end to end', async ({ page, request }) => {
   test.setTimeout(90000)
-  const statusCards = page.getByLabel('Mock web status cards')
+  const statusCards = page.getByLabel('WebMock status cards')
   const currentAcrCard = statusCards.locator('article').filter({ hasText: 'Current acr' })
 
   const { userId, password } = await createBrowserUser(request, 'stepup')
-  await loginMockWeb(page, userId, password)
+  await loginWebMockWeb(page, userId, password)
 
   await expect(statusCards).toBeVisible()
   await expect(currentAcrCard.locator('strong')).toHaveText('1se')
@@ -287,24 +287,24 @@ test('mock web browser login, step-up, and tracing work end to end', async ({ pa
   await page.locator('#smsTan').fill(demoTan ?? '')
   await page.getByRole('button', { name: /2se schritt abschliessen|2se Schritt abschließen/i }).click()
 
-  await expect(page).toHaveURL(/mock\.localhost:8443/)
+  await expect(page).toHaveURL(/webmock\.localhost:8443/)
   await expect(currentAcrCard.locator('strong')).toHaveText('2se', { timeout: 15000 })
   await expect(page.getByText(/the token satisfied the stronger 2se assurance check/i)).toBeVisible()
 
-  await page.getByLabel('Neue geschützte Notiz').fill('Mock web playwright note')
+  await page.getByLabel('Neue geschützte Notiz').fill('WebMock Web playwright note')
   await page.getByRole('button', { name: /notiz an mock api senden/i }).click()
-  await expect(page.getByLabel('Mock message response')).toContainText('Mock web playwright note')
+  await expect(page.getByLabel('WebMock message response')).toContainText('WebMock Web playwright note')
 
-  const browserTrace = await waitForTrace(request, userId, 'mock_web_step_up', 'mock-web')
+  const browserTrace = await waitForTrace(request, userId, 'webmock_web_step_up', 'webmock-web')
   const authApiTrace = await waitForTrace(request, userId, 'browser_step_up_start_internal', 'auth-api')
   await page.goto(`${TRACE_WEB_URL}#trace/${browserTrace.traceId}`)
   await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
-  await expect(timeline).toContainText('mock-web')
+  await expect(timeline).toContainText('webmock-web')
 
   const artifactList = page.getByRole('list', { name: 'Artifact list' })
-  await timeline.getByRole('button', { name: /mock_web_step_up_challenge_ready/i }).click()
+  await timeline.getByRole('button', { name: /webmock_web_step_up_challenge_ready/i }).click()
   await expect(artifactList).toContainText('sms_tan_challenge')
   await artifactList.getByRole('button', { name: /sms_tan_challenge/i }).click()
   const artifactViewer = page.getByLabel('Artifact viewer')
@@ -336,7 +336,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
 
   expect(registrationResponse.ok()).toBeTruthy()
 
-  await page.goto('https://app.localhost:8443')
+  await page.goto('https://appmock.localhost:8443')
   await expect(page.getByRole('heading', { name: 'Dieses Telefon einrichten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Geräteanmeldung einrichten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Sitzungstokens', exact: true })).toBeVisible()
@@ -404,7 +404,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Token Sitzung' })).toHaveAttribute('aria-selected', 'true')
-  await expect(page.getByRole('tab', { name: 'Mock API Demo API' })).toHaveAttribute('aria-selected', 'false')
+  await expect(page.getByRole('tab', { name: 'ServiceMock API Demo API' })).toHaveAttribute('aria-selected', 'false')
   await expect(page.getByRole('heading', { name: 'Token-Inspektion und Hilfsansichten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Userinfo-Endpunkt' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Introspection-Endpunkt' })).toBeVisible()
@@ -439,28 +439,28 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(comparisonClaimsTable.getByRole('row', { name: /acr/i })).toContainText('2se')
 
   await expect(page.getByText('OIDC-geschützte Demo-Endpunkte')).toHaveCount(0)
-  const mockApiPanel = page.getByLabel('Protected mock API panel')
-  await expect(mockApiPanel).toHaveCount(0)
-  await page.getByRole('tab', { name: 'Mock API Demo API' }).click()
-  await expect(page.getByRole('tab', { name: 'Mock API Demo API' })).toHaveAttribute('aria-selected', 'true')
+  const serviceMockApiPanel = page.getByLabel('Protected mock API panel')
+  await expect(serviceMockApiPanel).toHaveCount(0)
+  await page.getByRole('tab', { name: 'ServiceMock API Demo API' }).click()
+  await expect(page.getByRole('tab', { name: 'ServiceMock API Demo API' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tab', { name: 'Token Sitzung' })).toHaveAttribute('aria-selected', 'false')
-  await expect(mockApiPanel).toContainText('mock-api')
-  await expect(mockApiPanel).toContainText(userId)
-  await expect(mockApiPanel).toContainText('JWKS')
-  await expect(page.getByRole('button', { name: 'Mock API neu laden' })).toBeVisible()
+  await expect(serviceMockApiPanel).toContainText('servicemock-api')
+  await expect(serviceMockApiPanel).toContainText(userId)
+  await expect(serviceMockApiPanel).toContainText('JWKS')
+  await expect(page.getByRole('button', { name: 'ServiceMock API neu laden' })).toBeVisible()
   await expect(page.getByText('OIDC-geschützte Demo-Endpunkte')).toBeVisible()
   await page.getByLabel('Neue geschützte Notiz').fill('Playwright protected note')
-  await page.getByRole('button', { name: 'Notiz an Mock API senden' }).click()
-  await expect(mockApiPanel).toContainText('Playwright protected note')
-  await waitForTrace(request, userId, 'mock_api_message_create_finished', 'mock-api')
+  await page.getByRole('button', { name: 'Notiz an ServiceMock API senden' }).click()
+  await expect(serviceMockApiPanel).toContainText('Playwright protected note')
+  await waitForTrace(request, userId, 'servicemock_api_message_create_finished', 'servicemock-api')
 
   await page.getByRole('tab', { name: 'Token Sitzung' }).click()
   await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
   await page.getByRole('button', { name: 'Tokens aktualisieren' }).click()
   await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Mock API Demo API' }).click()
-  await expect(mockApiPanel).toContainText('mock-api')
+  await page.getByRole('tab', { name: 'ServiceMock API Demo API' }).click()
+  await expect(serviceMockApiPanel).toContainText('servicemock-api')
 
   await page.getByRole('tab', { name: 'Token Sitzung' }).click()
   await page.getByRole('button', { name: 'Abmelden' }).click()
@@ -746,7 +746,7 @@ test('missing saved device binding is cleared instead of failing with a server e
 
   expect(registrationResponse.ok()).toBeTruthy()
 
-  await page.goto('https://app.localhost:8443')
+  await page.goto('https://appmock.localhost:8443')
   await page.getByLabel('Benutzer-ID').fill(userId)
   await page.getByLabel('Vorname').fill('Missing')
   await page.getByLabel('Nachname').fill('User')

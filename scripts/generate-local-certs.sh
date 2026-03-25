@@ -31,12 +31,12 @@ subjectAltName = @alt_names
 
 [alt_names]
 DNS.1 = home.localhost
-DNS.2 = app.localhost
+DNS.2 = appmock.localhost
 DNS.3 = admin.localhost
 DNS.4 = auth.localhost
 DNS.5 = keycloak.localhost
 DNS.6 = trace.localhost
-DNS.7 = mock.localhost
+DNS.7 = webmock.localhost
 DNS.8 = db.localhost
 EOF
 

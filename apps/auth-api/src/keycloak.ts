@@ -482,18 +482,18 @@ function toTokenBundle(tokens: KeycloakTokenResponse, userInfo: JsonObject, toke
     tokenIntrospection: isJsonObject(tokenIntrospection) ? tokenIntrospection : {}
   }
 
-  return applyAppWebAssuranceClaims(bundle)
+  return applyAppMockWebAssuranceClaims(bundle)
 }
 
-function applyAppWebAssuranceClaims(bundle: TokenBundle): TokenBundle {
-  // Demo-only UI normalization: app-web expects the elevated assurance it just
+function applyAppMockWebAssuranceClaims(bundle: TokenBundle): TokenBundle {
+  // Demo-only UI normalization: appmock-web expects the elevated assurance it just
   // achieved to show up in its token-inspection panels immediately.
   const accessClientId = typeof bundle.accessTokenClaims.azp === 'string' ? bundle.accessTokenClaims.azp : null
   const idClientId = typeof bundle.idTokenClaims.azp === 'string' ? bundle.idTokenClaims.azp : null
   const introspectionClientId = typeof bundle.tokenIntrospection.client_id === 'string' ? bundle.tokenIntrospection.client_id : null
-  const isAppWebBundle = accessClientId === keycloakConfig.clientId || idClientId === keycloakConfig.clientId || introspectionClientId === keycloakConfig.clientId
+  const isAppMockWebBundle = accessClientId === keycloakConfig.clientId || idClientId === keycloakConfig.clientId || introspectionClientId === keycloakConfig.clientId
 
-  if (!isAppWebBundle) {
+  if (!isAppMockWebBundle) {
     return bundle
   }
 

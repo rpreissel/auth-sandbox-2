@@ -192,13 +192,13 @@ Verworfen zugunsten eines One-Time-Codes mit serverseitigem Redeem durch Keycloa
 
 ```mermaid
 flowchart LR
-  Browser[mock-web browser]
-  Device[app-web device flow]
+  Browser[webmock-web browser]
+  Device[appmock-web device flow]
   Admin[admin-web]
   Caddy[Caddy]
   Auth[auth-api]
   Trace[trace-api]
-  Mock[mock-api]
+  Mock[servicemock-api]
   KC[Keycloak]
   Ext[KC extension]
   DB[(Postgres)]

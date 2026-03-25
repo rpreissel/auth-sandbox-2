@@ -51,11 +51,11 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   },
   {
     title: 'Device registration and password bootstrap',
-    summary: 'App Web runs the registration flow, stores the custom device credential, and triggers backend password setup when the user still has none.',
-    actors: ['App Web', 'Auth API', 'Postgres', 'Keycloak'],
+    summary: 'AppMock Web runs the registration flow, stores the custom device credential, and triggers backend password setup when the user still has none.',
+    actors: ['AppMock Web', 'Auth API', 'Postgres', 'Keycloak'],
     steps: [
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Start registration flow with device material',
         detail: 'The app sends userId, device name, and the public signing key so auth-api can create a registration flow.'
@@ -67,7 +67,7 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
         detail: 'The backend persists the registration flow state and exposes code or SMS-TAN verification options.'
       },
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Complete code or SMS verification',
         detail: 'The user finishes the selected registration service and proves control over the prepared identity.'
@@ -86,12 +86,12 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'Auth API',
-        to: 'App Web',
+        to: 'AppMock Web',
         label: 'Return registration result',
         detail: 'The app learns whether it can continue directly or must ask the backend to set an initial password.'
       },
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Submit initial password when required',
         detail: 'If the user has no password yet, the app submits one through the backend instead of using Keycloak required actions.'
@@ -107,10 +107,10 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   {
     title: 'Encrypted device login and protected API use',
     summary: 'A saved device turns the encrypted challenge into OIDC tokens and immediately uses them against the protected mock API.',
-    actors: ['App Web', 'Auth API', 'Postgres', 'Keycloak', 'Mock API'],
+    actors: ['AppMock Web', 'Auth API', 'Postgres', 'Keycloak', 'ServiceMock API'],
     steps: [
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Request encrypted challenge',
         detail: 'The app starts login by sending the stored public-key hash from the saved device binding.'
@@ -123,12 +123,12 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'Auth API',
-        to: 'App Web',
+        to: 'AppMock Web',
         label: 'Return encrypted payload',
         detail: 'Only the registered device key can sign the payload that comes back to the browser.'
       },
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Submit signature over challenge',
         detail: 'The browser signs the encrypted data locally and sends the signature back without exporting the private key.'
@@ -141,18 +141,18 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'Auth API',
-        to: 'App Web',
+        to: 'AppMock Web',
         label: 'Return token bundle',
         detail: 'The app receives the full token set plus decoded claims for inspection in the UI.'
       },
       {
-        from: 'App Web',
-        to: 'Mock API',
+        from: 'AppMock Web',
+        to: 'ServiceMock API',
         label: 'Call protected endpoint',
         detail: 'The access token is used immediately against the demo API to prove the issued session is usable.'
       },
       {
-        from: 'Mock API',
+        from: 'ServiceMock API',
         to: 'Keycloak',
         label: 'Validate JWT through JWKS',
         detail: 'Mock-api verifies the token signature and audience before returning the protected response.'
@@ -162,10 +162,10 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   {
     title: 'Refresh and logout lifecycle',
     summary: 'The device session stays renewable through Keycloak refresh tokens and can be revoked again through the logout endpoint.',
-    actors: ['App Web', 'Auth API', 'Keycloak'],
+    actors: ['AppMock Web', 'Auth API', 'Keycloak'],
     steps: [
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Refresh token bundle',
         detail: 'The app sends the current refresh token when the demo session should continue without a new device signature.'
@@ -178,12 +178,12 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'Auth API',
-        to: 'App Web',
+        to: 'AppMock Web',
         label: 'Return rotated tokens',
         detail: 'The app updates its token wallet, decoded claims, and downstream API state with the fresh credentials.'
       },
       {
-        from: 'App Web',
+        from: 'AppMock Web',
         to: 'Auth API',
         label: 'Request logout',
         detail: 'The demo ends the current device session by sending the remaining refresh token to auth-api.'
@@ -196,7 +196,7 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'Auth API',
-        to: 'App Web',
+        to: 'AppMock Web',
         label: 'Confirm local session clear',
         detail: 'The UI drops its local tokens but keeps the device binding so a new encrypted login can start again later.'
       }
@@ -204,23 +204,23 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   },
   {
     title: 'Browser login and inline 2se step-up',
-    summary: 'Mock Web starts at 1se, then Keycloak upgrades the browser session through the inline SMS-TAN backchannel flow.',
-    actors: ['Mock Web', 'Keycloak', 'KC Extension', 'Auth API', 'Postgres'],
+    summary: 'WebMock Web starts at 1se, then Keycloak upgrades the browser session through the inline SMS-TAN backchannel flow.',
+    actors: ['WebMock Web', 'Keycloak', 'KC Extension', 'Auth API', 'Postgres'],
     steps: [
       {
-        from: 'Mock Web',
+        from: 'WebMock Web',
         to: 'Keycloak',
         label: 'Sign in with acr_values=1se',
         detail: 'The browser login begins at the weaker level and returns a normal Keycloak browser session.'
       },
       {
         from: 'Keycloak',
-        to: 'Mock Web',
+        to: 'WebMock Web',
         label: 'Return 1se session and tokens',
-        detail: 'Mock Web can inspect the current acr and shows that stronger endpoints still require a step-up.'
+        detail: 'WebMock Web can inspect the current acr and shows that stronger endpoints still require a step-up.'
       },
       {
-        from: 'Mock Web',
+        from: 'WebMock Web',
         to: 'Keycloak',
         label: 'Start fresh auth with acr_values=2se',
         detail: 'The browser explicitly asks for a stronger assurance level instead of using a public shortcut endpoint.'
@@ -250,7 +250,7 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
         detail: 'The extension gets the inline challenge payload and renders the SMS-TAN form directly inside Keycloak.'
       },
       {
-        from: 'Mock Web',
+        from: 'WebMock Web',
         to: 'Keycloak',
         label: 'Submit SMS-TAN in Keycloak form',
         detail: 'The user completes the stronger factor without leaving the Keycloak browser flow.'
@@ -263,7 +263,7 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'Keycloak',
-        to: 'Mock Web',
+        to: 'WebMock Web',
         label: 'Return upgraded 2se session',
         detail: 'The browser session and tokens now satisfy the stronger endpoint requirements.'
       }
@@ -290,8 +290,8 @@ function HomeApp() {
 
       <section className="grid links">
         <LinkCard title="Homepage" href="https://home.localhost:8443" description="Overview, links, and sequence diagrams." />
-        <LinkCard title="App Web" href="https://app.localhost:8443" description="Register a device, log in, inspect tokens and claims." />
-        <LinkCard title="Mock Web" href="https://mock.localhost:8443" description="Browser Keycloak login with 1se-by-default and an interactive 2se step-up path." />
+        <LinkCard title="AppMock Web" href="https://appmock.localhost:8443" description="Register a device, log in, inspect tokens and claims." />
+        <LinkCard title="WebMock Web" href="https://webmock.localhost:8443" description="Browser Keycloak login with 1se-by-default and an interactive 2se step-up path." />
         <LinkCard title="Admin Web" href="https://admin.localhost:8443" description="Create registration codes and inspect existing device bindings." />
         <LinkCard title="Trace Viewer" href="https://trace.localhost:8443/" description="Inspect full demo traces, decoded JWTs, encrypted payloads, and proxy hops." />
         <LinkCard title="Auth API" href="https://auth.localhost:8443/api/health" description="Fastify backend health endpoint." />

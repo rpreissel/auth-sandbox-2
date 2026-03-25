@@ -14,9 +14,9 @@ const envSchema = z.object({
   KEYCLOAK_BASE_URL: z.string().default('http://keycloak:8080'),
   KEYCLOAK_PUBLIC_URL: z.string().default('https://keycloak.localhost:8443'),
   KEYCLOAK_REALM: z.string().default('auth-sandbox-2'),
-  KEYCLOAK_CLIENT_ID: z.string().default('app-web'),
+  KEYCLOAK_CLIENT_ID: z.string().default('appmock-web'),
   KEYCLOAK_CLIENT_SECRET: z.string().default('change-me'),
-  KEYCLOAK_BROWSER_CLIENT_ID: z.string().default('browser-app'),
+  KEYCLOAK_BROWSER_CLIENT_ID: z.string().default('webmock-web'),
   KEYCLOAK_BROWSER_CLIENT_SECRET: z.string().default('change-me-browser'),
   KEYCLOAK_ADMIN_CLIENT_ID: z.string().default('auth-api-admin'),
   KEYCLOAK_ADMIN_CLIENT_SECRET: z.string().default('change-me-admin'),
@@ -29,7 +29,7 @@ const envSchema = z.object({
   AUTH_API_ADMIN_PROXY_TOKEN: z.string().min(16).default('change-me-admin-proxy-token'),
   TRACE_API_BROWSER_PROXY_TOKEN: z.string().min(16).default('change-me-trace-browser-token'),
   TRACE_API_INTERNAL_WRITE_TOKEN: z.string().min(16).default('change-me-trace-internal-token'),
-  CORS_ORIGIN: z.string().default('https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443'),
+  CORS_ORIGIN: z.string().default('https://appmock.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().default(300)
 })
 

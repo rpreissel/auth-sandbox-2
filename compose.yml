@@ -65,7 +65,7 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
       KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID: ${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}
       KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET: ${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}
-      MOCK_API_AUDIENCE: ${MOCK_API_AUDIENCE:-mock-api}
+      SERVICEMOCK_API_AUDIENCE: ${SERVICEMOCK_API_AUDIENCE:-servicemock-api}
       TOFU_STATE_DIR: ${TOFU_STATE_DIR:-/state}
     depends_on:
       keycloak:
@@ -96,9 +96,9 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
-      KEYCLOAK_CLIENT_ID: app-web
+      KEYCLOAK_CLIENT_ID: appmock-web
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-change-me}
-      KEYCLOAK_BROWSER_CLIENT_ID: ${KEYCLOAK_BROWSER_CLIENT_ID:-browser-app}
+      KEYCLOAK_BROWSER_CLIENT_ID: ${KEYCLOAK_BROWSER_CLIENT_ID:-webmock-web}
       KEYCLOAK_BROWSER_CLIENT_SECRET: ${KEYCLOAK_BROWSER_CLIENT_SECRET:-change-me-browser}
       KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-auth-api-admin}
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
@@ -106,7 +106,7 @@ services:
       AUTH_API_INTERNAL_URL: http://auth-api:3000
       KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443,https://mock.localhost:8443
+      CORS_ORIGIN: https://appmock.localhost:8443,https://admin.localhost:8443,https://home.localhost:8443,https://webmock.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -132,9 +132,9 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
-      KEYCLOAK_CLIENT_ID: app-web
+      KEYCLOAK_CLIENT_ID: appmock-web
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-change-me}
-      KEYCLOAK_BROWSER_CLIENT_ID: ${KEYCLOAK_BROWSER_CLIENT_ID:-browser-app}
+      KEYCLOAK_BROWSER_CLIENT_ID: ${KEYCLOAK_BROWSER_CLIENT_ID:-webmock-web}
       KEYCLOAK_BROWSER_CLIENT_SECRET: ${KEYCLOAK_BROWSER_CLIENT_SECRET:-change-me-browser}
       KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-auth-api-admin}
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
@@ -142,7 +142,7 @@ services:
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       TRACE_API_BROWSER_PROXY_TOKEN: ${TRACE_API_BROWSER_PROXY_TOKEN:-change-me-trace-browser-token}
       TRACE_API_INTERNAL_WRITE_TOKEN: ${TRACE_API_INTERNAL_WRITE_TOKEN:-change-me-trace-internal-token}
-      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443
+      CORS_ORIGIN: https://appmock.localhost:8443,https://admin.localhost:8443,https://webmock.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -150,16 +150,16 @@ services:
       keycloak-config:
         condition: service_started
 
-  mock-api:
+  servicemock-api:
     build:
       context: .
-      dockerfile: apps/mock-api/Dockerfile
+      dockerfile: apps/servicemock-api/Dockerfile
     environment:
-      MOCK_API_HOST: 0.0.0.0
-      MOCK_API_PORT: 3002
-      MOCK_API_PUBLIC_URL: https://mock.localhost:8443
-      MOCK_API_AUDIENCE: mock-api
-      OBSERVABILITY_SERVICE_NAME: mock-api
+      SERVICEMOCK_API_HOST: 0.0.0.0
+      SERVICEMOCK_API_PORT: 3002
+      SERVICEMOCK_API_PUBLIC_URL: https://webmock.localhost:8443
+      SERVICEMOCK_API_AUDIENCE: servicemock-api
+      OBSERVABILITY_SERVICE_NAME: servicemock-api
       OBSERVABILITY_WRITE_MODE: http
       TRACE_API_INTERNAL_URL: http://trace-api:3001
       TRACE_API_INTERNAL_WRITE_TOKEN: ${TRACE_API_INTERNAL_WRITE_TOKEN:-change-me-trace-internal-token}
@@ -168,7 +168,7 @@ services:
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
-      CORS_ORIGIN: https://app.localhost:8443,https://admin.localhost:8443,https://mock.localhost:8443,https://home.localhost:8443
+      CORS_ORIGIN: https://appmock.localhost:8443,https://admin.localhost:8443,https://webmock.localhost:8443,https://home.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -194,15 +194,15 @@ services:
       - ./local-certs:/etc/caddy/local-certs:ro
       - caddy-data:/data
       - caddy-config:/config
-      - ./apps/app-web/dist:/srv/app-web:ro
+      - ./apps/appmock-web/dist:/srv/appmock-web:ro
       - ./apps/admin-web/dist:/srv/admin-web:ro
       - ./apps/trace-web/dist:/srv/trace-web:ro
       - ./apps/home-web/dist:/srv/home-web:ro
-      - ./apps/mock-web/dist:/srv/mock-web:ro
+      - ./apps/webmock-web/dist:/srv/webmock-web:ro
       - ./runtime/caddy-logs:/var/log/caddy
     depends_on:
       - auth-api
-      - mock-api
+      - servicemock-api
       - trace-api
       - adminer
       - keycloak

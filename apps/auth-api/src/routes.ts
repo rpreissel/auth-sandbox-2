@@ -528,7 +528,7 @@ export async function registerRoutes(app: any) {
       reply,
       traceType: 'device_set_password',
       title: `Set password for ${body.userId}`,
-      summary: 'App web asked auth-api to set the initial Keycloak password for the demo user.',
+      summary: 'AppMock Web asked auth-api to set the initial Keycloak password for the demo user.',
       userId: body.userId,
       body,
       run: () => setPassword(body)
@@ -541,7 +541,7 @@ export async function registerRoutes(app: any) {
       reply,
       traceType: 'device_login_start',
       title: `Start device login for ${body.publicKeyHash}`,
-      summary: 'App web requested an encrypted challenge for the saved device binding.',
+      summary: 'AppMock Web requested an encrypted challenge for the saved device binding.',
       body,
       run: () => startLogin(body)
     })
@@ -553,7 +553,7 @@ export async function registerRoutes(app: any) {
       reply,
       traceType: 'device_login_finish',
       title: `Finish device login ${body.nonce}`,
-      summary: 'App web returned the signed challenge response and auth-api exchanged it with Keycloak.',
+      summary: 'AppMock Web returned the signed challenge response and auth-api exchanged it with Keycloak.',
       body,
       run: () => finishLogin(body)
     })
@@ -565,7 +565,7 @@ export async function registerRoutes(app: any) {
       reply,
       traceType: 'device_token_refresh',
       title: 'Refresh device tokens',
-      summary: 'App web refreshed the Keycloak token bundle for the device session.',
+      summary: 'AppMock Web refreshed the Keycloak token bundle for the device session.',
       body,
       run: () => refreshTokens(body)
     })
@@ -577,7 +577,7 @@ export async function registerRoutes(app: any) {
       reply,
       traceType: 'device_logout',
       title: 'Device logout',
-      summary: 'App web revoked the refresh token and ended the demo session.',
+      summary: 'AppMock Web revoked the refresh token and ended the demo session.',
       body,
       run: () => logout(body)
     })

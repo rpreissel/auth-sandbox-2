@@ -18,7 +18,7 @@ The repo previously hit a local optional Rollup dependency issue on macOS. Reins
 
 ```bash
 pnpm --filter auth-api build
-pnpm --filter app-web build
+pnpm --filter appmock-web build
 pnpm --filter admin-web build
 pnpm --filter home-web build
 ```
@@ -32,7 +32,7 @@ bash scripts/generate-local-certs.sh
 bash scripts/trust-local-ca-macos.sh
 ```
 
-This creates a persistent local CA plus one SAN certificate for `home.localhost`, `app.localhost`, `admin.localhost`, `auth.localhost`, and `keycloak.localhost` in `local-certs/`.
+This creates a persistent local CA plus one SAN certificate for `home.localhost`, `appmock.localhost`, `admin.localhost`, `auth.localhost`, and `keycloak.localhost` in `local-certs/`.
 
 ```bash
 podman compose up -d
@@ -46,7 +46,7 @@ This starts:
 - Keycloak with the custom extension
 - OpenTofu runner for Keycloak config
 - auth-api
-- mock-api
+- servicemock-api
 - trace-api
 - Adminer Postgres viewer
 - Caddy reverse proxy
@@ -63,9 +63,9 @@ curl -k https://db.localhost:8443
 ## Open the apps
 
 - `https://home.localhost:8443`
-- `https://app.localhost:8443`
+- `https://appmock.localhost:8443`
 - `https://admin.localhost:8443`
-- `https://mock.localhost:8443`
+- `https://webmock.localhost:8443`
 - `https://trace.localhost:8443`
 - `https://keycloak.localhost:8443`
 - `https://db.localhost:8443`
@@ -76,7 +76,7 @@ The certificate should now be trusted by macOS browsers that use the login keych
 
 1. Open `https://admin.localhost:8443`
 2. Create a registration code for a new `userId`
-3. Open `https://app.localhost:8443`
+3. Open `https://appmock.localhost:8443`
 4. Register the device with that code
 5. Set the initial password if prompted
 6. Start login and finish login
