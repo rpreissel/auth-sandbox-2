@@ -22,7 +22,7 @@ import type {
 
 import {
   completePublicAssuranceFlowMethod,
-  createPublicAssuranceFlow,
+  createStepUpFlow,
   finalizePublicAssuranceFlow,
   selectPublicAssuranceFlowService,
   startPublicAssuranceFlowMethod
@@ -327,9 +327,8 @@ export async function resendFlowService(flowId: string, service: AssuranceFlowSe
 }
 
 export async function startKeycloakBrowserStepUp(userId: string) {
-  const created = await createPublicAssuranceFlow({
-    purpose: 'step_up',
-    subjectId: userId,
+  const created = await createStepUpFlow({
+    userId,
     requiredAcr: 'level_2'
   })
   const selected = await selectPublicAssuranceFlowService(created.flowId, 'sms_tan')
@@ -530,13 +529,10 @@ export async function completeMobileStepUp(input: {
   phoneNumber: string
   refreshToken?: string
 }) {
-  const created = await createPublicAssuranceFlow({
-    purpose: 'step_up',
-    subjectId: input.userId,
+  const created = await createStepUpFlow({
+    userId: input.userId,
     requiredAcr: 'level_1',
-    context: {
-      phoneNumber: input.phoneNumber
-    }
+    phoneNumber: input.phoneNumber
   })
   await selectPublicAssuranceFlowService(created.flowId, 'sms_tan')
   const started = await startFlowService(created.flowId, 'sms_tan')

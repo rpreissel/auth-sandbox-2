@@ -515,18 +515,15 @@ export function App() {
     setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
     const signingKeys = await createSigningKeys()
     setStatus('Registrierungs-Flow wird angelegt...')
-    const created = await api.createFlow({
-      purpose: 'registration',
-      subjectId: form.userId,
-      requiredAcr: 'level_1',
-      context: {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        birthDate: form.birthDate,
-        phoneNumber: form.phoneNumber,
-        deviceName: form.deviceName,
-        publicKey: signingKeys.publicKey
-      }
+    const created = await api.createRegistrationFlow({
+      userId: form.userId,
+      firstName: form.firstName,
+      lastName: form.lastName,
+      birthDate: form.birthDate,
+      phoneNumber: form.phoneNumber,
+      deviceName: form.deviceName,
+      publicKey: signingKeys.publicKey,
+      requiredAcr: 'level_1'
     }, flow)
 
     if (created.availableServices.length === 0) {

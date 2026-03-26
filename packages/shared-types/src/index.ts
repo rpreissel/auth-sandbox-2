@@ -123,12 +123,21 @@ export type AssuranceFlowFinalization =
 
 export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser' | 'keycloak'
 
-export type CreateFlowInput = {
-  purpose: AssuranceFlowPurpose
+export type CreateRegistrationFlowInput = {
   requiredAcr?: AcrLevel
-  deviceId?: string
-  subjectId?: string
-  context?: JsonObject
+  userId: string
+  firstName: string
+  lastName: string
+  birthDate: string
+  phoneNumber?: string
+  deviceName: string
+  publicKey: string
+}
+
+export type CreateStepUpFlowInput = {
+  requiredAcr?: AcrLevel
+  userId?: string
+  phoneNumber?: string
 }
 
 export type AssuranceFlowRecord = {

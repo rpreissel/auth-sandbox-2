@@ -137,8 +137,8 @@ sequenceDiagram
 
 - `POST /api/device/login/start`, `POST /api/device/login/finish`, `POST /api/device/token/refresh`, and `POST /api/device/logout` are reachable without a separate API bearer token.
 - `POST /api/device/login/start`, `POST /api/device/login/finish`, `POST /api/device/token/refresh`, and `POST /api/device/logout` are still proof-bound by device registration state, challenge validation, signatures, or refresh-token validity.
-- `POST /api/flows` is now purpose-gated: anonymous callers may bootstrap `registration`, while `step_up` and `account_upgrade` require a valid Keycloak user bearer token from the allowed browser/app clients.
-- Protected flow creation also binds `subjectId` to the bearer user: mismatches are rejected, and missing `subjectId` values are filled from the token.
+- `POST /api/registration-flows` is the anonymous bootstrap endpoint for device registration and carries the concrete registration payload directly.
+- `POST /api/step-up-flows` requires a valid Keycloak user bearer token from the allowed browser/app clients and binds the flow to that bearer user.
 - `GET /api/flows/:flowId`, `POST /api/flows/:flowId/select-service`, and `POST /api/flows/:flowId/finalize` require `Authorization: Bearer <flowToken>`.
 - Direct identification endpoints require `Authorization: Bearer <serviceToken>` and return a `serviceResultToken` for finalization.
 - `POST /api/admin/registration-identities`, `GET /api/admin/registration-identities`, `GET /api/admin/devices`, `DELETE /api/admin/devices/:id`, `POST /api/device/set-password`, and `POST /api/step-up/mobile/complete` are protected by exact proxy bearer tokens that Caddy injects for the demo browser apps.
@@ -150,13 +150,15 @@ sequenceDiagram
 ```mermaid
 flowchart TB
   subgraph Public[Reachable without API bearer token]
-    P1[POST /api/flows]
+    P1[POST /api/registration-flows]
     P2[POST /api/device/login/start]
     P3[POST /api/device/login/finish]
     P4[POST /api/device/token/refresh]
     P5[POST /api/device/logout]
     P6[GET health endpoints]
   end
+
+  UserBearer[Keycloak user bearer] --> SU1[/POST /api/step-up-flows/]
 
   subgraph Proxy[Browser routes protected by Caddy-injected demo bearer tokens]
     AdminToken[admin proxy token] --> A1[/api/admin/*/]

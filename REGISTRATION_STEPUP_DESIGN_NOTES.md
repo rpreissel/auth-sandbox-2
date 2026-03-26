@@ -34,7 +34,7 @@ Dieses Dokument fasst die Ergebnisse der Session zusammen. Es dient als Grundlag
 - Ob ein User schon existiert, kann bewusst erst am Ende eines Flows entschieden werden.
 - Die bestehende Regel bleibt: `username == userId`.
 
-### 3. Generische statt methodenspezifische APIs
+### 3. Konkrete Flow-Create-APIs statt methodenspezifische APIs
 
 Die API soll nicht nach Verfahren geschnitten sein wie:
 
@@ -42,7 +42,7 @@ Die API soll nicht nach Verfahren geschnitten sein wie:
 - `/eid/register`
 - `/code/register`
 
-Stattdessen eine generische Flow-/Assurance-API, in die neue Methoden eingesteckt werden koennen.
+Stattdessen konkrete Create-APIs pro Fachfall und eine gemeinsame Flow-/Assurance-Engine hinter der API, in die neue Methoden eingesteckt werden koennen.
 
 ## Domainenmodell
 
@@ -88,7 +88,7 @@ Moegliche Daten pro Flow:
 - `requiredAcr`
 - `achievedAcr`
 - `deviceId`
-- `subjectId`
+- `subjectId` bzw. die fachliche User-Bindung des Flows
 - methodenspezifische Zwischenergebnisse
 - Challenge-/Proof-Metadaten
 - Ablaufzeit
@@ -106,22 +106,33 @@ Beispielhafte Statusmaschine:
 - `expired`
 - `failed`
 
-## API-Design: generische Flow-API
+## API-Design: konkrete Flow-Create-API mit gemeinsamer Follow-up-Phase
 
 Empfohlene grobe Form:
 
-### Flow anlegen
+### Registrierungs-Flow anlegen
 
-`POST /flows`
+`POST /api/registration-flows`
 
 Beispiel:
 
 ```json
 {
-  "purpose": "registration",
+  "userId": "user-123",
+  "firstName": "Ada",
+  "lastName": "Lovelace",
+  "birthDate": "1990-01-01",
+  "deviceName": "Pixel 9",
+  "publicKey": "pem-or-jwk",
   "requiredAcr": "level_1"
 }
 ```
+
+### Step-up-Flow anlegen
+
+`POST /api/step-up-flows`
+
+Der Aufruf ist bearer-geschuetzt. `userId` ist optional im Body, wird aber bei Fehlen aus dem Bearer abgeleitet und muss bei Angabe zum Bearer passen.
 
 Antwort:
 
@@ -135,7 +146,7 @@ Antwort:
 
 ### Flow lesen
 
-`GET /flows/{flowId}`
+`GET /api/flows/{flowId}`
 
 Liefert z. B.:
 
@@ -146,22 +157,22 @@ Liefert z. B.:
 
 ### Service waehlen
 
-- `POST /flows/{flowId}/select-service`
+- `POST /api/flows/{flowId}/select-service`
 
 Antwort mit `serviceToken`
 
 ### Direktes Service-API
 
-- `POST /identification/person-code/complete`
-- `POST /identification/sms-tan/start`
-- `POST /identification/sms-tan/resend`
-- `POST /identification/sms-tan/complete`
+- `POST /api/identification/person-code/complete`
+- `POST /api/identification/sms-tan/start`
+- `POST /api/identification/sms-tan/resend`
+- `POST /api/identification/sms-tan/complete`
 
 Hier werden z. B. TAN, eID-Assertion oder Registrierungscode eingereicht. Erfolgreiche Services liefern ein `serviceResultToken`.
 
 ### Flow finalisieren
 
-`POST /flows/{flowId}/finalize`
+`POST /api/flows/{flowId}/finalize`
 
 Hier wird erst entschieden:
 
@@ -179,9 +190,9 @@ Dieselben fachlichen Operationen koennen fuer mehrere Zwecke genutzt werden, z. 
 - Device binden
 - weiteres Credential hinzufuegen
 
-Der Unterschied liegt nicht primaer im Endpoint, sondern in:
+Der Unterschied liegt primaer im konkreten Create-Endpoint und danach in:
 
-- `purpose`
+- fachlichem Start-Input
 - Berechtigungsregeln
 - Finalisierung
 
@@ -376,7 +387,7 @@ Empfohlen:
 
 ### Empfohlen
 
-- generische Flow-API statt methodenspezifischer APIs
+- konkrete Flow-Create-APIs statt methodenspezifischer APIs
 - `purpose`, `method` und `assurance` sauber trennen
 - persistente Flow-Zwischenstaende im `auth-api`
 - Registrierung und Account-Upgrade ueber dieselbe fachliche Engine
@@ -396,17 +407,19 @@ Empfohlen:
 
 ## Sicherheitsmatrix im laufenden Repo
 
-`POST /api/flows` ist jetzt purpose-spezifisch gehaertet: `registration` bleibt anonym bootstrap-bar, waehrend `step_up` und `account_upgrade` einen gueltigen Keycloak-User-Bearer der erlaubten Browser-/App-Clients verlangen. Wenn fuer diese geschuetzten Zwecke ein `subjectId` mitgegeben wird, muss er zum Bearer passen; sonst fuellt `auth-api` ihn aus dem Token.
+`POST /api/registration-flows` bleibt anonym bootstrap-bar und traegt den konkreten Registrierungs-Input direkt im Request. `POST /api/step-up-flows` verlangt einen gueltigen Keycloak-User-Bearer der erlaubten Browser-/App-Clients. Wenn dort ein `userId` mitgegeben wird, muss er zum Bearer passen; sonst fuellt `auth-api` ihn aus dem Token.
 
 ```mermaid
 flowchart TB
   subgraph Public[Reachable without API bearer token]
-    P1[POST /api/flows]
+    P1[POST /api/registration-flows]
     P2[POST /api/device/login/start]
     P3[POST /api/device/login/finish]
     P4[POST /api/device/token/refresh]
     P5[POST /api/device/logout]
   end
+
+  U1[Keycloak user bearer] --> U2[POST /api/step-up-flows]
 
   subgraph FlowScoped[Flow-scoped tokens from auth-api]
     F1[flowToken] --> F2[GET /api/flows/:flowId]

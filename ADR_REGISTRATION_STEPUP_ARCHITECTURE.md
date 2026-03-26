@@ -29,26 +29,27 @@ Komplexe Registrierungs-, Upgrade- und Step-up-Flows werden im `auth-api` orches
 - OIDC Tokens
 - Claims wie `acr`, `amr` und `auth_time`
 
-### 2. Das `auth-api` implementiert eine generische Assurance-Flow-Engine
+### 2. Das `auth-api` implementiert eine gemeinsame Assurance-Flow-Engine hinter konkreten Start-APIs
 
-Das `auth-api` verwaltet persistierte Flows mit einem generischen Modell aus:
+Das `auth-api` verwaltet persistierte Flows intern mit einem gemeinsamen Modell aus:
 
 - `purpose`: `registration`, `account_upgrade`, `step_up`
 - `method`: z. B. `sms`, `eid`, `code`, spaeter weitere
 - `result` / `assurance`: z. B. `phone_verified`, `legal_identity_verified`, `high_assurance`
 
-Die API wird an der Orchestrierungsgrenze generisch geschnitten. Das `auth-api` bleibt fuer Flow-Erzeugung, Service-Selektion und Finalisierung zustaendig; konkrete Identifikationsverfahren laufen ueber feste direkte Service-Endpoints.
+Die oeffentliche API wird an der Orchestrierungsgrenze fachlich konkret geschnitten. Das `auth-api` bleibt fuer Flow-Erzeugung, Service-Selektion und Finalisierung zustaendig; konkrete Identifikationsverfahren laufen ueber feste direkte Service-Endpoints.
 
 Beispielhafte Endpoints:
 
-- `POST /flows`
-- `GET /flows/{flowId}`
-- `POST /flows/{flowId}/select-service`
-- `POST /flows/{flowId}/finalize`
-- `POST /identification/person-code/complete`
-- `POST /identification/sms-tan/start`
-- `POST /identification/sms-tan/resend`
-- `POST /identification/sms-tan/complete`
+- `POST /api/registration-flows`
+- `POST /api/step-up-flows`
+- `GET /api/flows/{flowId}`
+- `POST /api/flows/{flowId}/select-service`
+- `POST /api/flows/{flowId}/finalize`
+- `POST /api/identification/person-code/complete`
+- `POST /api/identification/sms-tan/start`
+- `POST /api/identification/sms-tan/resend`
+- `POST /api/identification/sms-tan/complete`
 
 ### 3. Zwischenstaende werden ausschliesslich im `auth-api` persistiert
 
@@ -60,7 +61,7 @@ Das `auth-api` speichert pro Flow mindestens:
 - `requiredAcr`
 - `achievedAcr`
 - `deviceId`
-- `subjectId`
+- `subjectId` bzw. die fachliche User-Bindung des Flows
 - methodenspezifische Zwischenergebnisse
 - Ablaufzeit
 - Idempotenz- und Audit-Informationen

@@ -12,7 +12,8 @@ import type {
   AssuranceFlowService,
   AssuranceFlowServiceOption,
   AssuranceFlowResultSummary,
-  CreateFlowInput,
+  CreateRegistrationFlowInput,
+  CreateStepUpFlowInput,
   FinalizeFlowChannel,
   RedeemFlowArtifactResponse,
   JsonObject
@@ -874,24 +875,59 @@ async function createSelectedServiceResponse(row: AssuranceFlowRow, service: Ass
   }
 }
 
-export async function createPublicAssuranceFlow(input: CreateFlowInput, db: Queryable = pool) {
+export async function createRegistrationFlow(input: CreateRegistrationFlowInput, db: Queryable = pool) {
   return runWithSpan(
     {
       kind: 'process',
       actorType: 'backend',
       actorName: 'auth-api',
-      operation: 'create_generic_flow',
-      userId: input.subjectId ?? null,
-      deviceId: input.deviceId ?? null,
-      notes: 'Create generic assurance flow.'
+      operation: 'create_registration_flow',
+      userId: input.userId,
+      notes: 'Create registration flow.'
     },
     async () => {
       const flow = await createAssuranceFlow({
-        purpose: input.purpose,
+        purpose: 'registration',
         requiredAcr: input.requiredAcr ?? 'level_1',
-        deviceId: input.deviceId ?? null,
-        subjectId: input.subjectId ?? null,
-        context: input.context ?? {}
+        subjectId: input.userId,
+        context: {
+          firstName: input.firstName,
+          lastName: input.lastName,
+          birthDate: input.birthDate,
+          phoneNumber: input.phoneNumber,
+          deviceName: input.deviceName,
+          publicKey: input.publicKey
+        }
+      }, db)
+      await appendAssuranceFlowEvent({ flowId: flow.id, eventType: 'flow_created', payload: { purpose: flow.purpose } }, db)
+      return mapPublicAssuranceFlowRecord(flow, db)
+    }
+  )
+}
+
+export async function createStepUpFlow(input: CreateStepUpFlowInput, db: Queryable = pool) {
+  return runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'create_step_up_flow',
+      userId: input.userId ?? null,
+      notes: 'Create step-up flow.'
+    },
+    async () => {
+      const userId = input.userId?.trim()
+      if (!userId) {
+        throw badRequest('Step-up flow requires a userId')
+      }
+
+      const flow = await createAssuranceFlow({
+        purpose: 'step_up',
+        requiredAcr: input.requiredAcr ?? 'level_1',
+        subjectId: userId,
+        context: input.phoneNumber
+          ? { phoneNumber: input.phoneNumber }
+          : {}
       }, db)
       await appendAssuranceFlowEvent({ flowId: flow.id, eventType: 'flow_created', payload: { purpose: flow.purpose } }, db)
       return mapPublicAssuranceFlowRecord(flow, db)
@@ -953,9 +989,9 @@ export async function startPublicAssuranceFlowMethod(flowId: string, method: Ass
       kind: 'process',
       actorType: 'backend',
       actorName: 'auth-api',
-      operation: 'start_generic_flow_method',
+      operation: 'start_assurance_flow_method',
       challengeId: flowId,
-      notes: 'Start generic assurance flow method.'
+      notes: 'Start assurance flow method.'
     },
     async () => {
   const record = await withTransaction(async (client) => {
@@ -1062,9 +1098,9 @@ export async function completePublicAssuranceFlowMethod(flowId: string, method: 
       kind: 'process',
       actorType: 'backend',
       actorName: 'auth-api',
-      operation: 'complete_generic_flow_method',
+      operation: 'complete_assurance_flow_method',
       challengeId: flowId,
-      notes: 'Complete generic assurance flow method.'
+      notes: 'Complete assurance flow method.'
     },
     async () => {
       const record = await withTransaction(async (client) => {
@@ -1174,9 +1210,9 @@ export async function finalizePublicAssuranceFlow(flowId: string, input: { servi
       kind: 'process',
       actorType: 'backend',
       actorName: 'auth-api',
-      operation: 'finalize_generic_flow',
+      operation: 'finalize_assurance_flow',
       challengeId: flowId,
-      notes: 'Finalize generic assurance flow.'
+      notes: 'Finalize assurance flow.'
     },
     async () => {
       const record = await withTransaction(async (client) => {

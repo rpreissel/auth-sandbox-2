@@ -10,9 +10,10 @@ import {
   withRequestTrace
 } from '@auth-sandbox-2/backend-core'
 import {
-  createPublicAssuranceFlow,
+  createRegistrationFlow,
   finalizePublicAssuranceFlow,
   getPublicAssuranceFlow,
+  createStepUpFlow,
   redeemFlowArtifact
 } from './assurance-flows.js'
 import { verifyFlowToken, verifyServiceToken } from './flow-tokens.js'
@@ -36,12 +37,21 @@ import {
   startLogin
 } from './services.js'
 
-const createFlowSchema = z.object({
-  purpose: z.enum(['registration', 'account_upgrade', 'step_up']),
+const createRegistrationFlowSchema = z.object({
   requiredAcr: z.enum(['level_1', 'level_2']).optional(),
-  deviceId: z.string().uuid().optional(),
-  subjectId: z.string().min(1).optional(),
-  context: z.record(z.string(), z.json()).optional()
+  userId: z.string().min(1),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  birthDate: z.string().min(1),
+  phoneNumber: z.string().min(1).optional(),
+  deviceName: z.string().min(1),
+  publicKey: z.string().min(1)
+})
+
+const createStepUpFlowSchema = z.object({
+  requiredAcr: z.enum(['level_1', 'level_2']).optional(),
+  userId: z.string().min(1).optional(),
+  phoneNumber: z.string().min(1).optional()
 })
 
 const getFlowParamsSchema = z.object({
@@ -291,34 +301,44 @@ async function tracedRoute<T>(args: {
 export async function registerRoutes(app: any) {
   app.get('/api/health', async () => ({ status: 'ok', service: 'auth-api' }))
 
-  app.post('/api/flows', async (request: FastifyRequest, reply: FastifyReply) => {
-    const body = createFlowSchema.parse(request.body)
-    const needsUserBearer = body.purpose === 'step_up' || body.purpose === 'account_upgrade'
-    const authenticatedUser = needsUserBearer
-      ? await requireUserAccessToken(app, request)
-      : null
+  app.post('/api/registration-flows', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = createRegistrationFlowSchema.parse(request.body)
+    const result = await tracedRoute({
+      request,
+      reply,
+      traceType: 'registration_flow_create',
+      title: `Create registration flow for ${body.userId}`,
+      summary: 'A client created a new registration flow.',
+      userId: body.userId,
+      body,
+      run: () => createRegistrationFlow(body)
+    })
+    reply.code(201)
+    return result
+  })
 
-    if (authenticatedUser && body.subjectId && body.subjectId !== authenticatedUser.userId) {
+  app.post('/api/step-up-flows', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = createStepUpFlowSchema.parse(request.body)
+    const authenticatedUser = await requireUserAccessToken(app, request)
+
+    if (body.userId && body.userId !== authenticatedUser.userId) {
       throw app.httpErrors.forbidden('Flow subject does not match bearer token user')
     }
 
-    const createInput = authenticatedUser
-      ? {
-          ...body,
-          subjectId: body.subjectId ?? authenticatedUser.userId
-        }
-      : body
+    const createInput = {
+      ...body,
+      userId: body.userId ?? authenticatedUser.userId
+    }
 
     const result = await tracedRoute({
       request,
       reply,
-      traceType: 'generic_flow_create',
-      title: `Create ${createInput.purpose} flow`,
-      summary: 'A client created a new generic assurance flow.',
-      userId: createInput.subjectId ?? null,
-      deviceId: createInput.deviceId ?? null,
+      traceType: 'step_up_flow_create',
+      title: `Create step-up flow for ${createInput.userId}`,
+      summary: 'A client created a new step-up flow.',
+      userId: createInput.userId,
       body: createInput,
-      run: () => createPublicAssuranceFlow(createInput)
+      run: () => createStepUpFlow(createInput)
     })
     reply.code(201)
     return result
@@ -330,9 +350,9 @@ export async function registerRoutes(app: any) {
     const result = await tracedRoute({
       request,
       reply,
-      traceType: 'generic_flow_get',
+      traceType: 'assurance_flow_get',
       title: `Get flow ${params.flowId}`,
-      summary: 'A client fetched the current state of a generic assurance flow.',
+      summary: 'A client fetched the current state of an assurance flow.',
       run: () => getPublicAssuranceFlow(params.flowId)
     })
 
@@ -417,9 +437,9 @@ export async function registerRoutes(app: any) {
     return tracedRoute({
       request,
       reply,
-      traceType: 'generic_flow_finalize',
+      traceType: 'assurance_flow_finalize',
       title: `Finalize flow ${params.flowId}`,
-      summary: 'A client finalized a generic assurance flow.',
+      summary: 'A client finalized an assurance flow.',
       body,
       run: () => finalizePublicAssuranceFlow(params.flowId, body)
     })
@@ -431,9 +451,9 @@ export async function registerRoutes(app: any) {
     return tracedRoute({
       request,
       reply,
-      traceType: 'generic_flow_artifact_redeem',
+      traceType: 'assurance_flow_artifact_redeem',
       title: `Redeem ${body.kind}`,
-      summary: 'A trusted backend redeemed a generic assurance-flow artifact.',
+      summary: 'A trusted backend redeemed an assurance-flow artifact.',
       body,
       run: () => redeemFlowArtifact(body.code, body.kind)
     })

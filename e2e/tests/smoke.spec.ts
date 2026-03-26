@@ -539,7 +539,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(artifactViewer).toContainText('headers.content-type')
 })
 
-test('generic registration and step-up flow APIs support service selection, concrete service lifecycle, finalize, and redeem', async ({ request }) => {
+test('registration and step-up flow APIs support service selection, concrete service lifecycle, finalize, and redeem', async ({ page, request }) => {
   const userId = `e2e-flow-${Date.now()}`
   const registrationCode = `FLOW${Date.now().toString(36).toUpperCase()}`
   const signingKeys = createSigningKeys()
@@ -562,18 +562,15 @@ test('generic registration and step-up flow APIs support service selection, conc
 
   expect(registrationIdentityResponse.ok()).toBeTruthy()
 
-  const createRegistrationFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+  const createRegistrationFlow = await request.post(`${AUTH_API_URL}/api/registration-flows`, {
     data: {
-      purpose: 'registration',
-      subjectId: userId,
       requiredAcr: 'level_1',
-      context: {
-        firstName: 'Flow',
-        lastName: 'User',
-        birthDate: '1990-01-01',
-        deviceName: 'Flow Device',
-        publicKey: signingKeys.publicKey
-      }
+      userId,
+      firstName: 'Flow',
+      lastName: 'User',
+      birthDate: '1990-01-01',
+      deviceName: 'Flow Device',
+      publicKey: signingKeys.publicKey
     }
   })
 
@@ -630,10 +627,9 @@ test('generic registration and step-up flow APIs support service selection, conc
   })
   expect(setPasswordResponse.ok()).toBeTruthy()
 
-  const anonymousStepUpFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+  const anonymousStepUpFlow = await request.post(`${AUTH_API_URL}/api/step-up-flows`, {
     data: {
-      purpose: 'step_up',
-      subjectId: userId,
+      userId,
       requiredAcr: 'level_1'
     }
   })
@@ -644,11 +640,10 @@ test('generic registration and step-up flow APIs support service selection, conc
     privateKey: signingKeys.privateKey
   })
 
-  const createStepUpFlow = await request.post(`${AUTH_API_URL}/api/flows`, {
+  const createStepUpFlow = await request.post(`${AUTH_API_URL}/api/step-up-flows`, {
     headers: withBearer(deviceLogin.accessToken),
     data: {
-      purpose: 'step_up',
-      subjectId: userId,
+      userId,
       requiredAcr: 'level_1'
     }
   })
@@ -726,6 +721,24 @@ test('generic registration and step-up flow APIs support service selection, conc
   const redeemedResult = await redeemResultCode.json() as { userId: string; achievedAcr: string | null }
   expect(redeemedResult.userId).toBe(userId)
   expect(redeemedResult.achievedAcr).toBe('level_2')
+
+  const flowTrace = await waitForTrace(request, userId, 'registration_flow_create', 'auth-api')
+
+  await page.goto(`${TRACE_WEB_URL}#trace/${flowTrace.traceId}`)
+  await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
+
+  const flowTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
+  await flowTimeline.getByRole('button', { name: /POST \/api\/registration-flows/i }).click()
+
+  const flowArtifactTabs = page.getByRole('tablist', { name: 'Artifact quick access' })
+  await expect(flowArtifactTabs).toContainText('outgoing_response_body')
+  await flowArtifactTabs.getByRole('tab', { name: /^outgoing_response_body/i }).click()
+
+  const flowArtifactViewer = page.getByLabel('Artifact viewer')
+  await expect(flowArtifactViewer).toContainText('flowToken')
+  await expect(flowArtifactViewer).toContainText('Verschachtelt decodiert: body.flowToken')
+  await expect(flowArtifactViewer).toContainText('"kind": "flow"')
+  await expect(flowArtifactViewer).toContainText(`"flowId": "${registrationFlow.flowId}"`)
 })
 
 test('missing saved device binding is cleared instead of failing with a server error', async ({ page, request }) => {

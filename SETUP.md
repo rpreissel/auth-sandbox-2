@@ -96,9 +96,9 @@ pnpm --filter @auth-sandbox-2/e2e test
 - Keycloak user creation is backend-driven, and `username == userId`.
 - Device credentials are created through the custom realm resource endpoint at `/realms/{realm}/device-credentials`.
 - Device login is completed through a custom OAuth grant at the Keycloak token endpoint using `grant_type=urn:auth-sandbox-2:params:oauth:grant-type:device-login`.
-- `POST /api/flows` is purpose-gated: anonymous callers may create `registration` flows, while `step_up` and `account_upgrade` require a valid Keycloak user bearer token from the allowed app/browser clients.
-- When a protected flow payload includes `subjectId`, it must match the bearer user; otherwise `auth-api` derives `subjectId` from the token.
-- Generic flow follow-up endpoints require `Authorization: Bearer <flowToken>` returned from `POST /api/flows`.
+- `POST /api/registration-flows` accepts the concrete anonymous registration bootstrap payload.
+- `POST /api/step-up-flows` requires a valid Keycloak user bearer token from the allowed app/browser clients and binds the flow to that bearer user.
+- Flow follow-up endpoints require `Authorization: Bearer <flowToken>` returned from `POST /api/registration-flows` or `POST /api/step-up-flows`.
 - Direct identification endpoints require a `serviceToken`, and `POST /api/flows/:flowId/finalize` consumes the returned `serviceResultToken`.
 - Internal flow artifact redeem now uses the dedicated Keycloak service-account client `auth-api-internal-redeem`.
 - Browser-facing admin, password-setup, mobile step-up, and trace routes are protected with exact demo bearer tokens injected by Caddy.
