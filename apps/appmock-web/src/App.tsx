@@ -62,6 +62,12 @@ type PendingRegistration = {
   selectedService: AssuranceFlowService
   // Redacted SMS destination shown back to the user, e.g. ***1234.
   maskedTarget?: string | null
+  devCode?: string | null
+}
+
+type VerificationFeedback = {
+  kind: 'error' | 'info' | 'success'
+  message: string
 }
 
 type ServiceMockApiState = {
@@ -160,6 +166,7 @@ export function App() {
   const [securePrompt, setSecurePrompt] = useState<SecurePrompt | null>(null)
   const [form, setForm] = useState(createInitialForm)
   const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null)
+  const [verificationFeedback, setVerificationFeedback] = useState<VerificationFeedback | null>(null)
   const [traceState, setTraceState] = useState<TraceState | null>(null)
   const [activeAuthenticatedTab, setActiveAuthenticatedTab] = useState<AuthenticatedTab>('tokens')
   const [serviceMockApi, setServiceMockApi] = useState<ServiceMockApiState>({
@@ -228,6 +235,7 @@ export function App() {
     setTokens(null)
     setSecurePrompt(null)
     setPendingRegistration(null)
+    setVerificationFeedback(null)
     setTraceState(null)
     setActiveAuthenticatedTab('tokens')
     setServiceMockApi({
@@ -530,9 +538,7 @@ export function App() {
       throw new Error('Für diese Person sind aktuell keine Identifikationsservices vorbereitet')
     }
 
-    const selectedService = created.availableServices.some((service) => service.id === form.selectedService)
-      ? form.selectedService
-      : created.availableServices[0].id
+    const selectedService = created.availableServices[0].id
 
     setPendingRegistration({
       flowId: created.flowId,
@@ -543,6 +549,8 @@ export function App() {
       availableServices: created.availableServices,
       selectedService,
       maskedTarget: created.method?.maskedTarget ?? null
+      ,
+      devCode: created.method?.devCode ?? null
     })
     setForm((current) => ({
       ...current,
@@ -551,6 +559,12 @@ export function App() {
       tan: ''
     }))
     setStatus('Wähle einen verfügbaren Identifikationsservice aus und führe ihn aus.')
+    setVerificationFeedback({
+      kind: 'info',
+      message: selectedService === 'sms_tan'
+        ? 'Starte jetzt die SMS-TAN, damit sie an die hinterlegte Nummer gesendet wird.'
+        : 'Gib den vorbereiteten Code ein. Ein zusätzlicher Startschritt ist für den Code nicht nötig.'
+    })
     setStep('register_verify')
   }
 
@@ -570,6 +584,8 @@ export function App() {
       return
     }
 
+    setVerificationFeedback(null)
+
     const selected = await api.selectFlowService(
       pendingRegistration.flowId,
       pendingRegistration.flowToken,
@@ -583,20 +599,27 @@ export function App() {
 
     const started = form.selectedService === 'sms_tan'
       ? await api.startSmsTan(serviceToken, traceState ?? undefined)
-      : { maskedTarget: null }
+      : { maskedTarget: null, devCode: null }
 
     setPendingRegistration((current) => current
       ? {
           ...current,
           serviceToken,
           selectedService: form.selectedService,
-          maskedTarget: started.maskedTarget ?? current.maskedTarget ?? null
+          maskedTarget: started.maskedTarget ?? current.maskedTarget ?? null,
+          devCode: started.devCode ?? null
         }
       : current)
 
     setStatus(form.selectedService === 'sms_tan'
       ? 'Die SMS-TAN wurde gesendet. Gib sie hier ein oder fordere eine neue SMS-TAN an.'
       : 'Gib den vorbereiteten Code ein, um die Registrierung fortzusetzen.')
+    setVerificationFeedback({
+      kind: 'success',
+      message: form.selectedService === 'sms_tan'
+        ? `Die SMS-TAN wurde an ${started.maskedTarget ?? pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet.`
+        : 'Code-Prüfung ist bereit. Gib jetzt den vorbereiteten Registrierungscode ein.'
+    })
   }
 
   async function handleCompleteSelectedService(event: FormEvent) {
@@ -605,13 +628,33 @@ export function App() {
       return
     }
 
-    await runAction(async () => {
-      if (!pendingRegistration.serviceToken) {
-        throw new Error('No service token available. Start the selected service first.')
+    setBusy(true)
+    setVerificationFeedback(null)
+    try {
+      let serviceToken = pendingRegistration.serviceToken
+      if (!serviceToken) {
+        const selected = await api.selectFlowService(
+          pendingRegistration.flowId,
+          pendingRegistration.flowToken,
+          { service: form.selectedService },
+          traceState ?? undefined
+        )
+        serviceToken = selected.serviceToken
+        if (!serviceToken) {
+          throw new Error('Für den gewählten Service wurde kein Service-Token zurückgegeben.')
+        }
+        setPendingRegistration((current) => current
+          ? {
+              ...current,
+              serviceToken,
+              selectedService: form.selectedService
+            }
+          : current)
       }
+
       const completed = form.selectedService === 'person_code'
-        ? await api.completePersonCode(pendingRegistration.serviceToken, form.code, traceState ?? undefined)
-        : await api.completeSmsTan(pendingRegistration.serviceToken, form.tan, traceState ?? undefined)
+        ? await api.completePersonCode(serviceToken, form.code, traceState ?? undefined)
+        : await api.completeSmsTan(serviceToken, form.tan, traceState ?? undefined)
       const finalized = await api.finalizeFlow(
         pendingRegistration.flowId,
         pendingRegistration.flowToken,
@@ -622,7 +665,13 @@ export function App() {
         publicKey: pendingRegistration.publicKey,
         privateKey: pendingRegistration.privateKey
       })
-    })
+    } catch (error) {
+      const message = readErrorMessage(error)
+      setVerificationFeedback({ kind: 'error', message })
+      setStatus(message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleResendTan() {
@@ -638,7 +687,8 @@ export function App() {
       setPendingRegistration((current) => current
         ? {
             ...current,
-            maskedTarget: restarted.maskedTarget ?? current.maskedTarget ?? null
+            maskedTarget: restarted.maskedTarget ?? current.maskedTarget ?? null,
+            devCode: restarted.devCode ?? current.devCode ?? null
           }
         : current)
       setForm((current) => ({
@@ -646,6 +696,33 @@ export function App() {
         tan: ''
       }))
       setStatus('Eine neue SMS-TAN wurde gesendet.')
+      setVerificationFeedback({
+        kind: 'success',
+        message: `Eine neue SMS-TAN wurde an ${restarted.maskedTarget ?? pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet.`
+      })
+    })
+  }
+
+  function handleRegistrationServiceChange(nextService: AssuranceFlowService) {
+    setForm((current) => ({
+      ...current,
+      selectedService: nextService,
+      code: '',
+      tan: ''
+    }))
+    setPendingRegistration((current) => current
+      ? {
+          ...current,
+          selectedService: nextService,
+          serviceToken: undefined,
+          devCode: null
+        }
+      : current)
+    setVerificationFeedback({
+      kind: 'info',
+      message: nextService === 'sms_tan'
+        ? 'Starte die SMS-TAN, damit der Demo-Code angezeigt und bestätigt werden kann.'
+        : 'Gib direkt den vorbereiteten Registrierungscode ein.'
     })
   }
 
@@ -870,11 +947,8 @@ export function App() {
                       <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                     </label>
                     <label>
-                      <span className="field-label">Bevorzugter Service</span>
-                      <select name="preferredService" value={form.selectedService} onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService })} disabled={busy}>
-                        <option value="person_code">Code</option>
-                        <option value="sms_tan">SMS-TAN</option>
-                      </select>
+                      <span className="field-label">Nächster Schritt</span>
+                      <input value="Service wird nach dem Erstellen des Flows gewählt" disabled aria-label="Nächster Schritt" />
                     </label>
                     <button type="submit" disabled={busy}>Weiter</button>
                   </form>
@@ -898,7 +972,7 @@ export function App() {
                     <select
                       name="availableService"
                       value={form.selectedService}
-                      onChange={(event) => setForm({ ...form, selectedService: event.target.value as AssuranceFlowService, code: '', tan: '' })}
+                      onChange={(event) => handleRegistrationServiceChange(event.target.value as AssuranceFlowService)}
                       disabled={busy}
                     >
                       {pendingRegistration.availableServices.map((service) => (
@@ -906,35 +980,61 @@ export function App() {
                       ))}
                     </select>
                   </label>
-                  <div className="challenge-card">
-                    <p className="section-label">Service starten</p>
-                    <strong>{form.selectedService === 'sms_tan' ? 'SMS-TAN senden' : 'Code prüfen'}</strong>
-                    <p className="muted-copy">
-                      {form.selectedService === 'sms_tan'
-                        ? `Die SMS-TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet. Gib sie hier ein und bestätige den Schritt anschließend.`
-                        : 'Der Nutzer gibt den vorbereiteten Code selbst ein.'}
-                     </p>
-                     <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
-                       {form.selectedService === 'sms_tan' ? 'SMS-TAN senden' : 'Code-Eingabe starten'}
-                     </button>
-                   </div>
-                   <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
-                    {form.selectedService === 'person_code' ? (
-                      <label>
-                        <span className="field-label">Code</span>
-                        <input name="code" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} disabled={busy} />
-                      </label>
-                    ) : (
+                  {verificationFeedback && (
+                    <div className={`feedback-banner feedback-${verificationFeedback.kind}`} role={verificationFeedback.kind === 'error' ? 'alert' : 'status'}>
+                      <strong>{verificationFeedback.kind === 'error' ? 'Fehler' : verificationFeedback.kind === 'success' ? 'Bereit' : 'Hinweis'}</strong>
+                      <p>{verificationFeedback.message}</p>
+                    </div>
+                  )}
+                  <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
+                     {form.selectedService === 'person_code' ? (
+                        <>
+                          <label>
+                            <span className="field-label">Registrierungscode</span>
+                            <input
+                              name="code"
+                              value={form.code}
+                              onChange={(event) => setForm({ ...form, code: event.target.value })}
+                              disabled={busy}
+                              aria-describedby="person-code-help"
+                            />
+                          </label>
+                          <p className="muted-copy" id="person-code-help">Nutze hier direkt den vorbereiteten Code aus der Admin-Registrierung. Ein separater Startschritt ist nicht erforderlich.</p>
+                        </>
+                     ) : (
                       <>
+                        <div className="challenge-card">
+                          <p className="section-label">SMS-TAN starten</p>
+                          <strong>Demo-SMS-TAN anfordern</strong>
+                          <p className="muted-copy">
+                            {`Die SMS-TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet. Nach dem Start erscheint der Demo-Code direkt hier in der UI.`}
+                          </p>
+                          <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
+                            SMS-TAN senden
+                          </button>
+                        </div>
+                        {pendingRegistration.devCode && (
+                          <div className="feedback-banner feedback-success" role="status">
+                            <strong>Demo-Code</strong>
+                            <p>{`SMS-TAN fuer die Demo: ${pendingRegistration.devCode}`}</p>
+                          </div>
+                        )}
                         <label>
                           <span className="field-label">SMS-TAN</span>
-                          <input name="tan" value={form.tan} onChange={(event) => setForm({ ...form, tan: event.target.value })} disabled={busy} />
+                          <input
+                            name="tan"
+                            value={form.tan}
+                            onChange={(event) => setForm({ ...form, tan: event.target.value })}
+                            disabled={busy}
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                          />
                         </label>
-                         <button type="button" onClick={() => void handleResendTan()} disabled={busy}>Neue SMS-TAN senden</button>
-                       </>
-                     )}
-                     <button type="submit" disabled={busy}>{form.selectedService === 'sms_tan' ? 'SMS-TAN bestätigen' : 'Identifikation abschließen'}</button>
-                   </form>
+                        <button type="button" className="button-secondary" onClick={() => void handleResendTan()} disabled={busy}>Neue SMS-TAN senden</button>
+                      </>
+                      )}
+                      <button type="submit" disabled={busy}>{form.selectedService === 'sms_tan' ? 'SMS-TAN bestätigen' : 'Identifikation abschließen'}</button>
+                    </form>
                  </>
                )}
 

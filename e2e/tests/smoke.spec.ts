@@ -347,7 +347,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByLabel('Geburtsdatum').fill('1990-01-01')
   await page.getByLabel('Telefonnummer').fill('+491701234567')
   await page.getByLabel('Gerätename').fill('Playwright Device')
-  await page.getByLabel('Bevorzugter Service').selectOption('sms_tan')
+  await expect(page.getByLabel('Nächster Schritt')).toHaveValue('Service wird nach dem Erstellen des Flows gewählt')
   await page.getByRole('button', { name: 'Weiter' }).click()
   await expect(page.getByLabel('Secure element prompt')).toBeVisible()
   await expect(page.getByText('Bestätige deine Identität')).toBeVisible()
@@ -360,6 +360,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   expect(startSmsTanResponse.ok()).toBeTruthy()
   const startSmsTanBody = await startSmsTanResponse.json() as SmsTanStartResponse
   expect(startSmsTanBody.devCode).toMatch(/^\d{6}$/)
+  await expect(page.getByText(`SMS-TAN fuer die Demo: ${startSmsTanBody.devCode ?? ''}`)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Neue SMS-TAN senden' })).toBeVisible()
   await page.getByRole('textbox', { name: 'SMS-TAN' }).fill(startSmsTanBody.devCode ?? '')
   await page.getByRole('button', { name: 'SMS-TAN bestätigen' }).click()
@@ -769,8 +770,8 @@ test('missing saved device binding is cleared instead of failing with a server e
   await expect(page.getByLabel('Secure element prompt')).toBeVisible()
   await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
   await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
-  await page.getByRole('button', { name: 'Code-Eingabe starten' }).click()
-  await page.getByRole('textbox', { name: 'Code' }).fill(registrationCode)
+  await expect(page.getByText('Ein separater Startschritt ist nicht erforderlich.')).toBeVisible()
+  await page.getByRole('textbox', { name: 'Registrierungscode' }).fill(registrationCode)
   await page.getByRole('button', { name: 'Identifikation abschließen' }).click()
 
   await expect(page.getByRole('heading', { name: /Neues Passwort erstellen|Mit gespeichertem Gerät anmelden/ })).toBeVisible()
@@ -806,4 +807,39 @@ test('missing saved device binding is cleared instead of failing with a server e
 
   const storedBinding = await page.evaluate(() => window.localStorage.getItem('auth-sandbox-2.device-binding'))
   expect(storedBinding).toBeNull()
+})
+
+test('registration verification shows inline error feedback for invalid code attempts', async ({ page, request }) => {
+  const userId = `e2e-invalid-code-${Date.now()}`
+  const registrationCode = `CODE${Date.now().toString(36).toUpperCase()}`
+
+  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS,
+    data: {
+      userId,
+      firstName: 'Invalid',
+      lastName: 'Code',
+      birthDate: '1990-01-01',
+      code: registrationCode,
+      codeValidForDays: 30
+    }
+  })
+
+  expect(registrationResponse.ok()).toBeTruthy()
+
+  await page.goto('https://appmock.localhost:8443')
+  await page.getByLabel('Benutzer-ID').fill(userId)
+  await page.getByLabel('Vorname').fill('Invalid')
+  await page.getByLabel('Nachname').fill('Code')
+  await page.getByLabel('Geburtsdatum').fill('1990-01-01')
+  await page.getByLabel('Gerätename').fill('Inline Error Device')
+  await page.getByRole('button', { name: 'Weiter' }).click()
+  await expect(page.getByLabel('Secure element prompt')).toBeVisible()
+  await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+  await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Registrierungscode' }).fill('WRONGCODE')
+  await page.getByRole('button', { name: 'Identifikation abschließen' }).click()
+
+  await expect(page.getByRole('alert')).toContainText('Invalid verification code')
+  await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
 })
