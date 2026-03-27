@@ -977,6 +977,18 @@ function decodeArtifact(rawValue: string, encoding?: string | null, contentType?
     }
   }
 
+  const signedJsonToken = decodeSignedJsonTokenValue(rawValue)
+  if (signedJsonToken) {
+    derivedValue.decoded = signedJsonToken.value
+    derivedValue.decodedSource = inferArtifactSource(artifactName, 'decoded')
+    fields.push(...explainKnownFields(signedJsonToken.value, 'decoded'))
+    return {
+      derivedValue,
+      fields,
+      explanation: 'Signed auth flow token decoded for demo inspection.'
+    }
+  }
+
   if (normalizedEncoding === 'base64' || normalizedEncoding === 'base64url') {
     const buffer = Buffer.from(rawValue, normalizedEncoding === 'base64url' ? 'base64url' : 'base64')
     const text = buffer.toString('utf8')
@@ -1252,6 +1264,11 @@ function decodeNestedString(value: string) {
     }
   }
 
+  const decodedSignedJsonToken = decodeSignedJsonTokenValue(candidate)
+  if (decodedSignedJsonToken) {
+    return decodedSignedJsonToken
+  }
+
   const decodedBase64Url = decodeBase64JsonValue(candidate, 'base64url')
   if (decodedBase64Url) {
     return decodedBase64Url
@@ -1302,6 +1319,45 @@ function decodeBase64JsonValue(value: string, encoding: 'base64' | 'base64url') 
     }
   } catch {
     return null
+  }
+}
+
+function decodeSignedJsonTokenValue(value: string) {
+  const segments = value.split('.')
+  if (segments.length !== 2) {
+    return null
+  }
+
+  const [payload, signature] = segments
+  if (!looksLikeBase64Value(payload, 'base64url') || !looksLikeBase64Value(signature, 'base64url')) {
+    return null
+  }
+
+  try {
+    const parsed = parseJson(Buffer.from(payload, 'base64url').toString('utf8'))
+    if (!isRecord(parsed) || typeof parsed.kind !== 'string' || typeof parsed.expiresAt !== 'string') {
+      return null
+    }
+
+    return {
+      encoding: inferSignedJsonTokenEncoding(parsed),
+      value: parsed
+    }
+  } catch {
+    return null
+  }
+}
+
+function inferSignedJsonTokenEncoding(claims: JsonObject) {
+  switch (claims.kind) {
+    case 'flow':
+      return 'flow-token'
+    case 'service':
+      return 'service-token'
+    case 'service_result':
+      return 'service-result-token'
+    default:
+      return 'signed-token'
   }
 }
 

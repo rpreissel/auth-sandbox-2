@@ -97,6 +97,7 @@ button {
   display: grid;
   gap: 1rem;
   align-content: start;
+  min-width: 0;
 }
 
 .trace-list-card {
@@ -135,6 +136,7 @@ button {
 .explanation-list {
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .trace-list {
@@ -269,6 +271,7 @@ button {
   border-radius: 20px;
   background: rgba(14, 34, 52, 0.06);
   border: 1px solid rgba(14, 34, 52, 0.08);
+  min-width: 0;
 }
 
 .trace-spotlight-compact {
@@ -278,12 +281,14 @@ button {
 .trace-spotlight-header {
   display: grid;
   gap: 0.7rem;
+  min-width: 0;
 }
 
 .trace-spotlight-header h3 {
   margin: 0;
   font-size: 1.35rem;
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .trace-summary-lead {
@@ -311,6 +316,11 @@ button {
   display: grid;
   gap: 0.3rem;
   min-width: 0;
+}
+
+.trace-fact-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .trace-fact-list span,
