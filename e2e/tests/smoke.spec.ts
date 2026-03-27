@@ -372,13 +372,11 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByLabel('Neues Passwort').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
 
-  await expect(page.getByText('Bestätige den Schlüsselspeicherzugriff, um die automatische Anmeldung abzuschließen')).toBeVisible()
-  await expect(page.getByLabel('Secure element prompt')).toBeVisible()
-  await expect(page.getByText('Bestätige deine Identität')).toBeVisible()
-  await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+  await expect(page.getByText('Automatische Anmeldung läuft...')).toBeVisible()
 
   await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
   await expect(page.getByText('Angemeldet und bereit')).toBeVisible()
+  await expect(page.getByText('Automatisch angemeldet')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Aktive Sitzung' })).toBeVisible()
   await expect(page.getByLabel('Token overview cards')).toContainText('Zugriff')
   await expect(page.getByLabel('Token claim summary').locator('article').filter({ hasText: 'Assurance Level' }).locator('strong')).toHaveText('2se')
