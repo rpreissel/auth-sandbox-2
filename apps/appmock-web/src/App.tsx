@@ -38,6 +38,10 @@ type StoredDeviceBinding = {
   passwordRequired: boolean
 }
 
+type AutoLoginState = {
+  active: boolean
+}
+
 type TraceState = {
   traceId: string
   sessionId: string
@@ -158,6 +162,7 @@ function clearDeviceBinding() {
 
 export function App() {
   const [step, setStep] = useState<Step>('register')
+  const [hydrated, setHydrated] = useState(false)
   const [status, setStatus] = useState<string>('Ready')
   const [busy, setBusy] = useState(false)
   const [device, setDevice] = useState<DeviceState | null>(null)
@@ -168,6 +173,7 @@ export function App() {
   const [pendingRegistration, setPendingRegistration] = useState<PendingRegistration | null>(null)
   const [verificationFeedback, setVerificationFeedback] = useState<VerificationFeedback | null>(null)
   const [traceState, setTraceState] = useState<TraceState | null>(null)
+  const [autoLogin, setAutoLogin] = useState<AutoLoginState | null>(null)
   const [activeAuthenticatedTab, setActiveAuthenticatedTab] = useState<AuthenticatedTab>('tokens')
   const [serviceMockApi, setServiceMockApi] = useState<ServiceMockApiState>({
     profile: null,
@@ -183,6 +189,26 @@ export function App() {
   const sharedTokenClaimKeys = useMemo(() => buildSharedClaimKeys(accessClaims, idClaims), [accessClaims, idClaims])
   const challengeExpiresAt = useMemo(() => (challenge ? formatDateTime(challenge.expiresAt) : null), [challenge])
   const tokenLifetimeLabel = useMemo(() => (tokens ? formatLifetime(tokens.expiresIn) : null), [tokens])
+  const restoringDevice = !hydrated
+  const hideEmptySessionState = hydrated && !tokens && Boolean(device) && (step === 'login' || step === 'password')
+  const promptActive = Boolean(securePrompt)
+  const compactHero = restoringDevice || Boolean(device) || Boolean(tokens)
+  const heroTitle = restoringDevice
+    ? 'Gerät wird geprüft'
+    : tokens
+      ? 'Sitzung aktiv'
+      : step === 'login' && device
+        ? 'Gerät bereit'
+        : device
+          ? 'Gerät registriert'
+          : 'Dieses Telefon einrichten'
+  const heroCopy = restoringDevice
+    ? 'Die lokale Gerätebindung wird geprüft, damit nach dem Neuladen direkt der passende Anmeldeschritt erscheint.'
+    : tokens
+      ? 'Deine Keycloak-Sitzung ist auf diesem Gerät aktiv.'
+      : device
+        ? 'Dieses Gerät ist bereits registriert. Starte jetzt die geschützte Geräteanmeldung.'
+        : 'Gib zuerst deine Identitätsdaten ein und identifiziere dich dann per Code oder SMS-TAN.'
 
   useEffect(() => {
     let cancelled = false
@@ -190,6 +216,9 @@ export function App() {
     void (async () => {
       const stored = readStoredDeviceBinding()
       if (!stored) {
+        if (!cancelled) {
+          setHydrated(true)
+        }
         return
       }
 
@@ -215,10 +244,12 @@ export function App() {
         }))
         setStep(stored.passwordRequired ? 'password' : 'login')
         setStatus('Dieses Gerät ist bereit zur Anmeldung')
+        setHydrated(true)
       } catch {
         clearDeviceBinding()
         if (!cancelled) {
           setStatus('Gespeicherte Gerätebindung war ungültig und wurde entfernt')
+          setHydrated(true)
         }
       }
     })()
@@ -237,6 +268,7 @@ export function App() {
     setPendingRegistration(null)
     setVerificationFeedback(null)
     setTraceState(null)
+    setAutoLogin(null)
     setActiveAuthenticatedTab('tokens')
     setServiceMockApi({
       profile: null,
@@ -267,6 +299,20 @@ export function App() {
       await syncServiceMockApi('Geschützte ServiceMock API synchronisiert')
     })
   }, [tokens?.accessToken])
+
+  useEffect(() => {
+    if (!promptActive) {
+      document.body.style.overflow = ''
+      return
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [promptActive])
 
   async function runAction(action: () => Promise<void>) {
     setBusy(true)
@@ -439,8 +485,9 @@ export function App() {
     })
   }
 
-  async function requestLoginChallenge(nextStatus: string) {
-    if (!device) {
+  async function requestLoginChallenge(nextStatus: string, options?: { autoFinish?: boolean; deviceOverride?: DeviceState }) {
+    const currentDevice = options?.deviceOverride ?? device
+    if (!currentDevice) {
       return
     }
 
@@ -448,21 +495,21 @@ export function App() {
     const flow = traceState ?? await createFlowTrace('device_login_started', [{
         name: 'device_binding',
         value: {
-          publicKeyHash: device.publicKeyHash,
+          publicKeyHash: currentDevice.publicKeyHash,
           // Trace-only context for the explorer; /api/device/login/start only
           // receives publicKeyHash.
-          userId: device.userId
+          userId: currentDevice.userId
         }
       }])
     let result: StartLoginResponse
 
     try {
-      result = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
+      result = await api.startLogin({ publicKeyHash: currentDevice.publicKeyHash }, flow)
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
         resetDeviceFlow('Gespeicherte Gerätebindung war ungültig und wurde entfernt', {
-          userId: device.userId,
-          deviceName: device.deviceName
+          userId: currentDevice.userId,
+          deviceName: currentDevice.deviceName
         })
         return
       }
@@ -479,6 +526,11 @@ export function App() {
       caption: `Challenge bereit bis ${formatDateTime(result.expiresAt)}`,
       confirmLabel: 'Displaysperre verwenden'
     })
+    if (options?.autoFinish) {
+      setAutoLogin({ active: true })
+      setStatus(nextStatus)
+      return
+    }
     setStatus(nextStatus)
   }
 
@@ -510,7 +562,10 @@ export function App() {
     }
 
     setPendingRegistration(null)
-    await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff, um die Anmeldung abzuschließen')
+    await requestLoginChallenge('Automatische Anmeldung läuft...', {
+      autoFinish: true,
+      deviceOverride: nextDevice
+    })
   }
 
   async function completeRegister() {
@@ -739,7 +794,7 @@ export function App() {
       setStatus('Keycloak-Passwort wird gespeichert...')
       await api.setPassword({ userId: device.userId, password: form.password }, flow)
       await persistDeviceBinding(device, false)
-      await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff, um die automatische Anmeldung abzuschließen')
+      await requestLoginChallenge('Automatische Anmeldung läuft...', { autoFinish: true })
     })
   }
 
@@ -750,7 +805,7 @@ export function App() {
     })
   }
 
-  async function handleFinishLogin() {
+  async function handleFinishLogin(options?: { preserveStatus?: boolean; clearAutoLogin?: boolean }) {
     if (!device || !challenge) return
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{
@@ -777,8 +832,11 @@ export function App() {
       setTraceState(null)
       setTokens(result)
       setChallenge(null)
+      if (options?.clearAutoLogin) {
+        setAutoLogin(null)
+      }
       setActiveAuthenticatedTab('tokens')
-      setStatus('Angemeldet')
+      setStatus(options?.preserveStatus ? 'Automatisch angemeldet' : 'Angemeldet')
       setStep('authenticated')
     })
   }
@@ -837,6 +895,17 @@ export function App() {
     })
   }
 
+  useEffect(() => {
+    if (!autoLogin?.active || !challenge || !device || busy || step !== 'login') {
+      return
+    }
+
+    void handleFinishLogin({
+      preserveStatus: true,
+      clearAutoLogin: true
+    })
+  }, [autoLogin, challenge, device, busy, step])
+
   async function handleConfirmSecurePrompt() {
     if (!securePrompt) {
       return
@@ -856,6 +925,14 @@ export function App() {
   }
 
   function handleCancelSecurePrompt() {
+    if (securePrompt?.kind === 'login') {
+      setAutoLogin(null)
+      setChallenge(null)
+      setStatus('Biometrischer Dialog geschlossen. Starte die Geräteanmeldung erneut, wenn du fortfahren möchtest.')
+      setSecurePrompt(null)
+      return
+    }
+
     setSecurePrompt(null)
     setStatus('Biometrischer Dialog geschlossen')
   }
@@ -877,117 +954,156 @@ export function App() {
             </div>
           </div>
 
-          <section className="app-shell">
-            <header className="hero card hero-card">
-              <p className="eyebrow">Android Device Pass</p>
-              <h1>{tokens ? 'Aktive Sitzung' : device ? 'Dieses Telefon ist bereit' : 'Dieses Telefon einrichten'}</h1>
-              <p className="lede">
-              {tokens
-                  ? 'Deine Keycloak-Sitzung ist auf diesem Gerät aktiv.'
-                  : device
-                    ? 'Nutze die gespeicherte Gerätebindung, um dich mit Android-Sicherheit erneut anzumelden.'
-                    : 'Gib zuerst deine Identitätsdaten ein und identifiziere dich dann per Code oder SMS-TAN.'}
-              </p>
-            </header>
+          <section className={promptActive ? 'app-shell app-shell-obscured' : 'app-shell'} aria-hidden={promptActive}>
+            <aside className="app-sidebar">
+              <header className={compactHero ? 'hero card hero-card hero-card-compact' : 'hero card hero-card'}>
+                <p className="eyebrow">Android Device Pass</p>
+                <h1>{heroTitle}</h1>
+                <p className="lede">{heroCopy}</p>
+              </header>
 
-            <section className="status-card card" aria-live="polite">
-              <p className="section-label">Status</p>
-              <strong>{status}</strong>
-              <div className="status-strip" aria-label="Android security status">
-                <span className="status-pill">Keystore bereit</span>
-                <span className="status-pill">Gerät gebunden</span>
-              </div>
-              <p className="muted-copy">
-                {tokens
-                  ? `Sitzung aktiv für ${tokenLifetimeLabel ?? 'begrenzte Zeit'}.`
-                  : challengeExpiresAt
-                     ? `Sichere Anmeldeanfrage bereit bis ${challengeExpiresAt}.`
-                     : device
-                       ? 'Die Gerätebindung ist auf diesem Telefon gespeichert.'
-                       : 'Noch keine Gerätebindung gespeichert.'}
-              </p>
-            </section>
+              <section className="status-card card" aria-live="polite">
+                <p className="section-label">Status</p>
+                <strong>{restoringDevice ? 'Gespeicherte Gerätebindung wird geladen' : status}</strong>
+                <div className="status-strip" aria-label="Android security status">
+                  <span className="status-pill">Keystore bereit</span>
+                  <span className="status-pill">Gerät gebunden</span>
+                </div>
+                <p className="muted-copy">
+                  {restoringDevice
+                    ? 'Lokale Daten werden geprüft, bevor der nächste Schritt angezeigt wird.'
+                    : tokens
+                    ? `Sitzung aktiv für ${tokenLifetimeLabel ?? 'begrenzte Zeit'}.`
+                    : challengeExpiresAt
+                       ? `Sichere Anmeldeanfrage bereit bis ${challengeExpiresAt}.`
+                       : device
+                          ? 'Die Gerätebindung ist gespeichert, aber es gibt noch keine aktive Keycloak-Sitzung.'
+                          : 'Noch keine Gerätebindung gespeichert.'}
+                </p>
+              </section>
 
-            <section className="card flow-card">
-              {step === 'register' && (
-                <>
-                  <div className="section-heading simple-heading">
-                    <div>
-                      <p className="section-label">Registrierung</p>
-                      <h2>Geräteanmeldung einrichten</h2>
-                    </div>
+              {hydrated && step === 'authenticated' && tokens && device && (
+                <section className="card authenticated-sidebar-card" aria-label="Authenticated sidebar summary">
+                  <div>
+                    <p className="section-label">Gerätekontext</p>
+                    <h2>{device.deviceName}</h2>
                   </div>
-                  <div className="android-intro">
-                    <strong>Prüfe zuerst deine Personendaten und wähle dann Code oder SMS-TAN.</strong>
-                    <p className="muted-copy">Die hinterlegte Methode wird gegen die beim Admin vorbereiteten Personendaten geprüft und bleibt als Flow später für Browser-Step-up wiederverwendbar.</p>
+                  <p className="muted-copy">Links bleibt der Sitzungsrahmen sichtbar, während rechts Token-Details und geschützte APIs im Fokus stehen.</p>
+                  <div className="authenticated-sidebar-summary">
+                    <article>
+                      <span>Zugriff</span>
+                      <strong>Erteilt</strong>
+                      <p>Access-Token bereit</p>
+                    </article>
+                    <article>
+                      <span>ID</span>
+                      <strong>Bereit</strong>
+                      <p>Identität geladen</p>
+                    </article>
+                    <article>
+                      <span>Refresh</span>
+                      <strong>Gespeichert</strong>
+                      <p>Sitzung erneuerbar</p>
+                    </article>
                   </div>
-                  <form className="grid form-stack" onSubmit={handleRegister}>
-                    <label>
-                      <span className="field-label">Benutzer-ID</span>
-                      <input name="userId" value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} disabled={busy} />
-                    </label>
-                    <label>
-                      <span className="field-label">Vorname</span>
-                      <input name="firstName" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} disabled={busy} />
-                    </label>
-                    <label>
-                      <span className="field-label">Nachname</span>
-                      <input name="lastName" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} disabled={busy} />
-                    </label>
-                    <label>
-                      <span className="field-label">Geburtsdatum</span>
-                      <input name="birthDate" type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} disabled={busy} />
-                    </label>
-                    <label>
-                      <span className="field-label">Telefonnummer</span>
-                      <input name="phoneNumber" value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} disabled={busy} />
-                    </label>
-                    <label>
-                      <span className="field-label">Gerätename</span>
-                      <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
-                    </label>
-                    <label>
-                      <span className="field-label">Nächster Schritt</span>
-                      <input value="Service wird nach dem Erstellen des Flows gewählt" disabled aria-label="Nächster Schritt" />
-                    </label>
-                    <button type="submit" disabled={busy}>Weiter</button>
-                  </form>
-                </>
+                </section>
               )}
 
-              {step === 'register_verify' && pendingRegistration && (
-                <>
-                  <div className="section-heading simple-heading">
-                    <div>
-                      <p className="section-label">Identifikation</p>
-                      <h2>Verfügbaren Service ausführen</h2>
+            </aside>
+
+            <section className="app-main">
+              <section className="card flow-card">
+                {restoringDevice && (
+                  <>
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Gerät</p>
+                        <h2>Gespeicherte Anmeldung prüfen</h2>
+                      </div>
                     </div>
-                  </div>
-                  <div className="android-intro">
-                    <strong>Es werden nur die für diese Person vorbereiteten Services angeboten.</strong>
-                    <p className="muted-copy">SMS-TAN erscheint nur mit hinterlegter Telefonnummer. Weitere Services können später über dieselbe Flow-Auswahl ergänzt werden.</p>
-                  </div>
-                  <label>
-                    <span className="field-label">Verfügbarer Service</span>
-                    <select
-                      name="availableService"
-                      value={form.selectedService}
-                      onChange={(event) => handleRegistrationServiceChange(event.target.value as AssuranceFlowService)}
-                      disabled={busy}
-                    >
-                      {pendingRegistration.availableServices.map((service) => (
-                        <option key={service.id} value={service.id}>{service.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  {verificationFeedback && (
-                    <div className={`feedback-banner feedback-${verificationFeedback.kind}`} role={verificationFeedback.kind === 'error' ? 'alert' : 'status'}>
-                      <strong>{verificationFeedback.kind === 'error' ? 'Fehler' : verificationFeedback.kind === 'success' ? 'Bereit' : 'Hinweis'}</strong>
-                      <p>{verificationFeedback.message}</p>
+                    <p className="muted-copy">Die App liest zuerst die lokale Gerätebindung, damit nach dem Neuladen kein falscher Registrierungs- oder Login-Schritt angezeigt wird.</p>
+                  </>
+                )}
+
+                {hydrated && step === 'register' && (
+                  <>
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Registrierung</p>
+                        <h2>Geräteanmeldung einrichten</h2>
+                      </div>
                     </div>
-                  )}
-                  <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
-                     {form.selectedService === 'person_code' ? (
+                    <div className="android-intro">
+                      <strong>Prüfe zuerst deine Personendaten und wähle dann Code oder SMS-TAN.</strong>
+                      <p className="muted-copy">Die hinterlegte Methode wird gegen die beim Admin vorbereiteten Personendaten geprüft und bleibt als Flow später für Browser-Step-up wiederverwendbar.</p>
+                    </div>
+                    <form className="grid form-stack" onSubmit={handleRegister}>
+                      <label>
+                        <span className="field-label">Benutzer-ID</span>
+                        <input name="userId" value={form.userId} onChange={(event) => setForm({ ...form, userId: event.target.value })} disabled={busy} />
+                      </label>
+                      <label>
+                        <span className="field-label">Vorname</span>
+                        <input name="firstName" value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} disabled={busy} />
+                      </label>
+                      <label>
+                        <span className="field-label">Nachname</span>
+                        <input name="lastName" value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} disabled={busy} />
+                      </label>
+                      <label>
+                        <span className="field-label">Geburtsdatum</span>
+                        <input name="birthDate" type="date" value={form.birthDate} onChange={(event) => setForm({ ...form, birthDate: event.target.value })} disabled={busy} />
+                      </label>
+                      <label>
+                        <span className="field-label">Telefonnummer</span>
+                        <input name="phoneNumber" value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} disabled={busy} />
+                      </label>
+                      <label>
+                        <span className="field-label">Gerätename</span>
+                        <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
+                      </label>
+                      <label>
+                        <span className="field-label">Nächster Schritt</span>
+                        <input value="Service wird nach dem Erstellen des Flows gewählt" disabled aria-label="Nächster Schritt" />
+                      </label>
+                      <button type="submit" disabled={busy}>Weiter</button>
+                    </form>
+                  </>
+                )}
+
+                {hydrated && step === 'register_verify' && pendingRegistration && (
+                  <>
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Identifikation</p>
+                        <h2>Verfügbaren Service ausführen</h2>
+                      </div>
+                    </div>
+                    <div className="android-intro">
+                      <strong>Es werden nur die für diese Person vorbereiteten Services angeboten.</strong>
+                      <p className="muted-copy">SMS-TAN erscheint nur mit hinterlegter Telefonnummer. Weitere Services können später über dieselbe Flow-Auswahl ergänzt werden.</p>
+                    </div>
+                    <label>
+                      <span className="field-label">Verfügbarer Service</span>
+                      <select
+                        name="availableService"
+                        value={form.selectedService}
+                        onChange={(event) => handleRegistrationServiceChange(event.target.value as AssuranceFlowService)}
+                        disabled={busy}
+                      >
+                        {pendingRegistration.availableServices.map((service) => (
+                          <option key={service.id} value={service.id}>{service.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {verificationFeedback && (
+                      <div className={`feedback-banner feedback-${verificationFeedback.kind}`} role={verificationFeedback.kind === 'error' ? 'alert' : 'status'}>
+                        <strong>{verificationFeedback.kind === 'error' ? 'Fehler' : verificationFeedback.kind === 'success' ? 'Bereit' : 'Hinweis'}</strong>
+                        <p>{verificationFeedback.message}</p>
+                      </div>
+                    )}
+                    <form className="grid form-stack" onSubmit={handleCompleteSelectedService}>
+                      {form.selectedService === 'person_code' ? (
                         <>
                           <label>
                             <span className="field-label">Registrierungscode</span>
@@ -1001,191 +1117,191 @@ export function App() {
                           </label>
                           <p className="muted-copy" id="person-code-help">Nutze hier direkt den vorbereiteten Code aus der Admin-Registrierung. Ein separater Startschritt ist nicht erforderlich.</p>
                         </>
-                     ) : (
-                      <>
-                        <div className="challenge-card">
-                          <p className="section-label">SMS-TAN starten</p>
-                          <strong>Demo-SMS-TAN anfordern</strong>
-                          <p className="muted-copy">
-                            {`Die SMS-TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet. Nach dem Start erscheint der Demo-Code direkt hier in der UI.`}
-                          </p>
-                          <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
-                            SMS-TAN senden
-                          </button>
-                        </div>
-                        {pendingRegistration.devCode && (
-                          <div className="feedback-banner feedback-success" role="status">
-                            <strong>Demo-Code</strong>
-                            <p>{`SMS-TAN fuer die Demo: ${pendingRegistration.devCode}`}</p>
+                      ) : (
+                        <>
+                          <div className="challenge-card">
+                            <p className="section-label">SMS-TAN starten</p>
+                            <strong>Demo-SMS-TAN anfordern</strong>
+                            <p className="muted-copy">
+                              {`Die SMS-TAN wird an ${pendingRegistration.maskedTarget ?? 'die hinterlegte Nummer'} gesendet. Nach dem Start erscheint der Demo-Code direkt hier in der UI.`}
+                            </p>
+                            <button type="button" onClick={() => void runAction(handleStartSelectedService)} disabled={busy}>
+                              SMS-TAN senden
+                            </button>
                           </div>
-                        )}
-                        <label>
-                          <span className="field-label">SMS-TAN</span>
-                          <input
-                            name="tan"
-                            value={form.tan}
-                            onChange={(event) => setForm({ ...form, tan: event.target.value })}
-                            disabled={busy}
-                            inputMode="numeric"
-                            autoComplete="one-time-code"
-                          />
-                        </label>
-                        <button type="button" className="button-secondary" onClick={() => void handleResendTan()} disabled={busy}>Neue SMS-TAN senden</button>
-                      </>
+                          {pendingRegistration.devCode && (
+                            <div className="feedback-banner feedback-success" role="status">
+                              <strong>Demo-Code</strong>
+                              <p>{`SMS-TAN fuer die Demo: ${pendingRegistration.devCode}`}</p>
+                            </div>
+                          )}
+                          <label>
+                            <span className="field-label">SMS-TAN</span>
+                            <input
+                              name="tan"
+                              value={form.tan}
+                              onChange={(event) => setForm({ ...form, tan: event.target.value })}
+                              disabled={busy}
+                              inputMode="numeric"
+                              autoComplete="one-time-code"
+                            />
+                          </label>
+                          <button type="button" className="button-secondary" onClick={() => void handleResendTan()} disabled={busy}>Neue SMS-TAN senden</button>
+                        </>
                       )}
                       <button type="submit" disabled={busy}>{form.selectedService === 'sms_tan' ? 'SMS-TAN bestätigen' : 'Identifikation abschließen'}</button>
                     </form>
-                 </>
-               )}
+                  </>
+                )}
 
-              {step === 'password' && (
-                <>
-                  <div className="section-heading simple-heading">
-                    <div>
-                      <p className="section-label">Passwort</p>
-                      <h2>Neues Passwort erstellen</h2>
-                    </div>
-                  </div>
-                  <p className="muted-copy">Dieses Konto braucht ein neues Keycloak-Passwort, bevor Android die Anmeldung abschließen kann.</p>
-                  <form className="grid form-stack" onSubmit={handlePassword}>
-                    <label>
-                      <span className="field-label">Neues Passwort</span>
-                      <input name="password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={busy} />
-                    </label>
-                    <button type="submit" disabled={busy}>Passwort speichern</button>
-                  </form>
-                </>
-              )}
-
-              {step === 'login' && device && (
-                <>
-                  <div className="section-heading simple-heading">
-                    <div>
-                      <p className="section-label">Anmeldung</p>
-                      <h2>Mit gespeichertem Gerät anmelden</h2>
-                    </div>
-                  </div>
-                  <div className="challenge-card">
-                    <p className="section-label">Android-Sicherheit</p>
-                    <strong>{challenge ? 'Bereit zur Bestätigung' : 'Gespeicherte Geräteanmeldung ist bereit'}</strong>
-                    <p className="muted-copy">
-                      {challenge
-                         ? 'Bestätige dich mit der Displaysperre, um die Anmeldung abzuschließen.'
-                         : 'Die App fordert eine Challenge an und öffnet danach genau einen Android-Bestätigungsdialog.'}
-                    </p>
-                  </div>
-                  <div className="binding-stack">
-                    <div className="device-summary" aria-label="Saved device summary">
+                {hydrated && step === 'password' && (
+                  <>
+                    <div className="section-heading simple-heading">
                       <div>
-                        <span className="field-label">Konto</span>
-                        <strong>{device.userId}</strong>
-                      </div>
-                      <div>
-                        <span className="field-label">Gerät</span>
-                        <strong>{device.deviceName}</strong>
+                        <p className="section-label">Passwort</p>
+                        <h2>Neues Passwort erstellen</h2>
                       </div>
                     </div>
-                    <div className="binding-notice" role="note" aria-label="Local device binding notice">
-                      <strong>Auf diesem Telefon gespeichert</strong>
-                      <p className="binding-note">Der private Schlüssel bleibt auf diesem Gerät, damit die Anmeldung auch nach Abmeldung oder Neuladen weiter funktioniert.</p>
-                    </div>
-                    <details className="device-details">
-                      <summary>Gerätedetails</summary>
-                      <p>{device.publicKeyHash}</p>
-                    </details>
-                    <div className="actions stacked-actions">
-                      <button type="button" onClick={handleStartLogin} disabled={busy}>Mit Gerät fortfahren</button>
-                      <button type="button" className="button-secondary" onClick={handleRemoveBinding} disabled={busy}>Gerätebindung entfernen</button>
-                    </div>
-                  </div>
-                </>
-              )}
+                    <p className="muted-copy">Dieses Konto braucht ein neues Keycloak-Passwort, bevor Android die Anmeldung abschließen kann.</p>
+                    <form className="grid form-stack" onSubmit={handlePassword}>
+                      <label>
+                        <span className="field-label">Neues Passwort</span>
+                        <input name="password" type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} disabled={busy} />
+                      </label>
+                      <button type="submit" disabled={busy}>Passwort speichern</button>
+                    </form>
+                  </>
+                )}
 
-              {step === 'authenticated' && tokens && device && (
-                <>
-                  <div className="section-heading simple-heading">
-                    <div>
-                      <p className="section-label">Angemeldet</p>
-                      <h2>{device.deviceName}</h2>
+                {hydrated && step === 'login' && device && !autoLogin?.active && (
+                  <>
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Anmeldung</p>
+                        <h2>Geräteanmeldung starten</h2>
+                      </div>
                     </div>
-                  </div>
-                  <section className="token-overview" aria-label="Token overview cards">
-                    <article>
-                        <span>Zugriff</span>
-                        <strong>Erteilt</strong>
-                        <p>API-Zugriff für diese Gerätesitzung.</p>
-                    </article>
-                    <article>
-                        <span>ID</span>
-                        <strong>Bereit</strong>
-                        <p>Identitätsdaten für die aktive Sitzung.</p>
-                    </article>
-                    <article>
-                        <span>Refresh</span>
-                        <strong>Gespeichert</strong>
-                        <p>Hole bei Bedarf ein frisches Token-Set.</p>
-                    </article>
-                  </section>
-                  <div className="challenge-card authenticated-card">
-                    <p className="section-label">Android-Gerät</p>
-                    <strong>Angemeldet und bereit</strong>
-                    <p className="muted-copy">Aktualisieren holt ein neues Token-Bündel. Abmelden behält die Gerätebindung, damit Device Login weiter schnell verfügbar bleibt.</p>
-                  </div>
-                  <div className="actions stacked-actions">
-                    <button type="button" onClick={handleRefresh} disabled={busy}>Tokens aktualisieren</button>
-                    <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Abmelden</button>
-                  </div>
-                </>
-              )}
-            </section>
-
-            <section className="session-stack">
-              {!tokens && (
-                <section className="card token-card">
-                  <div className="section-heading simple-heading">
-                    <div>
-                      <p className="section-label">Sitzungsdetails</p>
-                      <h2>Sitzungstokens</h2>
+                    <div className="challenge-card">
+                      <p className="section-label">Android-Sicherheit</p>
+                      <strong>{challenge ? 'Bestätigung ausstehend' : 'Registriertes Gerät wartet auf Anmeldung'}</strong>
+                      <p className="muted-copy">
+                        {challenge
+                          ? 'Bestätige dich mit der Displaysperre, um die Anmeldung abzuschließen.'
+                          : 'Erst nach der Challenge und der Android-Bestätigung wird eine neue Keycloak-Sitzung erstellt.'}
+                      </p>
                     </div>
-                  </div>
-                  <TokenEmptyState hasDevice={Boolean(device)} hasChallenge={Boolean(challenge)} />
-                </section>
-              )}
-
-              {tokens && (
-                <>
-                  <AuthenticatedTabs activeTab={activeAuthenticatedTab} onChange={setActiveAuthenticatedTab} />
-
-                  {activeAuthenticatedTab === 'tokens' ? (
-                    <section className="card token-card" id="authenticated-panel-tokens">
-                      <div className="section-heading simple-heading">
+                    <div className="binding-stack">
+                      <div className="device-summary" aria-label="Saved device summary">
                         <div>
-                          <p className="section-label">Sitzungsdetails</p>
-                          <h2>Sitzungstokens</h2>
+                          <span className="field-label">Konto</span>
+                          <strong>{device.userId}</strong>
+                        </div>
+                        <div>
+                          <span className="field-label">Gerät</span>
+                          <strong>{device.deviceName}</strong>
                         </div>
                       </div>
-                      <div className="token-section-stack">
-                        <SessionTokensSection tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
-                        <TokenInspectionSection
-                          accessClaims={accessClaims}
-                          idClaims={idClaims}
-                          claimKeys={sharedTokenClaimKeys}
-                          userInfo={userInfo}
-                          tokenIntrospection={tokenIntrospection}
-                        />
+                      <div className="binding-notice" role="note" aria-label="Local device binding notice">
+                        <strong>Lokal registriert, nicht automatisch eingeloggt</strong>
+                        <p className="binding-note">Der private Schlüssel bleibt auf diesem Gerät. Tokens werden aber erst nach einer erfolgreichen Geräteanmeldung ausgestellt.</p>
                       </div>
-                    </section>
-                  ) : (
-                    <ServiceMockApiPanel
-                      serviceMockApi={serviceMockApi}
-                      busy={busy}
-                      onReload={() => void runAction(async () => { await syncServiceMockApi('Geschützte Mock-API synchronisiert') })}
-                      onSubmit={handleCreateMockMessage}
-                      onDraftChange={(draft) => setServiceMockApi((current) => ({ ...current, draft }))}
-                    />
-                  )}
-                </>
-              )}
+                      <details className="device-details">
+                        <summary>Gerätedetails</summary>
+                        <p>{device.publicKeyHash}</p>
+                      </details>
+                      <div className="actions stacked-actions">
+                        <button type="button" onClick={handleStartLogin} disabled={busy}>Mit Gerät fortfahren</button>
+                        <button type="button" className="button-secondary" onClick={handleRemoveBinding} disabled={busy}>Gerätebindung entfernen</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {hydrated && step === 'login' && autoLogin?.active && device && (
+                  <>
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Anmeldung</p>
+                        <h2>Geräteanmeldung wird abgeschlossen</h2>
+                      </div>
+                    </div>
+                    <div className="challenge-card authenticated-card">
+                      <p className="section-label">Android-Sicherheit</p>
+                      <strong>Keycloak-Sitzung wird erzeugt</strong>
+                      <p className="muted-copy">Die Geräte-Challenge wird mit der gespeicherten Bindung abgeschlossen. Erst danach werden die Sitzungstokens geladen.</p>
+                    </div>
+                  </>
+                )}
+
+                {hydrated && step === 'authenticated' && tokens && device && (
+                  <>
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Angemeldet</p>
+                        <h2>{device.deviceName}</h2>
+                      </div>
+                    </div>
+                    <div className="challenge-card authenticated-card">
+                      <p className="section-label">Android-Gerät</p>
+                      <strong>Angemeldet mit aktiver Sitzung</strong>
+                      <p className="muted-copy">Aktualisieren holt ein neues Token-Bündel. Abmelden beendet die Sitzung, behält aber die Gerätebindung für spätere Anmeldungen.</p>
+                    </div>
+                    <div className="actions stacked-actions">
+                      <button type="button" onClick={handleRefresh} disabled={busy}>Tokens aktualisieren</button>
+                      <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Abmelden</button>
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section className={tokens ? 'session-stack session-stack-authenticated' : 'session-stack'}>
+                {!tokens && !hideEmptySessionState && (
+                  <section className="card token-card">
+                    <div className="section-heading simple-heading">
+                      <div>
+                        <p className="section-label">Sitzungsdetails</p>
+                        <h2>Sitzungstokens</h2>
+                      </div>
+                    </div>
+                    <TokenEmptyState hasDevice={Boolean(device)} hasChallenge={Boolean(challenge)} />
+                  </section>
+                )}
+
+                {tokens && (
+                  <>
+                    <AuthenticatedTabs activeTab={activeAuthenticatedTab} onChange={setActiveAuthenticatedTab} />
+
+                    {activeAuthenticatedTab === 'tokens' ? (
+                      <section className="card token-card" id="authenticated-panel-tokens">
+                        <div className="section-heading simple-heading">
+                          <div>
+                            <p className="section-label">Sitzungsdetails</p>
+                            <h2>Sitzungstokens</h2>
+                          </div>
+                        </div>
+                        <div className="token-section-stack">
+                          <SessionTokensSection tokens={tokens} tokenLifetimeLabel={tokenLifetimeLabel} />
+                          <TokenInspectionSection
+                            accessClaims={accessClaims}
+                            idClaims={idClaims}
+                            claimKeys={sharedTokenClaimKeys}
+                            userInfo={userInfo}
+                            tokenIntrospection={tokenIntrospection}
+                          />
+                        </div>
+                      </section>
+                    ) : (
+                      <ServiceMockApiPanel
+                        serviceMockApi={serviceMockApi}
+                        busy={busy}
+                        onReload={() => void runAction(async () => { await syncServiceMockApi('Geschützte Mock-API synchronisiert') })}
+                        onSubmit={handleCreateMockMessage}
+                        onDraftChange={(draft) => setServiceMockApi((current) => ({ ...current, draft }))}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
             </section>
           </section>
         </div>
@@ -1208,13 +1324,13 @@ function TokenEmptyState({ hasDevice, hasChallenge }: { hasDevice: boolean; hasC
     <section className="token-empty" aria-label="Token wallet empty state">
       <div>
         <p className="section-label">Gesperrt</p>
-        <h3>Tokens erscheinen hier nach der Geräteanmeldung.</h3>
+        <h3>Tokens erscheinen erst nach erfolgreicher Geräteanmeldung.</h3>
       </div>
       <p className="muted-copy">
         {hasChallenge
           ? 'Bestätige den sicheren Anmeldedialog, um den Token-Bereich zu entsperren.'
           : hasDevice
-            ? 'Dieses Telefon hat bereits eine gespeicherte Gerätebindung.'
+            ? 'Dieses Telefon ist bereits registriert, aber aktuell noch nicht bei Keycloak angemeldet.'
             : 'Richte dieses Telefon zuerst ein und bestätige die Registrierung per Code oder SMS-TAN.'}
       </p>
       <p>Noch keine Keycloak-Tokens.</p>
