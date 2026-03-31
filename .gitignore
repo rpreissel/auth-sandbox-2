@@ -19,6 +19,8 @@ local-certs/
 *.tfstate
 *.tfstate.*
 .opencode/
+.beads/.beads-credential-key
+artifacts/
 runtime/caddy-logs/*.json
 runtime/caddy-logs/*.json.gz
 runtime/*.tgz
