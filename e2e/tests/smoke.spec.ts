@@ -296,7 +296,7 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   await expect(page.getByLabel('WebMock message response')).toContainText('WebMock Web playwright note')
 
   const browserTrace = await waitForTrace(request, userId, 'webmock_web_step_up', 'webmock-web')
-  const authApiTrace = await waitForTrace(request, userId, 'browser_step_up_start_internal', 'auth-api')
+  const internalStepUpTrace = await waitForTrace(request, userId, 'browser_step_up_complete_internal', 'keycloak-extension')
   await page.goto(`${TRACE_WEB_URL}#trace/${browserTrace.traceId}`)
   await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
 
@@ -310,10 +310,11 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   const artifactViewer = page.getByLabel('Artifact viewer')
   await expect(artifactViewer).toContainText('keycloak_inline')
 
-  await page.goto(`${TRACE_WEB_URL}#trace/${authApiTrace.traceId}`)
+  await page.goto(`${TRACE_WEB_URL}#trace/${internalStepUpTrace.traceId}`)
   await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
   const authApiTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(authApiTimeline).toContainText('auth-api')
+  await expect(authApiTimeline).toContainText('keycloak-extension')
   await authApiTimeline.getByRole('button', { name: /POST \/api\/internal\/browser-step-up\/start/i }).click()
   await expect(page.getByRole('tab', { name: /outgoing_response_body response_body/i })).toBeVisible()
   await page.getByRole('tab', { name: /outgoing_response_body response_body/i }).click()

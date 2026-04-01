@@ -9,6 +9,8 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 
+import java.util.Map;
+
 public class ResultCodeAuthenticator implements Authenticator {
 
     private static final Logger LOG = Logger.getLogger(ResultCodeAuthenticator.class);
@@ -16,6 +18,7 @@ public class ResultCodeAuthenticator implements Authenticator {
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
+        AuthFlowTraceSupport.AuthenticatorTrace trace = AuthFlowTraceSupport.start(context, ResultCodeAuthenticatorFactory.PROVIDER_ID, "authenticate");
         try {
             String resultCode = context.getAuthenticationSession().getClientNote(RESULT_CODE_NOTE);
             if (resultCode == null || resultCode.isBlank()) {
@@ -26,17 +29,27 @@ public class ResultCodeAuthenticator implements Authenticator {
             }
             if (resultCode == null || resultCode.isBlank()) {
                 LOG.warn("No result_code found in auth session notes");
+                trace.error("No result_code found in auth session notes.");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
             }
 
-            AuthApiClient.FlowArtifactRedeemResult redeem = new AuthApiClient().redeemArtifact(resultCode, "result_code");
+            AuthApiClient.FlowArtifactRedeemResult redeem = new AuthApiClient().redeemArtifact(resultCode, "result_code", trace.outboundContext());
             UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), redeem.userId());
             if (user == null) {
                 LOG.warnf("No Keycloak user found for result code user '%s'", redeem.userId());
+                trace.error("No Keycloak user found for redeemed result_code user.");
                 context.failure(AuthenticationFlowError.INVALID_USER);
                 return;
             }
+
+            trace.recordArtifact("result_code_redeem", Map.of(
+                    "userId", redeem.userId(),
+                    "flowId", redeem.flowId(),
+                    "purpose", redeem.purpose(),
+                    "achievedAcr", redeem.achievedAcr(),
+                    "amr", redeem.amr()
+            ), "Redeemed result_code and mapped it to a Keycloak user.");
 
             context.getAuthenticationSession().setAuthNote("acr", redeem.achievedAcr());
             context.getAuthenticationSession().setAuthNote("auth_time", redeem.authTime());
@@ -51,9 +64,11 @@ public class ResultCodeAuthenticator implements Authenticator {
             recordLevelOfAuthentication(context, redeem.achievedAcr());
 
             context.setUser(user);
+            trace.success("Redeemed result_code and completed Keycloak authentication.");
             context.success();
         } catch (Exception exception) {
             LOG.warnf(exception, "Result code validation failed");
+            trace.error(exception.getMessage());
             context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
         }
     }

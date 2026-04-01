@@ -20,6 +20,8 @@ import org.keycloak.services.managers.UserSessionManager;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 
+import java.util.Map;
+
 public class AssuranceHandleGrantType extends OAuth2GrantTypeBase {
 
     private static final String ASSURANCE_HANDLE_PARAM = "assurance_handle";
@@ -29,22 +31,55 @@ public class AssuranceHandleGrantType extends OAuth2GrantTypeBase {
     public Response process(Context context) {
         setContext(context);
         event.detail(Details.AUTH_METHOD, "assurance_handle_grant");
+        String existingRefreshToken = formParams.getFirst(REFRESH_TOKEN_PARAM);
+        GrantTypeTraceSupport.GrantTrace trace = GrantTypeTraceSupport.start(
+                firstNonBlank(
+                        session.getContext().getRequestHeaders().getHeaderString("x-trace-id"),
+                        session.getContext().getRequestHeaders().getHeaderString("x-correlation-id")
+                ),
+                session.getContext().getRequestHeaders().getHeaderString("x-session-id"),
+                session.getContext().getUri().getRequestUri().toString(),
+                session.getContext().getUri().getPath(),
+                session.getContext().getHttpRequest().getHttpMethod(),
+                clientConnection.getRemoteHost(),
+                realm,
+                client,
+                context.getGrantType(),
+                AssuranceHandleGrantTypeFactory.GRANT_TYPE,
+                "assurance_handle_grant",
+                null,
+                false,
+                true,
+                existingRefreshToken != null && !existingRefreshToken.isBlank()
+        );
 
         if (client.isBearerOnly() || client.isPublicClient()) {
+            trace.error("Client not allowed to use assurance handle grant");
             throw new CorsErrorResponseException(cors, OAuthErrorException.UNAUTHORIZED_CLIENT, "Client not allowed to use assurance handle grant", Response.Status.BAD_REQUEST);
         }
 
         String assuranceHandle = formParams.getFirst(ASSURANCE_HANDLE_PARAM);
         if (assuranceHandle == null || assuranceHandle.isBlank()) {
+            trace.error("Missing parameter: " + ASSURANCE_HANDLE_PARAM);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, "Missing parameter: " + ASSURANCE_HANDLE_PARAM, Response.Status.BAD_REQUEST);
         }
 
         try {
-            AuthApiClient.FlowArtifactRedeemResult redeem = new AuthApiClient().redeemArtifact(assuranceHandle, "assurance_handle");
+            AuthApiClient.FlowArtifactRedeemResult redeem = new AuthApiClient().redeemArtifact(assuranceHandle, "assurance_handle", trace.outboundContext());
             UserModel user = session.users().getUserByUsername(realm, redeem.userId());
             if (user == null) {
                 throw new IllegalArgumentException("User not found");
             }
+            trace.updateResolvedUser(user.getUsername(), user.getId());
+            trace.updateAssurance(redeem.achievedAcr(), redeem.amr());
+            trace.recordArtifact("assurance_handle_redeem", Map.of(
+                    "userId", redeem.userId(),
+                    "flowId", redeem.flowId(),
+                    "purpose", redeem.purpose(),
+                    "achievedAcr", redeem.achievedAcr(),
+                    "amr", redeem.amr(),
+                    "usedRefreshToken", existingRefreshToken != null && !existingRefreshToken.isBlank()
+            ), "Redeemed assurance handle for token endpoint processing.");
 
             event.user(user);
             event.detail(Details.USERNAME, user.getUsername());
@@ -56,7 +91,6 @@ public class AssuranceHandleGrantType extends OAuth2GrantTypeBase {
             authSession.setClientNote(OIDCLoginProtocol.ISSUER, Urls.realmIssuer(session.getContext().getUri().getBaseUri(), realm.getName()));
             authSession.setClientNote(OIDCLoginProtocol.SCOPE_PARAM, getRequestedScopes());
 
-            String existingRefreshToken = formParams.getFirst(REFRESH_TOKEN_PARAM);
             UserSessionModel userSession = new UserSessionManager(session).createUserSession(
                     authSession.getParentSession().getId(),
                     realm,
@@ -77,6 +111,8 @@ public class AssuranceHandleGrantType extends OAuth2GrantTypeBase {
                 userSession.setNote("amr", String.join(" ", redeem.amr()));
             }
             event.session(userSession);
+            trace.updateSessions(authSession.getParentSession().getId(), userSession.getId());
+            trace.refreshContextArtifact();
 
             AuthenticationManager.setClientScopesInSession(session, authSession);
             ClientSessionContext clientSessionCtx = TokenManager.attachAuthenticationSession(session, userSession, authSession);
@@ -84,12 +120,15 @@ public class AssuranceHandleGrantType extends OAuth2GrantTypeBase {
             updateUserSessionFromClientAuth(userSession);
 
             TokenManager.AccessTokenResponseBuilder responseBuilder = createTokenResponseBuilder(user, userSession, clientSessionCtx, getRequestedScopes(), null);
+            trace.success("Completed assurance-handle grant token issuance.");
             return createTokenResponse(responseBuilder, clientSessionCtx, true);
         } catch (CorsErrorResponseException exception) {
+            trace.error(exception.getMessage());
             throw exception;
         } catch (Exception exception) {
             event.detail(Details.REASON, exception.getMessage());
             event.error(Errors.INVALID_USER_CREDENTIALS);
+            trace.error(exception.getMessage());
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_GRANT, exception.getMessage(), Response.Status.BAD_REQUEST);
         }
     }
@@ -97,5 +136,12 @@ public class AssuranceHandleGrantType extends OAuth2GrantTypeBase {
     @Override
     public EventType getEventType() {
         return EventType.LOGIN;
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second != null && !second.isBlank() ? second : null;
     }
 }

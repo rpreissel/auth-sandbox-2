@@ -18,6 +18,7 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Map;
 
 public class DeviceLoginTokenAuthenticator implements Authenticator {
 
@@ -27,10 +28,14 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
+        AuthFlowTraceSupport.AuthenticatorTrace trace = AuthFlowTraceSupport.start(context, DeviceLoginTokenAuthenticatorFactory.PROVIDER_ID, "authenticate");
         try {
             String loginToken = LoginTokenSupport.resolveLoginToken(context);
             if (loginToken == null || loginToken.isBlank()) {
                 LOG.info("No login_token found, device-login browser branch not attempted");
+                trace.recordArtifact("device_login_attempt", Map.of("attempted", true, "hasLoginToken", false),
+                        "Device login browser authenticator skipped because no login_token was present.");
+                trace.success("No login_token present; authenticator attempted but skipped.");
                 context.attempted();
                 return;
             }
@@ -44,6 +49,7 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             LoginTokenSupport.validateExpiry(token);
             if (!LoginTokenSupport.markSingleUse(context.getSession(), token)) {
                 LOG.warnf("login_token jti '%s' was already used", token.jti());
+                trace.error("login_token jti already used.");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
             }
@@ -58,6 +64,7 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             UserModel user = context.getSession().users().getUserByUsername(context.getRealm(), userId);
             if (user == null) {
                 LOG.warnf("No Keycloak user found for device login user '%s'", userId);
+                trace.error("No Keycloak user found for login_token subject.");
                 context.failure(AuthenticationFlowError.INVALID_USER);
                 return;
             }
@@ -70,6 +77,7 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
 
             if (matched == null) {
                 LOG.warnf("No device credential matched publicKeyHash '%s' for user '%s'", publicKeyHash, userId);
+                trace.error("No stored device credential matched publicKeyHash.");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
             }
@@ -83,11 +91,18 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
 
             if (!valid) {
                 LOG.warnf("Invalid signature for device login user '%s' and credential '%s'", userId, matched.getId());
+                trace.error("Device login signature validation failed.");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
             }
 
             LOG.infof("Device login token validated for user '%s' with credential '%s'", userId, matched.getId());
+            trace.recordArtifact("device_login_validation", Map.of(
+                    "userId", userId,
+                    "credentialId", matched.getId(),
+                    "publicKeyHash", publicKeyHash,
+                    "hasEncryptedData", encryptedData != null && !encryptedData.isBlank()
+            ), "Validated device login token and matched the stored credential.");
             long authTime = System.currentTimeMillis() / 1000;
             context.getAuthenticationSession().setAuthNote("acr", DEVICE_LOGIN_ACR);
             context.getAuthenticationSession().setAuthNote("auth_time", Long.toString(authTime));
@@ -97,9 +112,11 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             context.getAuthenticationSession().setUserSessionNote("amr", "pwd");
             recordLevelOfAuthentication(context, DEVICE_LOGIN_LOA);
             context.setUser(user);
+            trace.success("Validated device login token and established Keycloak user session.");
             context.success();
         } catch (Exception exception) {
             LOG.warnf(exception, "Device login validation failed");
+            trace.error(exception.getMessage());
             context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
         }
     }

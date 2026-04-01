@@ -28,6 +28,7 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import java.util.Map;
 
 public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
 
@@ -39,11 +40,32 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
     public Response process(Context context) {
         setContext(context);
         event.detail(Details.AUTH_METHOD, "device_grant");
+        GrantTypeTraceSupport.GrantTrace trace = GrantTypeTraceSupport.start(
+                firstNonBlank(
+                        session.getContext().getRequestHeaders().getHeaderString("x-trace-id"),
+                        session.getContext().getRequestHeaders().getHeaderString("x-correlation-id")
+                ),
+                session.getContext().getRequestHeaders().getHeaderString("x-session-id"),
+                session.getContext().getUri().getRequestUri().toString(),
+                session.getContext().getUri().getPath(),
+                session.getContext().getHttpRequest().getHttpMethod(),
+                clientConnection.getRemoteHost(),
+                realm,
+                client,
+                context.getGrantType(),
+                DeviceLoginGrantTypeFactory.GRANT_TYPE,
+                "device_grant",
+                null,
+                true,
+                false,
+                false
+        );
 
         if (client.isBearerOnly() || client.isPublicClient()) {
             String errorMessage = "Client not allowed to use device login grant";
             event.detail(Details.REASON, errorMessage);
             event.error(Errors.NOT_ALLOWED);
+            trace.error(errorMessage);
             throw new CorsErrorResponseException(cors, OAuthErrorException.UNAUTHORIZED_CLIENT, errorMessage, Response.Status.BAD_REQUEST);
         }
 
@@ -51,11 +73,13 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             String errorMessage = "Client requires user consent";
             event.detail(Details.REASON, errorMessage);
             event.error(Errors.CONSENT_DENIED);
+            trace.error(errorMessage);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_CLIENT, errorMessage, Response.Status.BAD_REQUEST);
         }
 
         String loginToken = formParams.getFirst(LOGIN_TOKEN_PARAM);
         if (loginToken == null || loginToken.isBlank()) {
+            trace.error("Missing parameter: " + LOGIN_TOKEN_PARAM);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST, "Missing parameter: " + LOGIN_TOKEN_PARAM, Response.Status.BAD_REQUEST);
         }
 
@@ -75,6 +99,12 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             if (user == null) {
                 throw new IllegalArgumentException("User not found");
             }
+            trace.updateResolvedUser(user.getUsername(), user.getId());
+            trace.recordArtifact("device_grant_validation", Map.of(
+                    "userId", user.getUsername(),
+                    "publicKeyHash", payload.publicKeyHash(),
+                    "hasEncryptedData", payload.encryptedData() != null && !payload.encryptedData().isBlank()
+            ), "Validated device grant login_token against stored device credential.");
 
             event.user(user);
             event.detail(Details.USERNAME, user.getUsername());
@@ -122,6 +152,9 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                     UserSessionModel.SessionPersistenceState.PERSISTENT
             );
             event.session(userSession);
+            trace.updateSessions(authSession.getParentSession().getId(), userSession.getId());
+            trace.updateAssurance(DEVICE_LOGIN_ACR, java.util.List.of("pwd"));
+            trace.refreshContextArtifact();
 
             AuthenticationManager.setClientScopesInSession(session, authSession);
             authSession.setAuthNote("acr", DEVICE_LOGIN_ACR);
@@ -132,12 +165,15 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             updateUserSessionFromClientAuth(userSession);
 
             TokenManager.AccessTokenResponseBuilder responseBuilder = createTokenResponseBuilder(user, userSession, clientSessionCtx, scope, null);
+            trace.success("Completed device-login grant token issuance.");
             return createTokenResponse(responseBuilder, clientSessionCtx, true);
         } catch (CorsErrorResponseException exception) {
+            trace.error(exception.getMessage());
             throw exception;
         } catch (Exception exception) {
             event.detail(Details.REASON, exception.getMessage());
             event.error(Errors.INVALID_USER_CREDENTIALS);
+            trace.error(exception.getMessage());
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_GRANT, exception.getMessage(), Response.Status.BAD_REQUEST);
         }
     }
@@ -167,6 +203,13 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                 .replaceAll("\\s+", "");
         byte[] decoded = Base64.getDecoder().decode(body);
         return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decoded));
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second != null && !second.isBlank() ? second : null;
     }
 
 }

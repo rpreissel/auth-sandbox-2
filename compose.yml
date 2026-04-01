@@ -42,6 +42,8 @@ services:
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
       KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID: ${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}
       KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET: ${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}
+      TRACE_API_INTERNAL_URL: http://trace-api:3001
+      TRACE_API_INTERNAL_WRITE_TOKEN: ${TRACE_API_INTERNAL_WRITE_TOKEN:-change-me-trace-internal-token}
     depends_on:
       postgres:
         condition: service_healthy

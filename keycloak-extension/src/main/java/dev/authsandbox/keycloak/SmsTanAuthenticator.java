@@ -10,6 +10,8 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 
+import java.util.Map;
+
 public class SmsTanAuthenticator implements Authenticator {
 
     private static final Logger LOG = Logger.getLogger(SmsTanAuthenticator.class);
@@ -21,6 +23,7 @@ public class SmsTanAuthenticator implements Authenticator {
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
+        AuthFlowTraceSupport.AuthenticatorTrace trace = AuthFlowTraceSupport.start(context, SmsTanAuthenticatorFactory.PROVIDER_ID, "authenticate");
         try {
             UserModel user = context.getUser() != null ? context.getUser() : context.getAuthenticationSession().getAuthenticatedUser();
             if (user == null) {
@@ -38,11 +41,19 @@ public class SmsTanAuthenticator implements Authenticator {
             }
 
             if (user == null) {
+                trace.error("No Keycloak user available for SMS-TAN step-up.");
                 context.failure(AuthenticationFlowError.INVALID_USER);
                 return;
             }
 
-            AuthApiClient.BrowserSmsChallenge challenge = new AuthApiClient().startBrowserStepUp(user.getUsername());
+            AuthApiClient.BrowserSmsChallenge challenge = new AuthApiClient().startBrowserStepUp(user.getUsername(), trace.outboundContext());
+            trace.recordArtifact("sms_tan_challenge", Map.of(
+                    "userId", user.getUsername(),
+                    "flowId", challenge.flowId(),
+                    "maskedTarget", challenge.maskedTarget(),
+                    "hasServiceToken", challenge.serviceToken() != null && !challenge.serviceToken().isBlank(),
+                    "hasDevCode", challenge.devCode() != null && !challenge.devCode().isBlank()
+            ), "Started browser step-up challenge for the SMS-TAN authenticator.");
             context.getAuthenticationSession().setAuthNote(FLOW_ID_NOTE, challenge.flowId());
             context.getAuthenticationSession().setAuthNote(SERVICE_TOKEN_NOTE, challenge.serviceToken());
             if (challenge.maskedTarget() != null) {
@@ -51,19 +62,23 @@ public class SmsTanAuthenticator implements Authenticator {
             if (challenge.devCode() != null) {
                 context.getAuthenticationSession().setAuthNote(DEV_CODE_NOTE, challenge.devCode());
             }
+            trace.success("Started SMS-TAN browser challenge.");
             context.challenge(createChallenge(context, null));
         } catch (Exception exception) {
             LOG.warnf(exception, "SMS-TAN authenticator start failed");
+            trace.error(exception.getMessage());
             context.failure(AuthenticationFlowError.INTERNAL_ERROR);
         }
     }
 
     @Override
     public void action(AuthenticationFlowContext context) {
+        AuthFlowTraceSupport.AuthenticatorTrace trace = AuthFlowTraceSupport.start(context, SmsTanAuthenticatorFactory.PROVIDER_ID, "action");
         try {
             MultivaluedMap<String, String> formParams = context.getHttpRequest().getDecodedFormParameters();
             String tan = formParams.getFirst("smsTan");
             if (tan == null || tan.isBlank()) {
+                trace.error("SMS-TAN form submission missing TAN value.");
                 context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, createChallenge(context, "Bitte gib die SMS-TAN ein."));
                 return;
             }
@@ -71,14 +86,22 @@ public class SmsTanAuthenticator implements Authenticator {
             String flowId = context.getAuthenticationSession().getAuthNote(FLOW_ID_NOTE);
             String serviceToken = context.getAuthenticationSession().getAuthNote(SERVICE_TOKEN_NOTE);
             if (flowId == null || flowId.isBlank() || serviceToken == null || serviceToken.isBlank()) {
+                trace.error("Missing flowId or serviceToken in authentication session notes.");
                 context.failure(AuthenticationFlowError.INVALID_CLIENT_SESSION);
                 return;
             }
 
-            new AuthApiClient().completeBrowserStepUp(flowId, serviceToken, tan.trim());
+            trace.recordArtifact("sms_tan_submission", Map.of(
+                    "flowId", flowId,
+                    "hasServiceToken", true,
+                    "hasTan", true
+            ), "Submitted SMS-TAN verification through auth-api.");
+            new AuthApiClient().completeBrowserStepUp(flowId, serviceToken, tan.trim(), trace.outboundContext());
+            trace.success("Completed SMS-TAN verification and returned success to Keycloak.");
             context.success();
         } catch (Exception exception) {
             LOG.warnf(exception, "SMS-TAN authenticator verification failed");
+            trace.error(exception.getMessage());
             context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, createChallenge(context, "Die SMS-TAN war ungültig oder abgelaufen."));
         }
     }
