@@ -359,8 +359,8 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
 
   await expect(page.getByText('Angemeldet mit aktiver Sitzung')).toBeVisible({ timeout: 20000 })
-  const openWebmockButton = page.locator('button').filter({ hasText: 'WebMock per SSO öffnen' }).first()
-  await expect(openWebmockButton).toBeVisible({ timeout: 20000 })
+  const prepareWebmockSsoButton = page.locator('button').filter({ hasText: 'WebMock SSO vorbereiten' }).first()
+  await expect(prepareWebmockSsoButton).toBeVisible({ timeout: 20000 })
 
   const securePrompt = page.getByRole('region', { name: 'Secure element prompt' })
   if (await securePrompt.isVisible().catch(() => false)) {
@@ -368,8 +368,15 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
     await expect(securePrompt).toHaveCount(0)
   }
 
+  await expect(page.getByRole('note', { name: 'SSO launch result' })).toHaveCount(0)
+
   const newPagePromise = context.waitForEvent('page')
-  await openWebmockButton.click({ force: true })
+  await prepareWebmockSsoButton.click({ force: true })
+  const ssoLaunchNote = page.getByRole('note', { name: 'SSO launch result' })
+  await expect(ssoLaunchNote).toContainText('Angeforderte Assurance: 2se')
+  await expect(ssoLaunchNote).toContainText('https://webmock.localhost:8443/')
+  await expect(page.getByRole('button', { name: 'Nur Ziel-URL kopieren' })).toBeVisible()
+  await page.getByRole('button', { name: 'Vorbereiteten SSO-Tab öffnen' }).click()
   const webmockPage = await newPagePromise
   await webmockPage.waitForLoadState('networkidle')
 

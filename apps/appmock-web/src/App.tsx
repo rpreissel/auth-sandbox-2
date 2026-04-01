@@ -8,6 +8,7 @@ import type {
   ServiceMockApiMessageRecord,
   ServiceMockApiProfileResponse,
   PublicAssuranceFlowRecord,
+  SsoBootstrapRequestedAcr,
   SessionTokenBundle,
   TokenBundle,
   StartLoginResponse
@@ -183,6 +184,7 @@ export function App() {
     status: 'Waiting for an authenticated session'
   })
   const [ssoLaunch, setSsoLaunch] = useState<CreateSsoLaunchResponse | null>(null)
+  const [ssoCopyStatus, setSsoCopyStatus] = useState<string | null>(null)
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -195,6 +197,10 @@ export function App() {
   const hideEmptySessionState = hydrated && !tokens && Boolean(device) && (step === 'login' || step === 'password')
   const promptActive = Boolean(securePrompt)
   const compactHero = restoringDevice || Boolean(device) || Boolean(tokens)
+  const currentSessionAcr = useMemo<SsoBootstrapRequestedAcr>(() => {
+    const rawAcr = readString(accessClaims, 'acr') ?? readString(idClaims, 'acr')
+    return rawAcr === '2se' ? '2se' : '1se'
+  }, [accessClaims, idClaims])
   const heroTitle = restoringDevice
     ? 'Gerät wird geprüft'
     : tokens
@@ -902,30 +908,29 @@ export function App() {
     })
   }
 
-  async function handleOpenWebmockSso() {
+  async function handlePrepareWebmockSso() {
     if (!device || !tokens) {
       return
     }
-
-    const popup = window.open('', '_blank')
 
     await runAction(async () => {
       const flow = await createFlowTrace('sso_launch_started', [{
         name: 'sso_launch_request',
         value: {
           targetId: 'webmock',
-          requestedAcr: '1se',
+          requestedAcr: currentSessionAcr,
           userId: device.userId
         }
       }])
 
+      setSsoCopyStatus(null)
       setStatus('Verschlüsselte Browser-SSO-Anfrage wird vorbereitet...')
       const challenge = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
       const signature = await signEncryptedData(challenge.encryptedData, device.privateKey)
       const launch = await api.createSsoLaunch({
         targetId: 'webmock',
         targetPath: '/',
-        requestedAcr: '1se',
+        requestedAcr: currentSessionAcr,
         nonce: challenge.nonce,
         encryptedKey: challenge.encryptedKey,
         encryptedData: challenge.encryptedData,
@@ -941,18 +946,29 @@ export function App() {
       }])
       setTraceState(null)
       setSsoLaunch(launch)
-      setStatus('Browser-SSO wird in WebMock geöffnet...')
-      if (popup) {
-        try {
-          popup.opener = null
-        } catch {
-          // Ignore browsers that expose opener as read-only.
-        }
-        popup.location.replace(launch.launchUrl)
-      } else {
-        window.open(launch.launchUrl, '_blank')
-      }
+      setStatus(`Browser-SSO bereit mit ${currentSessionAcr}. Öffne den Link direkt oder kopiere die Ziel-URL.`)
     })
+  }
+
+  function handleOpenPreparedWebmockSso() {
+    if (!ssoLaunch) {
+      return
+    }
+
+    window.open(ssoLaunch.launchUrl, '_blank', 'noopener')
+  }
+
+  async function handleCopyPreparedWebmockTargetUrl() {
+    if (!ssoLaunch) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(ssoLaunch.targetUrl)
+      setSsoCopyStatus('Ziel-URL in die Zwischenablage kopiert.')
+    } catch {
+      setSsoCopyStatus('Ziel-URL konnte nicht in die Zwischenablage kopiert werden.')
+    }
   }
 
   useEffect(() => {
@@ -1308,13 +1324,19 @@ export function App() {
                     </div>
                     <div className="actions stacked-actions">
                       <button type="button" onClick={handleRefresh} disabled={busy}>Tokens aktualisieren</button>
-                      <button type="button" onClick={() => void handleOpenWebmockSso()} disabled={busy}>WebMock per SSO öffnen</button>
+                      <button type="button" onClick={() => void handlePrepareWebmockSso()} disabled={busy}>WebMock SSO vorbereiten</button>
                       <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Abmelden</button>
                     </div>
                     {ssoLaunch && (
                       <div className="binding-notice" role="note" aria-label="SSO launch result">
                         <strong>Letzter Browser-Start bereit</strong>
+                        <p className="binding-note">Angeforderte Assurance: {currentSessionAcr}</p>
                         <p className="binding-note">Ziel: {ssoLaunch.targetUrl}</p>
+                        <div className="actions stacked-actions">
+                          <button type="button" onClick={handleOpenPreparedWebmockSso} disabled={busy}>Vorbereiteten SSO-Tab öffnen</button>
+                          <button type="button" className="button-secondary" onClick={() => void handleCopyPreparedWebmockTargetUrl()} disabled={busy}>Nur Ziel-URL kopieren</button>
+                        </div>
+                        {ssoCopyStatus && <p className="binding-note">{ssoCopyStatus}</p>}
                       </div>
                     )}
                   </>
