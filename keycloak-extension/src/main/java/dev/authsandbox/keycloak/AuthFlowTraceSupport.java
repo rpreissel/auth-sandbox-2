@@ -21,17 +21,19 @@ final class AuthFlowTraceSupport {
         String requestUri = stringValue(metadata.get("requestUri"));
         String sessionId = stringValue(metadata.get("authSessionId"));
         String userId = stringValue(metadata.get("userId"));
-        String traceId = sessionId != null ? sessionId : requestUri;
-        TraceApiClient.TraceEnvelope trace = traceApiClient.ensureTrace(
-                traceId,
-                "keycloak_authenticator",
-                "Keycloak " + authenticatorId,
-                "Custom Keycloak authenticator activity captured for trace attribution.",
-                stringValue(metadata.get("clientId")),
-                requestUri,
-                userId,
-                sessionId
-        );
+        String traceHint = stringValue(metadata.get("traceHint"));
+        TraceApiClient.TraceEnvelope trace = traceHint != null
+                ? new TraceApiClient.TraceEnvelope(traceHint, traceHint, sessionId)
+                : traceApiClient.ensureTrace(
+                        sessionId != null ? sessionId : requestUri,
+                        "keycloak_authenticator",
+                        "Keycloak " + authenticatorId,
+                        "Custom Keycloak authenticator activity captured for trace attribution.",
+                        stringValue(metadata.get("clientId")),
+                        requestUri,
+                        userId,
+                        sessionId
+                );
         String notes = "realm=" + stringValue(metadata.get("realmName"))
                 + " flow=" + stringValue(metadata.get("flowAlias"))
                 + " executionId=" + stringValue(metadata.get("executionId"));
@@ -88,9 +90,24 @@ final class AuthFlowTraceSupport {
         metadata.put("authSessionId", context.getAuthenticationSession().getParentSession() != null ? context.getAuthenticationSession().getParentSession().getId() : null);
         metadata.put("tabId", context.getAuthenticationSession().getTabId());
         metadata.put("loginHint", loginHint);
+        metadata.put("traceHint", resolveClientRequestValue(context, "trace_hint"));
         metadata.put("hasLoginToken", hasValue(context, "login_token"));
         metadata.put("hasResultCode", hasValue(context, "result_code"));
         return metadata;
+    }
+
+    private static String resolveClientRequestValue(AuthenticationFlowContext context, String name) {
+        String clientNote = context.getAuthenticationSession().getClientNote("client_request_param_" + name);
+        if (clientNote == null || clientNote.isBlank()) {
+            clientNote = context.getAuthenticationSession().getClientNote(name);
+        }
+        if (clientNote == null || clientNote.isBlank()) {
+            clientNote = context.getAuthenticationSession().getAuthNote(name);
+        }
+        if (clientNote == null || clientNote.isBlank()) {
+            clientNote = context.getHttpRequest().getUri().getQueryParameters().getFirst(name);
+        }
+        return clientNote != null && !clientNote.isBlank() ? clientNote : null;
     }
 
     private static boolean hasValue(AuthenticationFlowContext context, String name) {

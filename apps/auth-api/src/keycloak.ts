@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 
-import { appConfig, buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
+import { appConfig, buildTraceHeaders, getTraceContext, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
 import type { JsonObject, RefreshTokensResponse, TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { decodeTokenClaims } from './lib/jwt.js'
@@ -416,6 +416,10 @@ export class KeycloakAuthClient {
     const authUrl = new URL(`${keycloakConfig.publicUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/auth`)
     authUrl.searchParams.set('client_id', keycloakConfig.ssoBootstrapClientId)
     authUrl.searchParams.set('request_uri', response.request_uri)
+    const traceId = getTraceContext()?.traceId
+    if (traceId) {
+      authUrl.searchParams.set('trace_hint', traceId)
+    }
 
     return {
       authUrl: authUrl.toString(),

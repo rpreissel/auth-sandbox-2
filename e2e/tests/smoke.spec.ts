@@ -61,7 +61,7 @@ async function waitForRuntimeReady(request: APIRequestContext) {
 }
 
 async function waitForUserLoginTrace(request: APIRequestContext, userId: string) {
-  return waitForTrace(request, userId, 'device_login_finish', 'web-client')
+  return waitForTrace(request, userId, 'device_login_finish', 'appmock-web')
 }
 
 async function waitForTrace(request: APIRequestContext, userId: string, traceType: string, actor: string) {
@@ -415,6 +415,19 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
     await expect(webmockPage.getByText('Sign in to your account')).toHaveCount(0)
     await expect(currentAcrCard.locator('strong')).toHaveText('2se', { timeout: 15000 })
   }
+
+  const ssoTrace = await waitForTrace(request, userId, 'sso_launch_finished', 'appmock-web')
+  await page.goto(`${TRACE_WEB_URL}#trace/${ssoTrace.traceId}`)
+  await expect(page).toHaveURL(`${TRACE_WEB_URL}#trace/${ssoTrace.traceId}`)
+  await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
+
+  const ssoTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
+  await expect(ssoTimeline).toContainText('appmock-web')
+  await expect(ssoTimeline).toContainText('auth-api')
+
+  const proxyLogList = page.getByRole('list', { name: 'Proxy log list' })
+  await expect(proxyLogList).toContainText('keycloak.localhost')
+  await expect(proxyLogList).toContainText('/protocol/openid-connect/auth?client_id=sso-bootstrap-web')
 })
 
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {
@@ -602,7 +615,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(timeline).toContainText('auth-api')
   await expect(timeline).toContainText('keycloak')
-  await expect(timeline).toContainText('web-client')
+  await expect(timeline).toContainText('appmock-web')
   await expect(timeline.getByText(/\d{2}\.\d{2}\.\d{4}.*UTC/i).first()).toBeVisible()
 
   await timeline.getByRole('button', { name: /auth-api start_login/i }).click()

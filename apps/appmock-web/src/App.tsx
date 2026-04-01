@@ -342,7 +342,7 @@ export function App() {
     return {
       traceId: trace.traceId,
       traceType: operation.startsWith('device_login') ? 'device_login_finish' : operation,
-      actorName: 'web-client',
+      actorName: 'appmock-web',
       operation,
       status: 'success' as const,
       timestamp: new Date().toISOString(),
