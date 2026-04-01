@@ -402,9 +402,15 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
     await expect(webmockPage).toHaveURL(/keycloak\.localhost:8443|webmock\.localhost:8443/)
     expect(webmockPage.url()).not.toContain('request_uri=')
     await expect(webmockPage.getByText('Sign in to your account')).toHaveCount(0)
-    await expect(currentAcrCard.locator('strong')).toHaveText('2se', { timeout: 15000 })
+    await expect(currentAcrCard.locator('strong')).toHaveText('1se', { timeout: 15000 })
     await expect(tokenSessionCard).toContainText('Has token')
     await expect(tokenSessionCard).toContainText('yes', { timeout: 15000 })
+
+    await expect(webmockPage.getByText(/step-up to 2se to unlock this endpoint/i)).toBeVisible()
+    await webmockPage.getByRole('button', { name: /step-up auf 2se starten/i }).click()
+    await webmockPage.waitForLoadState('networkidle')
+    await expect(webmockPage.getByText('Sign in to your account')).toHaveCount(0)
+    await expect(currentAcrCard.locator('strong')).toHaveText('2se', { timeout: 15000 })
   }
 })
 

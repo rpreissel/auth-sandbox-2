@@ -575,14 +575,9 @@ export async function createSsoLaunch(input: CreateSsoLaunchInput & { authentica
         explanation: 'Keycloak authorization URL created from the PAR request_uri for browser bootstrap.'
       })
 
-      const targetUrl = new URL(buildSsoBootstrapTargetUrl(target, input.targetPath))
-      if (input.requestedAcr === '2se') {
-        targetUrl.searchParams.set('sso_acr_hint', '2se')
-      }
-
       return {
         launchUrl: launch.authUrl,
-        targetUrl: targetUrl.toString()
+        targetUrl: buildSsoBootstrapTargetUrl(target, input.targetPath)
       }
     }
   )
@@ -605,10 +600,7 @@ export async function completeSsoBootstrapCallback(input: { state: string; code:
 
       await authClient.redeemSsoBootstrapCode(input.code)
       const target = getSsoBootstrapTarget(verifiedState.claims.targetId)
-      const redirectUrl = new URL(buildSsoBootstrapTargetUrl(target, verifiedState.claims.targetPath))
-      if (verifiedState.claims.requestedAcr === '2se') {
-        redirectUrl.searchParams.set('sso_acr_hint', '2se')
-      }
+      const redirectUrl = buildSsoBootstrapTargetUrl(target, verifiedState.claims.targetPath)
 
       await recordArtifact({
         spanId,
@@ -617,12 +609,12 @@ export async function completeSsoBootstrapCallback(input: { state: string; code:
         contentType: 'text/uri-list',
         encoding: 'raw',
         direction: 'outbound',
-        rawValue: redirectUrl.toString(),
+        rawValue: redirectUrl,
         explanation: 'Allowlisted target URL selected from the signed bootstrap state after code redemption.'
       })
 
       return {
-        redirectUrl: redirectUrl.toString(),
+        redirectUrl,
         state: verifiedState.claims
       }
     }
