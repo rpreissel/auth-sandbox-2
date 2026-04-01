@@ -320,6 +320,69 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   await expect(artifactViewer).toContainText('maskedTarget')
 })
 
+test('appmock can open webmock through bootstrap SSO', async ({ page, context, request }) => {
+  test.setTimeout(90000)
+
+  const userId = `e2e-sso-${Date.now()}`
+  const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS,
+    data: {
+      userId,
+      firstName: 'SSO',
+      lastName: 'User',
+      birthDate: '1990-01-01',
+      phoneNumber: '+491701234567'
+    }
+  })
+
+  expect(registrationResponse.ok()).toBeTruthy()
+
+  await page.goto('https://appmock.localhost:8443')
+  await page.getByLabel('Benutzer-ID').fill(userId)
+  await page.getByLabel('Vorname').fill('SSO')
+  await page.getByLabel('Nachname').fill('User')
+  await page.getByLabel('Geburtsdatum').fill('1990-01-01')
+  await page.getByLabel('Telefonnummer').fill('+491701234567')
+  await page.getByLabel('Gerätename').fill('Playwright SSO Device')
+  await page.getByRole('button', { name: 'Weiter' }).click()
+  await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+
+  const startSmsTanResponsePromise = page.waitForResponse((response) => response.url().includes('/api/identification/sms-tan/start') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'SMS-TAN senden', exact: true }).click()
+  const startSmsTanResponse = await startSmsTanResponsePromise
+  const startSmsTanBody = await startSmsTanResponse.json() as SmsTanStartResponse
+  await page.getByRole('textbox', { name: 'SMS-TAN' }).fill(startSmsTanBody.devCode ?? '')
+  await page.getByRole('button', { name: 'SMS-TAN bestätigen' }).click()
+
+  await page.getByLabel('Neues Passwort').fill('ChangeMe123!')
+  await page.getByRole('button', { name: 'Passwort speichern' }).click()
+
+  const openWebmockButton = page.locator('button').filter({ hasText: 'WebMock per SSO öffnen' }).first()
+  await expect(openWebmockButton).toHaveCount(1)
+
+  const securePrompt = page.getByRole('region', { name: 'Secure element prompt' })
+  if (await securePrompt.isVisible().catch(() => false)) {
+    await securePrompt.getByRole('button', { name: 'Abbrechen' }).click()
+    await expect(securePrompt).toHaveCount(0)
+  }
+
+  const newPagePromise = context.waitForEvent('page')
+  await openWebmockButton.click({ force: true })
+  const webmockPage = await newPagePromise
+  await webmockPage.waitForLoadState('networkidle')
+
+  await expect(webmockPage).toHaveURL(/webmock\.localhost:8443|auth\.localhost:8443\/api\/sso-bootstrap\/callback|keycloak\.localhost:8443/)
+
+  const currentUrl = webmockPage.url()
+  expect(currentUrl).not.toContain('/protocol/openid-connect/auth?client_id=sso-bootstrap-web&request_uri=')
+
+  if (currentUrl.includes('webmock.localhost:8443')) {
+    await expect(
+      webmockPage.getByRole('heading', { name: /Browser login starts with 1se|Token claims and browser session/i }).first()
+    ).toBeVisible()
+  }
+})
+
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {
   test.setTimeout(45000)
   const userId = `e2e-user-${Date.now()}`

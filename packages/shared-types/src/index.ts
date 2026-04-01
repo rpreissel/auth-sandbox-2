@@ -219,6 +219,21 @@ export type FinishLoginInput = {
   signature: string
 }
 
+export type SsoBootstrapTargetId = 'webmock'
+
+export type SsoBootstrapRequestedAcr = '1se' | '2se'
+
+export type CreateSsoLaunchInput = FinishLoginInput & {
+  targetId: SsoBootstrapTargetId
+  targetPath?: string
+  requestedAcr: SsoBootstrapRequestedAcr
+}
+
+export type CreateSsoLaunchResponse = {
+  launchUrl: string
+  targetUrl: string
+}
+
 export type RefreshTokensInput = {
   refreshToken: string
 }

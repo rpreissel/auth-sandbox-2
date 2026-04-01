@@ -31,6 +31,16 @@ variable "browser_client_secret" {
   sensitive = true
 }
 
+variable "bootstrap_client_id" {
+  type    = string
+  default = "sso-bootstrap-web"
+}
+
+variable "bootstrap_client_secret" {
+  type      = string
+  sensitive = true
+}
+
 variable "admin_client_id" {
   type    = string
   default = "auth-api-admin"

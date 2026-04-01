@@ -10,12 +10,12 @@ terraform {
 }
 
 provider "keycloak" {
-  client_id     = "admin-cli"
-  username      = var.keycloak_admin
-  password      = var.keycloak_admin_password
-  url           = var.keycloak_url
-  realm         = "master"
-  initial_login = false
+  client_id                = "admin-cli"
+  username                 = var.keycloak_admin
+  password                 = var.keycloak_admin_password
+  url                      = var.keycloak_url
+  realm                    = "master"
+  initial_login            = false
   tls_insecure_skip_verify = true
 }
 
@@ -128,6 +128,14 @@ resource "keycloak_authentication_subflow" "browser_auth_flow" {
   provider_id       = "basic-flow"
   requirement       = "ALTERNATIVE"
   priority          = 20
+}
+
+resource "keycloak_authentication_execution" "browser_device_login_authenticator" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
+  authenticator     = "device-login-token"
+  requirement       = "ALTERNATIVE"
+  priority          = 15
 }
 
 resource "keycloak_authentication_subflow" "browser_loa_1_flow" {
@@ -249,6 +257,28 @@ resource "keycloak_openid_client" "browser_app" {
   }
 }
 
+resource "keycloak_openid_client" "bootstrap_app" {
+  realm_id                     = keycloak_realm.realm.id
+  client_id                    = var.bootstrap_client_id
+  name                         = var.bootstrap_client_id
+  access_type                  = "CONFIDENTIAL"
+  standard_flow_enabled        = true
+  direct_access_grants_enabled = false
+  service_accounts_enabled     = false
+  valid_redirect_uris          = ["https://auth.localhost:8443/api/sso-bootstrap/callback"]
+  web_origins                  = []
+  client_secret                = var.bootstrap_client_secret
+
+  extra_config = {
+    "default.acr.values" = "1se"
+    "minimum.acr.value"  = "1se"
+  }
+
+  authentication_flow_binding_overrides {
+    browser_id = keycloak_authentication_flow.browser_step_up_flow.id
+  }
+}
+
 resource "keycloak_openid_client_default_scopes" "browser_default_scopes" {
   realm_id  = keycloak_realm.realm.id
   client_id = keycloak_openid_client.browser_app.id
@@ -270,6 +300,16 @@ resource "keycloak_openid_client_default_scopes" "app_default_scopes" {
     "email",
     keycloak_openid_client_scope.profile_scope.name,
     keycloak_openid_client_scope.servicemock_api_scope.name
+  ]
+}
+
+resource "keycloak_openid_client_default_scopes" "bootstrap_default_scopes" {
+  realm_id  = keycloak_realm.realm.id
+  client_id = keycloak_openid_client.bootstrap_app.id
+  default_scopes = [
+    "acr",
+    "profile",
+    "email"
   ]
 }
 

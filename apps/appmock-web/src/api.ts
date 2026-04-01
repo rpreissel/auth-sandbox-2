@@ -1,6 +1,8 @@
 import type {
   ArtifactDetailResponse,
   ClientEventInput,
+  CreateSsoLaunchInput,
+  CreateSsoLaunchResponse,
   CreateRegistrationFlowInput,
   CreateStepUpFlowInput,
   FinalizeFlowInput,
@@ -127,6 +129,7 @@ export const api = {
   setPassword: (body: SetPasswordInput, options?: TraceRequestOptions) => requestJson<{ passwordSet: true }>(API_BASE, '/api/device/set-password', { method: 'POST', body: JSON.stringify(body) }, options),
   startLogin: (body: StartLoginInput, options?: TraceRequestOptions) => requestJson<StartLoginResponse>(API_BASE, '/api/device/login/start', { method: 'POST', body: JSON.stringify(body) }, options),
   finishLogin: (body: FinishLoginInput, options?: TraceRequestOptions) => requestJson<FinishLoginResponse>(API_BASE, '/api/device/login/finish', { method: 'POST', body: JSON.stringify(body) }, options),
+  createSsoLaunch: (body: CreateSsoLaunchInput, accessToken: string, options?: TraceRequestOptions) => bearerRequest<CreateSsoLaunchResponse>('/api/sso-launches', accessToken, { method: 'POST', body: JSON.stringify(body) }, options),
   refresh: (body: RefreshTokensInput, options?: TraceRequestOptions) => requestJson<RefreshTokensResponse>(API_BASE, '/api/device/token/refresh', { method: 'POST', body: JSON.stringify(body) }, options),
   logout: (body: RefreshTokensInput, options?: TraceRequestOptions) => requestJson<{ logout: true }>(API_BASE, '/api/device/logout', { method: 'POST', body: JSON.stringify(body) }, options),
   listTraces: (params?: URLSearchParams) => requestJson<TraceListResponse>(TRACE_API_BASE, `/traces${params ? `?${params.toString()}` : ''}`),

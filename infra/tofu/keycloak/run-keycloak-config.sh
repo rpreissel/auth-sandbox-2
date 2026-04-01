@@ -27,6 +27,8 @@ apply_config() {
     -var="app_client_secret=${KEYCLOAK_CLIENT_SECRET}" \
     -var="browser_client_id=${KEYCLOAK_BROWSER_CLIENT_ID:-webmock-web}" \
     -var="browser_client_secret=${KEYCLOAK_BROWSER_CLIENT_SECRET:-change-me-browser}" \
+    -var="bootstrap_client_id=${KEYCLOAK_SSO_BOOTSTRAP_CLIENT_ID:-sso-bootstrap-web}" \
+    -var="bootstrap_client_secret=${KEYCLOAK_SSO_BOOTSTRAP_CLIENT_SECRET:-change-me-bootstrap}" \
     -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}" \
     -var="internal_redeem_client_id=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}" \
     -var="internal_redeem_client_secret=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}" \

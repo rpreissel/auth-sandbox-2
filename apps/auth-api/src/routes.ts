@@ -19,8 +19,10 @@ import {
 import { verifyFlowToken, verifyServiceToken } from './flow-tokens.js'
 import { isAllowedInternalRedeemTokenClaims, type InternalRedeemAccessTokenClaims } from './internal-auth.js'
 import {
+  completeSsoBootstrapCallback,
   completeKeycloakBrowserStepUp,
   completeFlowService,
+  createSsoLaunch,
   createRegistrationIdentity,
   deleteDevice,
   finishLogin,
@@ -99,6 +101,17 @@ const finishLoginSchema = z.object({
   encryptedData: z.string().min(1),
   iv: z.string().min(1),
   signature: z.string().min(1)
+})
+
+const createSsoLaunchSchema = finishLoginSchema.extend({
+  targetId: z.enum(['webmock']),
+  targetPath: z.string().min(1).optional(),
+  requestedAcr: z.enum(['1se', '2se'])
+})
+
+const ssoBootstrapCallbackQuerySchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1)
 })
 
 const refreshSchema = z.object({
@@ -577,6 +590,45 @@ export async function registerRoutes(app: any) {
       body,
       run: () => finishLogin(body)
     })
+  })
+  app.post('/api/sso-launches', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = createSsoLaunchSchema.parse(request.body)
+    const authenticatedUser = await requireUserAccessToken(app, request)
+    const result = await tracedRoute({
+      request,
+      reply,
+      traceType: 'sso_launch_create',
+      title: `Create SSO launch for ${authenticatedUser.userId}`,
+      summary: 'AppMock Web requested a PAR-based browser SSO bootstrap launch.',
+      userId: authenticatedUser.userId,
+      body: {
+        ...body,
+        signature: '[redacted]'
+      },
+      run: () => createSsoLaunch({
+        ...body,
+        authenticatedUserId: authenticatedUser.userId
+      })
+    })
+    reply.code(201)
+    return result
+  })
+  app.get('/api/sso-bootstrap/callback', async (request: FastifyRequest, reply: FastifyReply) => {
+    const query = ssoBootstrapCallbackQuerySchema.parse(request.query)
+    const result = await tracedRoute({
+      request,
+      reply,
+      traceType: 'sso_bootstrap_callback',
+      title: 'Complete SSO bootstrap callback',
+      summary: 'auth-api redeemed the bootstrap authorization code and redirected to the allowlisted web target.',
+      body: {
+        code: '[redacted]',
+        state: query.state
+      },
+      run: () => completeSsoBootstrapCallback(query)
+    })
+    reply.code(303)
+    return reply.redirect(result.redirectUrl)
   })
   app.post('/api/device/token/refresh', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = refreshSchema.parse(request.body)

@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { appConfig, logger, pool, recordArtifact, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
   AssuranceFlowService,
+  CreateSsoLaunchInput,
+  CreateSsoLaunchResponse,
   CreateRegistrationIdentityInput,
   DeviceRecord,
   FinishLoginInput,
@@ -30,6 +32,7 @@ import {
 import { verifyServiceToken } from './flow-tokens.js'
 import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
+import { buildSsoBootstrapTargetUrl, createSsoBootstrapState, getSsoBootstrapTarget, verifySsoBootstrapState } from './sso-bootstrap.js'
 import type {
   ChallengeRow,
   DeviceRow,
@@ -57,6 +60,12 @@ function notFound(message: string) {
 function badRequest(message: string) {
   const error = new Error(message) as Error & { statusCode: number }
   error.statusCode = 400
+  return error
+}
+
+function unauthorized(message: string) {
+  const error = new Error(message) as Error & { statusCode: number }
+  error.statusCode = 401
   return error
 }
 
@@ -453,30 +462,7 @@ export async function finishLogin(input: FinishLoginInput): Promise<FinishLoginR
       notes: 'Finish device login service operation.'
     },
     async (spanId) => {
-      const challengeResult = await pool.query<ChallengeRow>('select * from login_challenges where nonce = $1', [input.nonce])
-      const challenge = challengeResult.rows[0]
-      if (!challenge) {
-        throw new Error('Unknown challenge')
-      }
-      if (challenge.used) {
-        throw new Error('Challenge already used')
-      }
-      if (new Date(challenge.expires_at).getTime() < Date.now()) {
-        throw new Error('Challenge expired')
-      }
-
-      await pool.query('update login_challenges set used = true where id = $1', [challenge.id])
-      const loginTokenPayload = {
-        type: 'device',
-        sub: challenge.user_id,
-        publicKeyHash: challenge.public_key_hash,
-        nonce: challenge.nonce,
-        encryptedKey: input.encryptedKey,
-        encryptedData: input.encryptedData,
-        iv: input.iv,
-        signature: input.signature
-      }
-      const loginToken = Buffer.from(JSON.stringify(loginTokenPayload)).toString('base64url')
+      const { loginToken } = await consumeLoginChallengeAndCreateLoginToken(input)
       await recordArtifact({
         spanId,
         artifactType: 'jwt',
@@ -491,6 +477,142 @@ export async function finishLogin(input: FinishLoginInput): Promise<FinishLoginR
       })
       const tokens = await authClient.authenticate(loginToken)
       return tokens
+    }
+  )
+}
+
+async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput) {
+  const challenge = await getUsableLoginChallenge(input.nonce)
+
+  await pool.query('update login_challenges set used = true where id = $1', [challenge.id])
+
+  const loginTokenPayload = {
+    type: 'device',
+    sub: challenge.user_id,
+    publicKeyHash: challenge.public_key_hash,
+    nonce: challenge.nonce,
+    encryptedKey: input.encryptedKey,
+    encryptedData: input.encryptedData,
+    iv: input.iv,
+    signature: input.signature
+  }
+
+  return {
+    challenge,
+    loginToken: Buffer.from(JSON.stringify(loginTokenPayload)).toString('base64url')
+  }
+}
+
+async function getUsableLoginChallenge(nonce: string) {
+  const challengeResult = await pool.query<ChallengeRow>('select * from login_challenges where nonce = $1', [nonce])
+  const challenge = challengeResult.rows[0]
+  if (!challenge) {
+    throw new Error('Unknown challenge')
+  }
+  if (challenge.used) {
+    throw new Error('Challenge already used')
+  }
+  if (new Date(challenge.expires_at).getTime() < Date.now()) {
+    throw new Error('Challenge expired')
+  }
+
+  return challenge
+}
+
+export async function createSsoLaunch(input: CreateSsoLaunchInput & { authenticatedUserId: string }): Promise<CreateSsoLaunchResponse> {
+  return runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'create_sso_launch',
+      userId: input.authenticatedUserId,
+      challengeId: input.nonce,
+      notes: `Create SSO bootstrap launch for ${input.targetId}.`
+    },
+    async (spanId) => {
+      const challenge = await getUsableLoginChallenge(input.nonce)
+      if (challenge.user_id !== input.authenticatedUserId) {
+        throw unauthorized('Challenge user does not match bearer token user')
+      }
+
+      const { loginToken } = await consumeLoginChallengeAndCreateLoginToken(input)
+
+      const target = getSsoBootstrapTarget(input.targetId)
+      const state = createSsoBootstrapState({
+        targetId: input.targetId,
+        targetPath: input.targetPath,
+        requestedAcr: input.requestedAcr
+      })
+      const launch = await authClient.createSsoBootstrapLaunch({
+        loginToken,
+        state,
+        requestedAcr: input.requestedAcr
+      })
+
+      await recordArtifact({
+        spanId,
+        artifactType: 'text',
+        name: 'sso_bootstrap_state',
+        contentType: 'text/plain',
+        encoding: 'raw',
+        direction: 'outbound',
+        rawValue: state,
+        explanation: 'Signed short-lived bootstrap state carrying the allowlisted target metadata.'
+      })
+      await recordArtifact({
+        spanId,
+        artifactType: 'url',
+        name: 'sso_bootstrap_auth_url',
+        contentType: 'text/uri-list',
+        encoding: 'raw',
+        direction: 'outbound',
+        rawValue: launch.authUrl,
+        explanation: 'Keycloak authorization URL created from the PAR request_uri for browser bootstrap.'
+      })
+
+      return {
+        launchUrl: launch.authUrl,
+        targetUrl: buildSsoBootstrapTargetUrl(target, input.targetPath)
+      }
+    }
+  )
+}
+
+export async function completeSsoBootstrapCallback(input: { state: string; code: string }) {
+  return runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'complete_sso_bootstrap_callback',
+      notes: 'Redeem bootstrap authorization code and resolve the final allowlisted target redirect.'
+    },
+    async (spanId) => {
+      const verifiedState = verifySsoBootstrapState(input.state)
+      if (!verifiedState.ok) {
+        throw badRequest(verifiedState.reason === 'expired' ? 'Bootstrap state expired' : 'Invalid bootstrap state')
+      }
+
+      await authClient.redeemSsoBootstrapCode(input.code)
+      const target = getSsoBootstrapTarget(verifiedState.claims.targetId)
+      const redirectUrl = buildSsoBootstrapTargetUrl(target, verifiedState.claims.targetPath)
+
+      await recordArtifact({
+        spanId,
+        artifactType: 'url',
+        name: 'sso_bootstrap_target_url',
+        contentType: 'text/uri-list',
+        encoding: 'raw',
+        direction: 'outbound',
+        rawValue: redirectUrl,
+        explanation: 'Allowlisted target URL selected from the signed bootstrap state after code redemption.'
+      })
+
+      return {
+        redirectUrl,
+        state: verifiedState.claims
+      }
     }
   )
 }

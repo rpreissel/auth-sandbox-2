@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 
-import { buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
+import { appConfig, buildTraceHeaders, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
 import type { JsonObject, RefreshTokensResponse, TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { decodeTokenClaims } from './lib/jwt.js'
@@ -27,6 +27,11 @@ type CredentialRepresentation = {
 
 type CreateDeviceCredentialResponse = {
   credentialId: string
+}
+
+type KeycloakParResponse = {
+  request_uri: string
+  expires_in: number
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
@@ -378,6 +383,58 @@ export class KeycloakAuthClient {
     const response = await this.requestToken(body)
 
     return this.toEnrichedTokenBundle(response)
+  }
+
+  async createSsoBootstrapLaunch(args: {
+    loginToken: string
+    state: string
+    requestedAcr: '1se' | '2se'
+  }) {
+    const redirectUri = `${appConfig.publicUrl}/api/sso-bootstrap/callback`
+    const body = createFormBody({
+      client_id: keycloakConfig.ssoBootstrapClientId,
+      client_secret: keycloakConfig.ssoBootstrapClientSecret,
+      response_type: 'code',
+      scope: 'openid',
+      redirect_uri: redirectUri,
+      state: args.state,
+      acr_values: args.requestedAcr,
+      login_token: args.loginToken
+    })
+
+    const response = await fetchJson<KeycloakParResponse>(
+      `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/ext/par/request`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded'
+        },
+        body
+      }
+    )
+
+    const authUrl = new URL(`${keycloakConfig.publicUrl}/realms/${keycloakConfig.realm}/protocol/openid-connect/auth`)
+    authUrl.searchParams.set('client_id', keycloakConfig.ssoBootstrapClientId)
+    authUrl.searchParams.set('request_uri', response.request_uri)
+
+    return {
+      authUrl: authUrl.toString(),
+      requestUri: response.request_uri,
+      expiresIn: response.expires_in
+    }
+  }
+
+  async redeemSsoBootstrapCode(code: string) {
+    const redirectUri = `${appConfig.publicUrl}/api/sso-bootstrap/callback`
+    const body = createFormBody({
+      grant_type: 'authorization_code',
+      client_id: keycloakConfig.ssoBootstrapClientId,
+      client_secret: keycloakConfig.ssoBootstrapClientSecret,
+      code,
+      redirect_uri: redirectUri
+    })
+
+    return this.requestToken(body)
   }
 
   async refresh(refreshToken: string) {

@@ -4,6 +4,7 @@ import type { FormEvent } from 'react'
 import type {
   AssuranceFlowService,
   AssuranceFlowServiceOption,
+  CreateSsoLaunchResponse,
   ServiceMockApiMessageRecord,
   ServiceMockApiProfileResponse,
   PublicAssuranceFlowRecord,
@@ -181,6 +182,7 @@ export function App() {
     draft: 'A fresh protected note from appmock-web.',
     status: 'Waiting for an authenticated session'
   })
+  const [ssoLaunch, setSsoLaunch] = useState<CreateSsoLaunchResponse | null>(null)
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -276,6 +278,7 @@ export function App() {
       draft: 'A fresh protected note from appmock-web.',
         status: 'Warten auf eine authentifizierte Sitzung'
     })
+    setSsoLaunch(null)
     setForm({
       ...createInitialForm(),
       ...nextForm
@@ -884,6 +887,7 @@ export function App() {
       setTokens(null)
       setChallenge(null)
       setActiveAuthenticatedTab('tokens')
+      setSsoLaunch(null)
       setServiceMockApi((current) => ({
         ...current,
         profile: null,
@@ -892,6 +896,59 @@ export function App() {
       }))
       setStatus('Abgemeldet. Dieses Gerät ist weiter für eine neue Anmeldung bereit.')
       setStep('login')
+    })
+  }
+
+  async function handleOpenWebmockSso() {
+    if (!device || !tokens) {
+      return
+    }
+
+    const popup = window.open('', '_blank')
+
+    await runAction(async () => {
+      const flow = await createFlowTrace('sso_launch_started', [{
+        name: 'sso_launch_request',
+        value: {
+          targetId: 'webmock',
+          requestedAcr: '1se',
+          userId: device.userId
+        }
+      }])
+
+      setStatus('Verschlüsselte Browser-SSO-Anfrage wird vorbereitet...')
+      const challenge = await api.startLogin({ publicKeyHash: device.publicKeyHash }, flow)
+      const signature = await signEncryptedData(challenge.encryptedData, device.privateKey)
+      const launch = await api.createSsoLaunch({
+        targetId: 'webmock',
+        targetPath: '/',
+        requestedAcr: '1se',
+        nonce: challenge.nonce,
+        encryptedKey: challenge.encryptedKey,
+        encryptedData: challenge.encryptedData,
+        iv: challenge.iv,
+        signature
+      }, tokens.accessToken, flow)
+      await sendFlowEvent(flow, 'sso_launch_finished', [{
+        name: 'sso_launch_result',
+        value: {
+          launchUrl: launch.launchUrl,
+          targetUrl: launch.targetUrl
+        }
+      }])
+      setTraceState(null)
+      setSsoLaunch(launch)
+      setStatus('Browser-SSO wird in WebMock geöffnet...')
+      if (popup) {
+        try {
+          popup.opener = null
+        } catch {
+          // Ignore browsers that expose opener as read-only.
+        }
+        popup.location.replace(launch.launchUrl)
+      } else {
+        window.open(launch.launchUrl, '_blank')
+      }
     })
   }
 
@@ -1248,8 +1305,15 @@ export function App() {
                     </div>
                     <div className="actions stacked-actions">
                       <button type="button" onClick={handleRefresh} disabled={busy}>Tokens aktualisieren</button>
+                      <button type="button" onClick={() => void handleOpenWebmockSso()} disabled={busy}>WebMock per SSO öffnen</button>
                       <button type="button" className="button-secondary" onClick={handleLogout} disabled={busy}>Abmelden</button>
                     </div>
+                    {ssoLaunch && (
+                      <div className="binding-notice" role="note" aria-label="SSO launch result">
+                        <strong>Letzter Browser-Start bereit</strong>
+                        <p className="binding-note">Ziel: {ssoLaunch.targetUrl}</p>
+                      </div>
+                    )}
                   </>
                 )}
               </section>
