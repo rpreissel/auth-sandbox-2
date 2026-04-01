@@ -522,6 +522,13 @@ export function App() {
 
     setChallenge(result)
     setStep('login')
+    if (options?.autoFinish) {
+      setSecurePrompt(null)
+      setAutoLogin({ active: true })
+      setStatus(nextStatus)
+      return
+    }
+
     setSecurePrompt({
       kind: 'login',
       title: 'Bestätige deine Identität',
@@ -529,11 +536,6 @@ export function App() {
       caption: `Challenge bereit bis ${formatDateTime(result.expiresAt)}`,
       confirmLabel: 'Displaysperre verwenden'
     })
-    if (options?.autoFinish) {
-      setAutoLogin({ active: true })
-      setStatus(nextStatus)
-      return
-    }
     setStatus(nextStatus)
   }
 
@@ -810,6 +812,7 @@ export function App() {
 
   async function handleFinishLogin(options?: { preserveStatus?: boolean; clearAutoLogin?: boolean }) {
     if (!device || !challenge) return
+    setSecurePrompt(null)
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{
         name: 'challenge_payload',

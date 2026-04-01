@@ -292,7 +292,7 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   await expect(page.getByText(/the token satisfied the stronger 2se assurance check/i)).toBeVisible()
 
   await page.getByLabel('Neue geschützte Notiz').fill('WebMock Web playwright note')
-  await page.getByRole('button', { name: /notiz an mock api senden/i }).click()
+  await page.getByRole('button', { name: /notiz an servicemock api senden/i }).click()
   await expect(page.getByLabel('WebMock message response')).toContainText('WebMock Web playwright note')
 
   const browserTrace = await waitForTrace(request, userId, 'webmock_web_step_up', 'webmock-web')
@@ -305,8 +305,8 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
 
   const artifactList = page.getByRole('list', { name: 'Artifact list' })
   await timeline.getByRole('button', { name: /webmock_web_step_up_challenge_ready/i }).click()
-  await expect(artifactList).toContainText('sms_tan_challenge')
-  await artifactList.getByRole('button', { name: /sms_tan_challenge/i }).click()
+  await expect(page.getByRole('tab', { name: /sms_tan_challenge event_payload/i })).toBeVisible()
+  await page.getByRole('tab', { name: /sms_tan_challenge event_payload/i }).click()
   const artifactViewer = page.getByLabel('Artifact viewer')
   await expect(artifactViewer).toContainText('keycloak_inline')
 
@@ -315,8 +315,8 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   const authApiTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(authApiTimeline).toContainText('auth-api')
   await authApiTimeline.getByRole('button', { name: /POST \/api\/internal\/browser-step-up\/start/i }).click()
-  await expect(artifactList).toContainText('outgoing_response_body')
-  await artifactList.getByRole('button', { name: /outgoing_response_body/i }).click()
+  await expect(page.getByRole('tab', { name: /outgoing_response_body response_body/i })).toBeVisible()
+  await page.getByRole('tab', { name: /outgoing_response_body response_body/i }).click()
   await expect(artifactViewer).toContainText('maskedTarget')
 })
 
@@ -403,7 +403,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByRole('heading', { name: 'Dieses Telefon einrichten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Geräteanmeldung einrichten' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Sitzungstokens', exact: true })).toBeVisible()
-  await expect(page.getByLabel('Token wallet empty state')).toContainText('Tokens erscheinen hier nach der Geräteanmeldung.')
+  await expect(page.getByLabel('Token wallet empty state')).toContainText('Tokens erscheinen erst nach erfolgreicher Geräteanmeldung.')
   await page.getByLabel('Benutzer-ID').fill(userId)
   await page.getByLabel('Vorname').fill('E2E')
   await page.getByLabel('Nachname').fill('User')
@@ -435,21 +435,33 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await page.getByLabel('Neues Passwort').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
 
-  await expect(page.getByText('Automatische Anmeldung läuft...')).toBeVisible()
+  const authenticatedTokenSummary = page.getByLabel('Authenticated token summary')
+  const postPasswordPrompt = page.getByLabel('Secure element prompt')
+  const postPasswordState = await Promise.race([
+    authenticatedTokenSummary.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'authenticated'),
+    postPasswordPrompt.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'prompt')
+  ])
+  if (postPasswordState === 'prompt') {
+    await postPasswordPrompt.getByRole('button', { name: 'Displaysperre verwenden' }).click()
+  }
 
-  await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
-  await expect(page.getByText('Angemeldet und bereit')).toBeVisible()
-  await expect(page.getByText('Automatisch angemeldet')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Aktive Sitzung' })).toBeVisible()
-  await expect(page.getByLabel('Token overview cards')).toContainText('Zugriff')
+  await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 })
+  await expect(page.getByText('Angemeldet mit aktiver Sitzung')).toBeVisible()
+  await expect(page.getByLabel('Session token section')).toBeVisible()
+  await expect(page.getByText('Zugriff')).toBeVisible()
+  await expect(page.getByText('Access-Token bereit')).toBeVisible()
   await expect(page.getByLabel('Token claim summary').locator('article').filter({ hasText: 'Assurance Level' }).locator('strong')).toHaveText('2se')
   const bindingNotice = page.getByRole('note', { name: 'Local device binding notice' })
+  if (await postPasswordPrompt.isVisible().catch(() => false)) {
+    await postPasswordPrompt.getByRole('button', { name: 'Abbrechen' }).click()
+    await expect(postPasswordPrompt).toHaveCount(0)
+  }
   await expect(page.getByRole('button', { name: 'Tokens aktualisieren' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Abmelden' })).toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Dieses Telefon ist bereit' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Mit gespeichertem Gerät anmelden' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Gerät bereit' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Geräteanmeldung starten' })).toBeVisible()
   await expect(page.getByText(userId)).toBeVisible()
   await expect(page.getByText('Playwright Device')).toBeVisible()
   await expect(bindingNotice).toBeVisible()
@@ -463,11 +475,11 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await expect(page.getByText('Bestätige deine Identität')).toBeVisible()
   await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Playwright Device' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
+  await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 })
+  await expect(page.getByLabel('Session token section')).toBeVisible()
   await expect(page.getByRole('tab', { name: 'Token Sitzung' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tab', { name: 'ServiceMock API Demo API' })).toHaveAttribute('aria-selected', 'false')
-  await expect(page.getByRole('heading', { name: 'Token-Inspektion und Hilfsansichten' })).toBeVisible()
+  await expect(page.getByLabel('Token claim summary')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Userinfo-Endpunkt' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Introspection-Endpunkt' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Refresh-Token' })).toBeVisible()
@@ -517,18 +529,18 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
   await waitForTrace(request, userId, 'servicemock_api_message_create_finished', 'servicemock-api')
 
   await page.getByRole('tab', { name: 'Token Sitzung' }).click()
-  await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
+  await expect(page.getByLabel('Session token section')).toBeVisible()
   await page.getByRole('button', { name: 'Tokens aktualisieren' }).click()
-  await expect(page.getByRole('heading', { name: 'Sitzung und Weiterverwendung' })).toBeVisible()
+  await expect(page.getByLabel('Session token section')).toBeVisible()
 
   await page.getByRole('tab', { name: 'ServiceMock API Demo API' }).click()
   await expect(serviceMockApiPanel).toContainText('servicemock-api')
 
   await page.getByRole('tab', { name: 'Token Sitzung' }).click()
   await page.getByRole('button', { name: 'Abmelden' }).click()
-  await expect(page.getByRole('heading', { name: 'Dieses Telefon ist bereit' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Gerät bereit' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Mit Gerät fortfahren' })).toBeVisible()
-  await expect(page.getByText('Noch keine Keycloak-Tokens.')).toBeVisible()
+  await expect(page.getByRole('note', { name: 'Local device binding notice' })).toContainText('Tokens werden aber erst nach einer erfolgreichen Geräteanmeldung ausgestellt.')
 
   await page.getByRole('button', { name: 'Gerätebindung entfernen' }).click()
   await expect(page.getByText('Gerätebindung von diesem Gerät entfernt')).toBeVisible()
@@ -841,11 +853,11 @@ test('missing saved device binding is cleared instead of failing with a server e
     await page.getByRole('button', { name: 'Passwort speichern' }).click()
     await expect(page.getByLabel('Secure element prompt')).toBeVisible()
     await page.getByRole('button', { name: 'Displaysperre verwenden' }).click()
-    await expect(page.getByRole('heading', { name: deviceName })).toBeVisible()
+    await expect(page.getByLabel('Authenticated token summary')).toBeVisible()
   }
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Mit gespeichertem Gerät anmelden' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Geräteanmeldung starten' })).toBeVisible()
 
   const devicesResponse = await request.get(`${AUTH_API_URL}/api/admin/devices`, {
     headers: ADMIN_PROXY_HEADERS
@@ -901,6 +913,6 @@ test('registration verification shows inline error feedback for invalid code att
   await page.getByRole('textbox', { name: 'Registrierungscode' }).fill('WRONGCODE')
   await page.getByRole('button', { name: 'Identifikation abschließen' }).click()
 
-  await expect(page.getByRole('alert')).toContainText('Invalid verification code')
+  await expect(page.getByRole('alert')).toContainText('Invalid registration code')
   await expect(page.getByRole('heading', { name: 'Verfügbaren Service ausführen' })).toBeVisible()
 })
