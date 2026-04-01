@@ -377,9 +377,24 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
   expect(currentUrl).not.toContain('/protocol/openid-connect/auth?client_id=sso-bootstrap-web&request_uri=')
 
   if (currentUrl.includes('webmock.localhost:8443')) {
+    const webmockStatusCards = webmockPage.getByLabel('WebMock status cards')
+    const currentAcrCard = webmockStatusCards.locator('article').filter({ hasText: 'Current acr' })
+    const tokenSessionCard = webmockPage.locator('.card').filter({ has: webmockPage.getByRole('heading', { name: /token claims and browser session/i }) })
+
     await expect(
       webmockPage.getByRole('heading', { name: /Browser login starts with 1se|Token claims and browser session/i }).first()
     ).toBeVisible()
+    await expect(webmockPage.getByRole('button', { name: /mit keycloak 1se anmelden/i })).toBeVisible()
+
+    await webmockPage.getByRole('button', { name: 'Lokale Sitzung leeren' }).click()
+    await expect(webmockPage.getByText('Local webmock-web tokens cleared.')).toBeVisible()
+    await expect(tokenSessionCard).toContainText('Has token')
+    await expect(tokenSessionCard).toContainText('no', { timeout: 15000 })
+
+    await webmockPage.getByRole('button', { name: /mit keycloak 1se anmelden/i }).click()
+    await webmockPage.waitForLoadState('networkidle')
+    await expect(webmockPage).toHaveURL(/keycloak\.localhost:8443|webmock\.localhost:8443/)
+    expect(webmockPage.url()).not.toContain('request_uri=')
   }
 })
 
