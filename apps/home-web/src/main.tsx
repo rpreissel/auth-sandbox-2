@@ -203,6 +203,49 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
     ]
   },
   {
+    title: 'SSO bootstrap from device app into WebMock',
+    summary: 'AppMock Web can prepare an allowlisted browser bootstrap into WebMock through auth-api and Keycloak PAR state.',
+    actors: ['AppMock Web', 'Auth API', 'Keycloak', 'WebMock Web'],
+    steps: [
+      {
+        from: 'AppMock Web',
+        to: 'Auth API',
+        label: 'Create SSO bootstrap launch',
+        detail: 'The device app submits the current authenticated context plus a signed login challenge to request a controlled browser handoff.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Create PAR-based auth launch',
+        detail: 'Auth-api creates a pushed authorization request, signs bootstrap state, and receives a request_uri-backed Keycloak launch URL.'
+      },
+      {
+        from: 'Auth API',
+        to: 'AppMock Web',
+        label: 'Return launch URL and target',
+        detail: 'The app gets the Keycloak URL plus the final allowlisted WebMock target it should open in a new browser tab.'
+      },
+      {
+        from: 'AppMock Web',
+        to: 'Keycloak',
+        label: 'Open bootstrap login tab',
+        detail: 'The browser follows the prepared Keycloak URL instead of assembling an open redirect or public shortcut on its own.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'Auth API',
+        label: 'Redeem callback and resolve target',
+        detail: 'Keycloak returns to auth-api, which redeems the code, validates signed state, and resolves the final allowlisted redirect URL.'
+      },
+      {
+        from: 'Auth API',
+        to: 'WebMock Web',
+        label: 'Redirect into WebMock',
+        detail: 'The browser lands in the WebMock target with a bootstrap-authenticated browser session that can continue into normal 1se or 2se flows.'
+      }
+    ]
+  },
+  {
     title: 'Browser login and inline 2se step-up',
     summary: 'WebMock Web starts at 1se, then Keycloak upgrades the browser session through the inline SMS-TAN backchannel flow.',
     actors: ['WebMock Web', 'Keycloak', 'KC Extension', 'Auth API', 'Postgres'],
@@ -268,6 +311,49 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
         detail: 'The browser session and tokens now satisfy the stronger endpoint requirements.'
       }
     ]
+  },
+  {
+    title: 'Trace capture and inspection',
+    summary: 'Browser clients, backend services, Keycloak calls, and proxy hops are stitched together through trace IDs, artifacts, and Caddy logs.',
+    actors: ['Browser Apps', 'Auth API', 'ServiceMock API', 'Keycloak', 'Trace API', 'Trace Web', 'Caddy'],
+    steps: [
+      {
+        from: 'Browser Apps',
+        to: 'Auth API',
+        label: 'Send API calls with trace headers',
+        detail: 'AppMock Web and WebMock Web attach trace, correlation, and session headers so backend requests stay linked to the originating UI interaction.'
+      },
+      {
+        from: 'Browser Apps',
+        to: 'Trace API',
+        label: 'Emit client events',
+        detail: 'The browser sends trace-only client-event payloads that describe UI milestones and attach demo artifacts for the trace explorer.'
+      },
+      {
+        from: 'Auth API',
+        to: 'Keycloak',
+        label: 'Record outbound spans and artifacts',
+        detail: 'Auth-api captures nested spans for service work and stores outbound Keycloak requests, responses, and decoded token artifacts.'
+      },
+      {
+        from: 'ServiceMock API',
+        to: 'Trace API',
+        label: 'Persist server spans through shared observability writes',
+        detail: 'Protected downstream calls keep the incoming trace chain and add their own request spans, status, and response artifacts.'
+      },
+      {
+        from: 'Trace Web',
+        to: 'Trace API',
+        label: 'Load traces, spans, and artifacts',
+        detail: 'The trace UI reads list and detail endpoints to show timelines, decoded payloads, decrypted challenge views, and field explanations.'
+      },
+      {
+        from: 'Trace Web',
+        to: 'Caddy',
+        label: 'Cross-check proxy hops by correlation ID',
+        detail: 'The inspector also reads proxy access logs and aligns matching requests when correlation IDs are present in the Caddy log records.'
+      }
+    ]
   }
 ]
 
@@ -319,7 +405,7 @@ function HomeApp() {
         <h2>Sequence diagrams</h2>
         <p className="panel-copy">
           The homepage now maps the full sandbox journey: admin provisioning, device enrollment, backend-driven password setup,
-          encrypted login, token lifecycle, and browser 2se step-up.
+          encrypted login, token lifecycle, SSO bootstrap, browser 2se step-up, and trace inspection.
         </p>
         <div className="sequence-stack">
           {sequenceDiagrams.map((diagram) => (

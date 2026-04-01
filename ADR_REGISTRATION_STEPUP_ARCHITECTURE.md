@@ -1,7 +1,9 @@
 # ADR: Architektur fuer Registrierung, Account-Upgrade und Step-up mit Keycloak
 
-- Status: Proposed
+- Status: Accepted
 - Datum: 2026-03-15
+
+Hinweis: Das beschriebene Zielbild ist im aktuellen Repo in den Kernpfaden weitgehend umgesetzt. Fuer den aktuellen Runtime-Zustand sind `README.md` und `TRACING.md` die massgeblichen Referenzen.
 
 ## Kontext
 

@@ -563,11 +563,11 @@ function WebMockApp() {
               <span>SMS-TAN</span>
               <strong>The TAN is intentionally shown in the demo UI after challenge start so browser and app flows stay interactive without a real SMS gateway.</strong>
             </div>
-            <div className="tan-card">
-              <span>Tracing</span>
-              <strong>Every servicemock-api request already emits traces. Browser step-up traces need to be validated once the end-to-end redirect path is finished.</strong>
-            </div>
-          </section>
+              <div className="tan-card">
+                <span>Tracing</span>
+                <strong>ServiceMock requests, browser client events, and the inline browser step-up path all emit traces that can be inspected in Trace Web.</strong>
+              </div>
+            </section>
         </section>
       </section>
     </main>

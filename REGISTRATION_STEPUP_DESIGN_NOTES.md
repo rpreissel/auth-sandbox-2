@@ -2,6 +2,8 @@
 
 Dieses Dokument fasst die Ergebnisse der Session zusammen. Es dient als Grundlage fuer spaetere Architektur-, API- und Sicherheitsdesigns.
 
+Hinweis: Die Kernideen aus dieser Notiz sind inzwischen weitgehend umgesetzt. Fuer den aktuellen Runtime-Zustand und die aktive Flow-/Tracing-Dokumentation sind `README.md` und `TRACING.md` die besseren Referenzen.
+
 ## Zielbild
 
 - Keycloak bleibt Identity Store, Session- und Token-Issuer.

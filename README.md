@@ -4,7 +4,7 @@ Minimal device-login sandbox with Keycloak, OpenTofu, Caddy, Postgres, React fro
 
 ## What this repo does
 
-`auth-sandbox-2` is a focused rebuild of the old sandbox with only the device-login flow:
+`auth-sandbox-2` is a focused rebuild of the old sandbox centered on device login plus the related browser step-up, bootstrap SSO, and trace-inspection demos:
 
 - registration codes for a `userId`
 - device registration with a stored Keycloak device credential
@@ -15,9 +15,9 @@ Minimal device-login sandbox with Keycloak, OpenTofu, Caddy, Postgres, React fro
 
 Explicitly out of scope:
 
-- SSO
+- full production SSO platform concerns beyond the focused bootstrap and browser step-up demos in this repo
 - CMS
-- extra demo or target apps
+- unrelated product domains outside the auth, mock, admin, home, and trace demo surfaces
 
 ## Stack
 
@@ -123,6 +123,13 @@ sequenceDiagram
   KC-->>Browser: Upgraded browser session / tokens
 ```
 
+## Additional flows
+
+- App-driven browser SSO bootstrap from `appmock-web` into `webmock-web`
+- Browser 1se login with inline 2se step-up inside Keycloak
+- Client-event, backend-span, and proxy-log tracing through `trace-api` and `trace-web`
+- App-assisted mobile step-up completion through `POST /api/step-up/mobile/complete`
+
 ## Architecture notes
 
 - Keycloak `username` always equals `userId`.
@@ -193,10 +200,14 @@ flowchart TB
 
 - `apps/auth-api` - backend API, DB migrations, Keycloak integration
 - `apps/appmock-web` - device registration, login, claims, refresh, logout
+- `apps/webmock-web` - browser login, browser step-up, and SSO bootstrap target
 - `apps/servicemock-api` - OIDC/JWKS protected mock REST endpoints for appmock-web
 - `apps/admin-web` - registration code and device admin UI
 - `apps/home-web` - landing page with links and flow diagram
+- `apps/trace-api` - trace persistence and observability read/write API
+- `apps/trace-web` - trace browser for spans, artifacts, and proxy-hop inspection
 - `packages/shared-types` - shared request and response types
+- `TRACING.md` - trace model, capture points, and how to inspect traces end to end
 - `keycloak-extension` - custom device credential and login authenticator
 - `infra/tofu/keycloak` - realm and flow config
 - `e2e` - Playwright coverage
