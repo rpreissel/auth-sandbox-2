@@ -4,6 +4,7 @@ import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
@@ -47,12 +48,32 @@ public class ResultCodeAuthenticator implements Authenticator {
                 context.getAuthenticationSession().setAuthNote("amr", String.join(" ", redeem.amr()));
                 context.getAuthenticationSession().setUserSessionNote("amr", String.join(" ", redeem.amr()));
             }
+            recordLevelOfAuthentication(context, redeem.achievedAcr());
 
             context.setUser(user);
             context.success();
         } catch (Exception exception) {
             LOG.warnf(exception, "Result code validation failed");
             context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+        }
+    }
+
+    private void recordLevelOfAuthentication(AuthenticationFlowContext context, String achievedAcr) {
+        int level = switch (achievedAcr) {
+            case "2se" -> 2;
+            case "1se" -> 1;
+            default -> -1;
+        };
+        if (level < 0) {
+            return;
+        }
+
+        AcrStore acrStore = new AcrStore(context.getSession(), context.getAuthenticationSession());
+        acrStore.setLevelAuthenticated(level);
+
+        String loaMap = context.getAuthenticationSession().getAuthNote("loa-map");
+        if (loaMap != null) {
+            context.getAuthenticationSession().setUserSessionNote("loa-map", loaMap);
         }
     }
 

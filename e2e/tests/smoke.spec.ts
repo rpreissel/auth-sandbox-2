@@ -357,8 +357,9 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
   await page.getByLabel('Neues Passwort').fill('ChangeMe123!')
   await page.getByRole('button', { name: 'Passwort speichern' }).click()
 
+  await expect(page.getByText('Angemeldet mit aktiver Sitzung')).toBeVisible({ timeout: 20000 })
   const openWebmockButton = page.locator('button').filter({ hasText: 'WebMock per SSO öffnen' }).first()
-  await expect(openWebmockButton).toHaveCount(1)
+  await expect(openWebmockButton).toBeVisible({ timeout: 20000 })
 
   const securePrompt = page.getByRole('region', { name: 'Secure element prompt' })
   if (await securePrompt.isVisible().catch(() => false)) {
@@ -395,6 +396,7 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
     await webmockPage.waitForLoadState('networkidle')
     await expect(webmockPage).toHaveURL(/keycloak\.localhost:8443|webmock\.localhost:8443/)
     expect(webmockPage.url()).not.toContain('request_uri=')
+    await expect(webmockPage.getByText('Sign in to your account')).toHaveCount(0)
   }
 })
 

@@ -5,6 +5,7 @@ import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.credential.CredentialModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -21,6 +22,8 @@ import java.util.Base64;
 public class DeviceLoginTokenAuthenticator implements Authenticator {
 
     static final Logger LOG = Logger.getLogger(DeviceLoginTokenAuthenticator.class);
+    private static final String DEVICE_LOGIN_ACR = "1se";
+    private static final int DEVICE_LOGIN_LOA = 1;
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
@@ -85,11 +88,29 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             }
 
             LOG.infof("Device login token validated for user '%s' with credential '%s'", userId, matched.getId());
+            long authTime = System.currentTimeMillis() / 1000;
+            context.getAuthenticationSession().setAuthNote("acr", DEVICE_LOGIN_ACR);
+            context.getAuthenticationSession().setAuthNote("auth_time", Long.toString(authTime));
+            context.getAuthenticationSession().setUserSessionNote("acr", DEVICE_LOGIN_ACR);
+            context.getAuthenticationSession().setUserSessionNote("auth_time", Long.toString(authTime));
+            context.getAuthenticationSession().setAuthNote("amr", "pwd");
+            context.getAuthenticationSession().setUserSessionNote("amr", "pwd");
+            recordLevelOfAuthentication(context, DEVICE_LOGIN_LOA);
             context.setUser(user);
             context.success();
         } catch (Exception exception) {
             LOG.warnf(exception, "Device login validation failed");
             context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+        }
+    }
+
+    private void recordLevelOfAuthentication(AuthenticationFlowContext context, int level) {
+        AcrStore acrStore = new AcrStore(context.getSession(), context.getAuthenticationSession());
+        acrStore.setLevelAuthenticated(level);
+
+        String loaMap = context.getAuthenticationSession().getAuthNote("loa-map");
+        if (loaMap != null) {
+            context.getAuthenticationSession().setUserSessionNote("loa-map", loaMap);
         }
     }
 
