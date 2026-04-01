@@ -7,6 +7,7 @@ export function buildAuthorizationUrl(input: {
   acrValues: string
   state: string
   nonce: string
+  traceHint?: string | null
   loginHint?: string | null
 }) {
   const url = new URL(input.authorizationEndpoint)
@@ -17,6 +18,9 @@ export function buildAuthorizationUrl(input: {
   url.searchParams.set('acr_values', input.acrValues)
   url.searchParams.set('state', input.state)
   url.searchParams.set('nonce', input.nonce)
+  if (input.traceHint) {
+    url.searchParams.set('trace_hint', input.traceHint)
+  }
   if (input.loginHint) {
     url.searchParams.set('login_hint', input.loginHint)
   }

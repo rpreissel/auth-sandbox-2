@@ -23,6 +23,7 @@ type ProxyLogRecord = {
   }
   host?: string
   correlation_id?: string
+  trace_hint?: string
   upstream_host?: string
 }
 
@@ -387,7 +388,7 @@ async function loadProxyLogs(correlationId: string) {
       .split('\n')
       .filter((line) => line.trim().length > 0)
       .map((line) => JSON.parse(line) as ProxyLogRecord)
-      .filter((entry) => entry.correlation_id === correlationId)
+      .filter((entry) => entry.correlation_id === correlationId || entry.trace_hint === correlationId)
       .slice(-30)
       .reverse()
   } catch {
@@ -861,6 +862,7 @@ function TraceInspectorPage(props: { traceId: string; onBack: () => void }) {
               <span>{entry.request?.method ?? 'GET'} {entry.request?.uri ?? '/'}</span>
               <span>upstream: {entry.upstream_host ?? 'static'}</span>
               <span>correlation: {entry.correlation_id ?? 'missing'}</span>
+              <span>trace hint: {entry.trace_hint ?? 'missing'}</span>
             </article>
           ))}
         </div>

@@ -302,6 +302,9 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(timeline).toContainText('webmock-web')
+  const proxyLogList = page.getByRole('list', { name: 'Proxy log list' })
+  await expect(proxyLogList).toContainText('keycloak.localhost')
+  await expect(proxyLogList).toContainText('/protocol/openid-connect/auth?')
 
   const artifactList = page.getByRole('list', { name: 'Artifact list' })
   await timeline.getByRole('button', { name: /webmock_web_step_up_challenge_ready/i }).click()

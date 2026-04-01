@@ -376,16 +376,32 @@ function WebMockApp() {
 
   function startLogin(acrValues: '1se' | '2se') {
     const loginHint = typeof tokenClaims?.preferred_username === 'string' ? tokenClaims.preferred_username : null
-    const url = buildAuthorizationUrl({
-      authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
-      clientId: CLIENT_ID,
-      redirectUri: REDIRECT_URI,
-      acrValues,
-      state: randomValue(),
-      nonce: randomValue(),
-      loginHint: acrValues === '2se' ? loginHint : null
+    const trace = createTraceState()
+    void sendClientEvent({
+      trace,
+      operation: 'webmock_web_login_redirect_started',
+      traceType: 'webmock_web_login_redirect',
+      userId: loginHint,
+      artifacts: [
+        {
+          artifactType: 'url',
+          name: 'keycloak_browser_auth_request',
+          rawValue: stringifyArtifact({ acrValues })
+        }
+      ]
+    }).finally(() => {
+      const url = buildAuthorizationUrl({
+        authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI,
+        acrValues,
+        state: randomValue(),
+        nonce: randomValue(),
+        traceHint: trace.traceId,
+        loginHint: acrValues === '2se' ? loginHint : null
+      })
+      window.location.assign(url)
     })
-    window.location.assign(url)
   }
 
   async function startInteractiveStepUp() {
@@ -436,6 +452,7 @@ function WebMockApp() {
         acrValues: '2se',
         state: randomValue(),
         nonce: randomValue(),
+        traceHint: trace.traceId,
         loginHint: typeof tokenClaims?.preferred_username === 'string' ? tokenClaims.preferred_username : null
       })
       window.location.assign(url)

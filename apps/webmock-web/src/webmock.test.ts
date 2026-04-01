@@ -10,11 +10,13 @@ describe('webmock helpers', () => {
       redirectUri: 'https://webmock.localhost:8443/',
       acrValues: '2se',
       state: 'state-1',
-      nonce: 'nonce-1'
+      nonce: 'nonce-1',
+      traceHint: 'trace-1'
     })
 
     expect(url).toContain('acr_values=2se')
     expect(url).toContain('client_id=webmock-web')
+    expect(url).toContain('trace_hint=trace-1')
   })
 
   it('treats 2se as satisfying 1se endpoints', () => {

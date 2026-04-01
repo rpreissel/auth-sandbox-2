@@ -199,6 +199,7 @@ https://keycloak.localhost:8443 {
   log_append host keycloak.localhost
   log_append correlation_id {http.request.header.X-Correlation-Id}
   log_append trace_id {http.request.header.X-Trace-Id}
+  log_append trace_hint {query.trace_hint}
   log_append client_name {http.request.header.X-Client-Name}
   log_append method {http.request.method}
   log_append uri {http.request.uri}
