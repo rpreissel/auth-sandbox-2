@@ -25,6 +25,8 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
     static final Logger LOG = Logger.getLogger(DeviceLoginTokenAuthenticator.class);
     private static final String DEVICE_LOGIN_ACR = "1se";
     private static final int DEVICE_LOGIN_LOA = 1;
+    private static final String STRONG_DEVICE_LOGIN_ACR = "2se";
+    private static final int STRONG_DEVICE_LOGIN_LOA = 2;
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
@@ -99,18 +101,22 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             LOG.infof("Device login token validated for user '%s' with credential '%s'", userId, matched.getId());
             trace.recordArtifact("device_login_validation", Map.of(
                     "userId", userId,
+                    "requestedAcr", token.acr() == null ? "" : token.acr(),
                     "credentialId", matched.getId(),
                     "publicKeyHash", publicKeyHash,
                     "hasEncryptedData", encryptedData != null && !encryptedData.isBlank()
             ), "Validated device login token and matched the stored credential.");
             long authTime = System.currentTimeMillis() / 1000;
-            context.getAuthenticationSession().setAuthNote("acr", DEVICE_LOGIN_ACR);
+            String achievedAcr = STRONG_DEVICE_LOGIN_ACR.equals(token.acr()) ? STRONG_DEVICE_LOGIN_ACR : DEVICE_LOGIN_ACR;
+            int achievedLoa = STRONG_DEVICE_LOGIN_ACR.equals(achievedAcr) ? STRONG_DEVICE_LOGIN_LOA : DEVICE_LOGIN_LOA;
+            String achievedAmr = STRONG_DEVICE_LOGIN_ACR.equals(achievedAcr) ? "hwk" : "pwd";
+            context.getAuthenticationSession().setAuthNote("acr", achievedAcr);
             context.getAuthenticationSession().setAuthNote("auth_time", Long.toString(authTime));
-            context.getAuthenticationSession().setUserSessionNote("acr", DEVICE_LOGIN_ACR);
+            context.getAuthenticationSession().setUserSessionNote("acr", achievedAcr);
             context.getAuthenticationSession().setUserSessionNote("auth_time", Long.toString(authTime));
-            context.getAuthenticationSession().setAuthNote("amr", "pwd");
-            context.getAuthenticationSession().setUserSessionNote("amr", "pwd");
-            recordLevelOfAuthentication(context, DEVICE_LOGIN_LOA);
+            context.getAuthenticationSession().setAuthNote("amr", achievedAmr);
+            context.getAuthenticationSession().setUserSessionNote("amr", achievedAmr);
+            recordLevelOfAuthentication(context, achievedLoa);
             context.setUser(user);
             trace.success("Validated device login token and established Keycloak user session.");
             context.success();

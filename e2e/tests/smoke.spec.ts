@@ -394,18 +394,17 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
     await expect(
       webmockPage.getByRole('heading', { name: /Browser login starts with 1se|Token claims and browser session/i }).first()
     ).toBeVisible()
+    await expect(currentAcrCard.locator('strong')).toHaveText('none', { timeout: 15000 })
     await expect(webmockPage.getByRole('button', { name: /mit keycloak 1se anmelden/i })).toBeVisible()
-
-    await webmockPage.getByRole('button', { name: 'Lokale Sitzung leeren' }).click()
-    await expect(webmockPage.getByText('Local webmock-web tokens cleared.')).toBeVisible()
-    await expect(tokenSessionCard).toContainText('Has token')
-    await expect(tokenSessionCard).toContainText('no', { timeout: 15000 })
 
     await webmockPage.getByRole('button', { name: /mit keycloak 1se anmelden/i }).click()
     await webmockPage.waitForLoadState('networkidle')
     await expect(webmockPage).toHaveURL(/keycloak\.localhost:8443|webmock\.localhost:8443/)
     expect(webmockPage.url()).not.toContain('request_uri=')
     await expect(webmockPage.getByText('Sign in to your account')).toHaveCount(0)
+    await expect(currentAcrCard.locator('strong')).toHaveText('2se', { timeout: 15000 })
+    await expect(tokenSessionCard).toContainText('Has token')
+    await expect(tokenSessionCard).toContainText('yes', { timeout: 15000 })
   }
 })
 

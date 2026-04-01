@@ -11,6 +11,7 @@ const SERVICEMOCK_API_BASE = import.meta.env.VITE_SERVICEMOCK_API_URL ?? '/servi
 const CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'webmock-web'
 const REDIRECT_URI = 'https://webmock.localhost:8443/'
 const TOKEN_STORAGE_KEY = 'auth-sandbox-2.webmock-web.tokens'
+const SSO_ACR_HINT_STORAGE_KEY = 'auth-sandbox-2.webmock-web.sso-acr-hint'
 const AUTH_API_BASE = 'https://auth.localhost:8443'
 const TRACE_API_BASE = '/trace-api'
 
@@ -152,6 +153,28 @@ function persistTokens(tokens: StoredTokens | null) {
   window.localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens))
 }
 
+function loadSsoAcrHint() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const value = window.localStorage.getItem(SSO_ACR_HINT_STORAGE_KEY)
+  return value === '2se' ? '2se' : null
+}
+
+function persistSsoAcrHint(acr: '2se' | null) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (!acr) {
+    window.localStorage.removeItem(SSO_ACR_HINT_STORAGE_KEY)
+    return
+  }
+
+  window.localStorage.setItem(SSO_ACR_HINT_STORAGE_KEY, acr)
+}
+
 async function exchangeCode(code: string) {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -203,6 +226,7 @@ async function requestJson<T>(path: string, accessToken: string, trace?: TraceSt
 
 function WebMockApp() {
   const [tokens, setTokens] = useState<StoredTokens | null>(() => loadStoredTokens())
+  const [ssoAcrHint, setSsoAcrHint] = useState<'2se' | null>(() => loadSsoAcrHint())
   const [profile, setProfile] = useState<ServiceMockApiProfileResponse | null>(null)
   const [assurance1, setAssurance1] = useState<ServiceMockApiAssuranceResponse | null>(null)
   const [assurance2, setAssurance2] = useState<ServiceMockApiAssuranceResponse | null>(null)
@@ -218,6 +242,11 @@ function WebMockApp() {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
     const error = params.get('error')
+    const ssoAcrHintParam = params.get('sso_acr_hint')
+    if (ssoAcrHintParam === '2se') {
+      persistSsoAcrHint('2se')
+      setSsoAcrHint('2se')
+    }
     if (error) {
       setMessageState({ kind: 'error', text: `Keycloak login failed: ${error}` })
       return
@@ -230,6 +259,8 @@ function WebMockApp() {
       .then((nextTokens) => {
         setTokens(nextTokens)
         persistTokens(nextTokens)
+        persistSsoAcrHint(null)
+        setSsoAcrHint(null)
         setMessageState({ kind: 'info', text: 'Keycloak session established and token bundle stored locally.' })
         window.history.replaceState({}, document.title, window.location.pathname)
       })
@@ -376,14 +407,15 @@ function WebMockApp() {
 
   function startLogin(acrValues: '1se' | '2se') {
     const loginHint = typeof tokenClaims?.preferred_username === 'string' ? tokenClaims.preferred_username : null
+    const effectiveAcr = acrValues === '1se' && ssoAcrHint === '2se' ? '2se' : acrValues
     const url = buildAuthorizationUrl({
       authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
-      acrValues,
+      acrValues: effectiveAcr,
       state: randomValue(),
       nonce: randomValue(),
-      loginHint: acrValues === '2se' ? loginHint : null
+      loginHint: effectiveAcr === '2se' ? loginHint : null
     })
     window.location.assign(url)
   }
@@ -448,7 +480,9 @@ function WebMockApp() {
 
   function logout() {
     persistTokens(null)
+    persistSsoAcrHint(null)
     setTokens(null)
+    setSsoAcrHint(null)
     setMessageState({ kind: 'warn', text: 'Local webmock-web tokens cleared. Log out in Keycloak separately if you want to remove the SSO cookie.' })
   }
 

@@ -7,6 +7,7 @@ import org.keycloak.credential.CredentialModel;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventType;
+import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.Constants;
 import org.keycloak.models.UserModel;
@@ -157,8 +158,15 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             trace.refreshContextArtifact();
 
             AuthenticationManager.setClientScopesInSession(session, authSession);
+            AcrStore acrStore = new AcrStore(session, authSession);
+            acrStore.setLevelAuthenticated(2);
             authSession.setAuthNote("acr", DEVICE_LOGIN_ACR);
             authSession.setUserSessionNote("acr", DEVICE_LOGIN_ACR);
+            String loaMap = authSession.getAuthNote("loa-map");
+            if (loaMap != null) {
+                authSession.setUserSessionNote("loa-map", loaMap);
+                userSession.setNote("loa-map", loaMap);
+            }
             userSession.setNote("acr", DEVICE_LOGIN_ACR);
             ClientSessionContext clientSessionCtx = TokenManager.attachAuthenticationSession(session, userSession, authSession);
             clientSessionCtx.setAttribute(Constants.GRANT_TYPE, context.getGrantType());

@@ -481,7 +481,7 @@ export async function finishLogin(input: FinishLoginInput): Promise<FinishLoginR
   )
 }
 
-async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput) {
+async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput & { acr?: string | null }) {
   const challenge = await getUsableLoginChallenge(input.nonce)
   const exp = Math.floor(new Date(challenge.expires_at).getTime() / 1000)
 
@@ -492,6 +492,7 @@ async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput)
     jti: randomUUID(),
     exp,
     sub: challenge.user_id,
+    ...(input.acr ? { acr: input.acr } : {}),
     publicKeyHash: challenge.public_key_hash,
     nonce: challenge.nonce,
     encryptedKey: input.encryptedKey,
@@ -522,7 +523,7 @@ async function getUsableLoginChallenge(nonce: string) {
   return challenge
 }
 
-export async function createSsoLaunch(input: CreateSsoLaunchInput & { authenticatedUserId: string }): Promise<CreateSsoLaunchResponse> {
+export async function createSsoLaunch(input: CreateSsoLaunchInput & { authenticatedUserId: string; acr?: string | null }): Promise<CreateSsoLaunchResponse> {
   return runWithSpan(
     {
       kind: 'process',
@@ -574,9 +575,14 @@ export async function createSsoLaunch(input: CreateSsoLaunchInput & { authentica
         explanation: 'Keycloak authorization URL created from the PAR request_uri for browser bootstrap.'
       })
 
+      const targetUrl = new URL(buildSsoBootstrapTargetUrl(target, input.targetPath))
+      if (input.requestedAcr === '2se') {
+        targetUrl.searchParams.set('sso_acr_hint', '2se')
+      }
+
       return {
         launchUrl: launch.authUrl,
-        targetUrl: buildSsoBootstrapTargetUrl(target, input.targetPath)
+        targetUrl: targetUrl.toString()
       }
     }
   )
@@ -599,7 +605,10 @@ export async function completeSsoBootstrapCallback(input: { state: string; code:
 
       await authClient.redeemSsoBootstrapCode(input.code)
       const target = getSsoBootstrapTarget(verifiedState.claims.targetId)
-      const redirectUrl = buildSsoBootstrapTargetUrl(target, verifiedState.claims.targetPath)
+      const redirectUrl = new URL(buildSsoBootstrapTargetUrl(target, verifiedState.claims.targetPath))
+      if (verifiedState.claims.requestedAcr === '2se') {
+        redirectUrl.searchParams.set('sso_acr_hint', '2se')
+      }
 
       await recordArtifact({
         spanId,
@@ -608,12 +617,12 @@ export async function completeSsoBootstrapCallback(input: { state: string; code:
         contentType: 'text/uri-list',
         encoding: 'raw',
         direction: 'outbound',
-        rawValue: redirectUrl,
+        rawValue: redirectUrl.toString(),
         explanation: 'Allowlisted target URL selected from the signed bootstrap state after code redemption.'
       })
 
       return {
-        redirectUrl,
+        redirectUrl: redirectUrl.toString(),
         state: verifiedState.claims
       }
     }

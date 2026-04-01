@@ -68,6 +68,7 @@ final class LoginTokenSupport {
         return new DeviceLoginPayload(
                 readRequiredString(token, "type"),
                 readRequiredString(token, "sub"),
+                readOptionalString(token, "acr"),
                 readRequiredString(token, "publicKeyHash"),
                 readRequiredString(token, "encryptedData"),
                 readRequiredString(token, "signature"),
@@ -97,9 +98,18 @@ final class LoginTokenSupport {
         return stringValue;
     }
 
+    private static String readOptionalString(Map<String, Object> token, String fieldName) {
+        Object value = token.get(fieldName);
+        if (value instanceof String stringValue && !stringValue.isBlank()) {
+            return stringValue;
+        }
+        return null;
+    }
+
     record DeviceLoginPayload(
             String type,
             String sub,
+            String acr,
             String publicKeyHash,
             String encryptedData,
             String signature,

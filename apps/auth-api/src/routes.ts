@@ -141,6 +141,7 @@ type UserAccessTokenClaims = JWTPayload & {
   client_id?: string
   preferred_username?: string
   userId?: string
+  acr?: string
 }
 
 function readTraceHeaders(request: FastifyRequest) {
@@ -607,7 +608,8 @@ export async function registerRoutes(app: any) {
       },
       run: () => createSsoLaunch({
         ...body,
-        authenticatedUserId: authenticatedUser.userId
+        authenticatedUserId: authenticatedUser.userId,
+        acr: typeof authenticatedUser.claims.acr === 'string' ? authenticatedUser.claims.acr : null
       })
     })
     reply.code(201)
