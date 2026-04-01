@@ -17,55 +17,38 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
-import java.util.Map;
 
 public class DeviceLoginTokenAuthenticator implements Authenticator {
 
-    private static final Logger LOG = Logger.getLogger(DeviceLoginTokenAuthenticator.class);
-    private static final String LOGIN_TOKEN_NOTE = "client_request_param_login_token";
-    private static final ObjectMapper mapper = new ObjectMapper();
-
-    private String resolveLoginToken(AuthenticationFlowContext context) {
-        String loginToken = context.getAuthenticationSession().getClientNote(LOGIN_TOKEN_NOTE);
-        String source = LOGIN_TOKEN_NOTE;
-        if (loginToken == null || loginToken.isBlank()) {
-            loginToken = context.getAuthenticationSession().getClientNote("login_token");
-            source = "clientNote:login_token";
-        }
-        if (loginToken == null || loginToken.isBlank()) {
-            loginToken = context.getAuthenticationSession().getAuthNote("login_token");
-            source = "authNote:login_token";
-        }
-        if (loginToken == null || loginToken.isBlank()) {
-            loginToken = context.getHttpRequest().getUri().getQueryParameters().getFirst("login_token");
-            source = "query:login_token";
-        }
-        if (loginToken == null || loginToken.isBlank()) {
-            LOG.info("Device login authenticator found no login_token in auth session or request");
-        } else {
-            LOG.infof("Device login authenticator resolved login_token from %s", source);
-        }
-        return loginToken;
-    }
+    static final Logger LOG = Logger.getLogger(DeviceLoginTokenAuthenticator.class);
 
     @Override
     public void authenticate(AuthenticationFlowContext context) {
         try {
-            String loginToken = resolveLoginToken(context);
+            String loginToken = LoginTokenSupport.resolveLoginToken(context);
             if (loginToken == null || loginToken.isBlank()) {
                 LOG.info("No login_token found, device-login browser branch not attempted");
                 context.attempted();
                 return;
             }
 
-            String json = new String(Base64.getUrlDecoder().decode(loginToken), StandardCharsets.UTF_8);
-            @SuppressWarnings("unchecked")
-            Map<String, String> token = mapper.readValue(json, Map.class);
+            LoginTokenSupport.DeviceLoginPayload token = LoginTokenSupport.parseLoginToken(loginToken);
+            if (!"device".equals(token.type())) {
+                LOG.warnf("Unsupported login_token type '%s'", token.type());
+                context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+                return;
+            }
+            LoginTokenSupport.validateExpiry(token);
+            if (!LoginTokenSupport.markSingleUse(context.getSession(), token)) {
+                LOG.warnf("login_token jti '%s' was already used", token.jti());
+                context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
+                return;
+            }
 
-            String userId = token.get("sub");
-            String publicKeyHash = token.get("publicKeyHash");
-            String encryptedData = token.get("encryptedData");
-            String signature = token.get("signature");
+            String userId = token.sub();
+            String publicKeyHash = token.publicKeyHash();
+            String encryptedData = token.encryptedData();
+            String signature = token.signature();
 
             LOG.infof("Device login token received for user '%s' and publicKeyHash '%s'", userId, publicKeyHash);
 

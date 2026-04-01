@@ -483,11 +483,14 @@ export async function finishLogin(input: FinishLoginInput): Promise<FinishLoginR
 
 async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput) {
   const challenge = await getUsableLoginChallenge(input.nonce)
+  const exp = Math.floor(new Date(challenge.expires_at).getTime() / 1000)
 
   await pool.query('update login_challenges set used = true where id = $1', [challenge.id])
 
   const loginTokenPayload = {
     type: 'device',
+    jti: randomUUID(),
+    exp,
     sub: challenge.user_id,
     publicKeyHash: challenge.public_key_hash,
     nonce: challenge.nonce,

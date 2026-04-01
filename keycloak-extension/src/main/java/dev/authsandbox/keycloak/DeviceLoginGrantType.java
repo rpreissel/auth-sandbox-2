@@ -28,7 +28,6 @@ import java.security.PublicKey;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
-import java.util.Map;
 
 public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
 
@@ -63,9 +62,13 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
         String scope = getRequestedScopes();
 
         try {
-            DeviceLoginPayload payload = parseLoginToken(loginToken);
+            LoginTokenSupport.DeviceLoginPayload payload = LoginTokenSupport.parseLoginToken(loginToken);
             if (!"device".equals(payload.type())) {
                 throw new IllegalArgumentException("Unsupported login token type");
+            }
+            LoginTokenSupport.validateExpiry(payload);
+            if (!LoginTokenSupport.markSingleUse(session, payload)) {
+                throw new IllegalArgumentException("login_token already used");
             }
 
             UserModel user = session.users().getUserByUsername(realm, payload.sub());
@@ -144,19 +147,6 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
         return EventType.LOGIN;
     }
 
-    private DeviceLoginPayload parseLoginToken(String loginToken) throws Exception {
-        String json = new String(Base64.getUrlDecoder().decode(loginToken), StandardCharsets.UTF_8);
-        @SuppressWarnings("unchecked")
-        Map<String, String> token = MAPPER.readValue(json, Map.class);
-        return new DeviceLoginPayload(
-                token.get("type"),
-                token.get("sub"),
-                token.get("publicKeyHash"),
-                token.get("encryptedData"),
-                token.get("signature")
-        );
-    }
-
     private void validateSignature(CredentialModel credential, String encryptedData, String signature) throws Exception {
         DeviceCredentialModel deviceCredential = DeviceCredentialModel.createFromCredentialModel(credential);
         PublicKey publicKey = readPublicKey(deviceCredential.getPublicKey());
@@ -179,12 +169,4 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
         return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decoded));
     }
 
-    private record DeviceLoginPayload(
-            String type,
-            String sub,
-            String publicKeyHash,
-            String encryptedData,
-            String signature
-    ) {
-    }
 }
