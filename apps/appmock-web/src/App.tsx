@@ -946,7 +946,7 @@ export function App() {
       }])
       setTraceState(null)
       setSsoLaunch(launch)
-      setStatus(`Browser-SSO bereit mit ${currentSessionAcr}. Öffne den Link direkt oder kopiere die Ziel-URL.`)
+      setStatus(`Browser-SSO bereit mit ${currentSessionAcr}. Öffne die SSO-URL direkt oder kopiere sie in einen anderen Browser.`)
     })
   }
 
@@ -958,16 +958,16 @@ export function App() {
     window.open(ssoLaunch.launchUrl, '_blank', 'noopener')
   }
 
-  async function handleCopyPreparedWebmockTargetUrl() {
+  async function handleCopyPreparedWebmockLaunchUrl() {
     if (!ssoLaunch) {
       return
     }
 
     try {
-      await navigator.clipboard.writeText(ssoLaunch.targetUrl)
-      setSsoCopyStatus('Ziel-URL in die Zwischenablage kopiert.')
+      await navigator.clipboard.writeText(ssoLaunch.launchUrl)
+      setSsoCopyStatus('SSO-URL in die Zwischenablage kopiert.')
     } catch {
-      setSsoCopyStatus('Ziel-URL konnte nicht in die Zwischenablage kopiert werden.')
+      setSsoCopyStatus('SSO-URL konnte nicht in die Zwischenablage kopiert werden.')
     }
   }
 
@@ -1331,10 +1331,11 @@ export function App() {
                       <div className="binding-notice" role="note" aria-label="SSO launch result">
                         <strong>Letzter Browser-Start bereit</strong>
                         <p className="binding-note">Angeforderte Assurance: {currentSessionAcr}</p>
+                        <p className="binding-note">SSO-Start: {ssoLaunch.launchUrl}</p>
                         <p className="binding-note">Ziel: {ssoLaunch.targetUrl}</p>
                         <div className="actions stacked-actions">
                           <button type="button" onClick={handleOpenPreparedWebmockSso} disabled={busy}>Vorbereiteten SSO-Tab öffnen</button>
-                          <button type="button" className="button-secondary" onClick={() => void handleCopyPreparedWebmockTargetUrl()} disabled={busy}>Nur Ziel-URL kopieren</button>
+                          <button type="button" className="button-secondary" onClick={() => void handleCopyPreparedWebmockLaunchUrl()} disabled={busy}>SSO-URL kopieren</button>
                         </div>
                         {ssoCopyStatus && <p className="binding-note">{ssoCopyStatus}</p>}
                       </div>

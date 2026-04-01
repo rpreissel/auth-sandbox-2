@@ -374,8 +374,9 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
   await prepareWebmockSsoButton.click({ force: true })
   const ssoLaunchNote = page.getByRole('note', { name: 'SSO launch result' })
   await expect(ssoLaunchNote).toContainText('Angeforderte Assurance: 2se')
+  await expect(ssoLaunchNote).toContainText('SSO-Start: https://keycloak.localhost:8443/')
   await expect(ssoLaunchNote).toContainText('https://webmock.localhost:8443/')
-  await expect(page.getByRole('button', { name: 'Nur Ziel-URL kopieren' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'SSO-URL kopieren' })).toBeVisible()
   await page.getByRole('button', { name: 'Vorbereiteten SSO-Tab öffnen' }).click()
   const webmockPage = await newPagePromise
   await webmockPage.waitForLoadState('networkidle')
