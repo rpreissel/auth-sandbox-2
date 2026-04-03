@@ -376,7 +376,7 @@ export class KeycloakAuthClient {
       grant_type: 'urn:auth-sandbox-2:params:oauth:grant-type:device-login',
       client_id: keycloakConfig.clientId,
       client_secret: keycloakConfig.clientSecret,
-      scope: 'openid profile email offline_access',
+      scope: 'openid profile email',
       login_token: loginToken
     })
 
@@ -475,7 +475,7 @@ export class KeycloakAuthClient {
       grant_type: 'urn:auth-sandbox-2:params:oauth:grant-type:assurance-handle',
       client_id: keycloakConfig.clientId,
       client_secret: keycloakConfig.clientSecret,
-      scope: 'openid profile email offline_access',
+      scope: 'openid profile email',
       assurance_handle: assuranceHandle,
       ...(refreshToken ? { refresh_token: refreshToken } : {})
     })
