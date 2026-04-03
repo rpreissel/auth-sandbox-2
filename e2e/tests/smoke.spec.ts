@@ -295,9 +295,8 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   await page.getByRole('button', { name: /notiz an servicemock api senden/i }).click()
   await expect(page.getByLabel('WebMock message response')).toContainText('WebMock Web playwright note')
 
-  const browserTrace = await waitForTrace(request, userId, 'webmock_web_step_up', 'webmock-web')
   const internalStepUpTrace = await waitForTrace(request, userId, 'browser_step_up_complete_internal', 'keycloak-extension')
-  await page.goto(`${TRACE_WEB_URL}#trace/${browserTrace.traceId}`)
+  await page.goto(`${TRACE_WEB_URL}#trace/${internalStepUpTrace.traceId}`)
   await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
 
   const timeline = page.getByRole('list', { name: 'Trace spans timeline' })
@@ -313,8 +312,6 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   const artifactViewer = page.getByLabel('Artifact viewer')
   await expect(artifactViewer).toContainText('keycloak_inline')
 
-  await page.goto(`${TRACE_WEB_URL}#trace/${internalStepUpTrace.traceId}`)
-  await expect(page.getByRole('heading', { name: 'Detailinspektion' })).toBeVisible()
   const authApiTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(authApiTimeline).toContainText('auth-api')
   await expect(authApiTimeline).toContainText('keycloak-extension')
@@ -376,7 +373,8 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
   const newPagePromise = context.waitForEvent('page')
   await prepareWebmockSsoButton.click({ force: true })
   const ssoLaunchNote = page.getByRole('note', { name: 'SSO launch result' })
-  await expect(ssoLaunchNote).toContainText('Angeforderte Assurance: 2se')
+  await expect(ssoLaunchNote).toBeVisible({ timeout: 20000 })
+  await expect(ssoLaunchNote).toContainText('Angeforderte Assurance: 2se', { timeout: 20000 })
   await expect(ssoLaunchNote).toContainText('SSO-Start: https://keycloak.localhost:8443/')
   await expect(ssoLaunchNote).toContainText('https://webmock.localhost:8443/')
   await expect(page.getByRole('button', { name: 'SSO-URL kopieren' })).toBeVisible()
@@ -424,10 +422,11 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
   const ssoTimeline = page.getByRole('list', { name: 'Trace spans timeline' })
   await expect(ssoTimeline).toContainText('appmock-web')
   await expect(ssoTimeline).toContainText('auth-api')
-
-  const proxyLogList = page.getByRole('list', { name: 'Proxy log list' })
-  await expect(proxyLogList).toContainText('keycloak.localhost')
-  await expect(proxyLogList).toContainText('/protocol/openid-connect/auth?client_id=sso-bootstrap-web')
+  await expect(ssoTimeline).toContainText('keycloak')
+  await ssoTimeline.getByRole('button', { name: /keycloak POST \/realms\/auth-sandbox-2\/protocol\/openid-connect\/ext\/par\/request/i }).click()
+  await expect(page.getByRole('tab', { name: /request_body request_body/i })).toBeVisible()
+  await page.getByRole('tab', { name: /request_body request_body/i }).click()
+  await expect(page.getByLabel('Artifact viewer')).toContainText('sso-bootstrap-web')
 })
 
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {

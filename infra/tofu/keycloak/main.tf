@@ -130,12 +130,19 @@ resource "keycloak_authentication_subflow" "browser_auth_flow" {
   priority          = 20
 }
 
-resource "keycloak_authentication_execution" "browser_device_login_authenticator" {
+resource "keycloak_authentication_flow" "browser_device_bootstrap_flow" {
+  realm_id    = keycloak_realm.realm.id
+  alias       = "browser-device-bootstrap-flow"
+  description = "Browser flow for bootstrap requests that authenticate only with device login tokens"
+  provider_id = "basic-flow"
+}
+
+resource "keycloak_authentication_execution" "bootstrap_device_login_authenticator" {
   realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
+  parent_flow_alias = keycloak_authentication_flow.browser_device_bootstrap_flow.alias
   authenticator     = "device-login-token"
-  requirement       = "ALTERNATIVE"
-  priority          = 15
+  requirement       = "REQUIRED"
+  priority          = 10
 }
 
 resource "keycloak_authentication_subflow" "browser_loa_1_flow" {
@@ -253,7 +260,7 @@ resource "keycloak_openid_client" "browser_app" {
   }
 
   authentication_flow_binding_overrides {
-    browser_id = keycloak_authentication_flow.browser_step_up_flow.id
+    browser_id = keycloak_authentication_flow.browser_device_bootstrap_flow.id
   }
 }
 

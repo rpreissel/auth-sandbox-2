@@ -304,8 +304,8 @@ export function App() {
       return
     }
 
-    void runAction(async () => {
-      await syncServiceMockApi('Geschützte ServiceMock API synchronisiert')
+    void syncServiceMockApi('Geschützte ServiceMock API synchronisiert').catch((error) => {
+      setStatus(readErrorMessage(error))
     })
   }, [tokens?.accessToken])
 
@@ -937,6 +937,7 @@ export function App() {
         iv: challenge.iv,
         signature
       }, tokens.accessToken, flow)
+      setSsoLaunch(launch)
       await sendFlowEvent(flow, 'sso_launch_finished', [{
         name: 'sso_launch_result',
         value: {
@@ -945,7 +946,6 @@ export function App() {
         }
       }])
       setTraceState(null)
-      setSsoLaunch(launch)
       setStatus(`Browser-SSO bereit mit ${currentSessionAcr}. Öffne die SSO-URL direkt oder kopiere sie in einen anderen Browser.`)
     })
   }
