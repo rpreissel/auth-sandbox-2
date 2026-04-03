@@ -260,7 +260,7 @@ resource "keycloak_openid_client" "browser_app" {
   }
 
   authentication_flow_binding_overrides {
-    browser_id = keycloak_authentication_flow.browser_device_bootstrap_flow.id
+    browser_id = keycloak_authentication_flow.browser_step_up_flow.id
   }
 }
 
@@ -282,7 +282,7 @@ resource "keycloak_openid_client" "bootstrap_app" {
   }
 
   authentication_flow_binding_overrides {
-    browser_id = keycloak_authentication_flow.browser_step_up_flow.id
+    browser_id = keycloak_authentication_flow.browser_device_bootstrap_flow.id
   }
 }
 
