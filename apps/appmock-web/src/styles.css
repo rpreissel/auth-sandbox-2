@@ -661,10 +661,11 @@ select {
 
 .android-tab-label {
   grid-area: label;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #5a6d82;
+  color: #35506c;
   position: relative;
   z-index: 1;
 }
@@ -673,7 +674,7 @@ select {
   grid-area: title;
   font-size: 0.98rem;
   line-height: 1.2;
-  color: #102033;
+  color: #18314a;
   position: relative;
   z-index: 1;
 }
