@@ -13,6 +13,7 @@ const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_WEB_URL = 'https://trace.localhost:8443/'
 const MOCK_WEB_URL = 'https://webmock.localhost:8443'
+const TANMOCK_WEB_URL = 'https://tanmock.localhost:8443'
 const ADMIN_PROXY_HEADERS = { authorization: 'Bearer change-me-admin-proxy-token' }
 const APP_PROXY_HEADERS = { authorization: 'Bearer change-me-app-proxy-token' }
 const TRACE_BROWSER_HEADERS = { authorization: 'Bearer change-me-trace-browser-token' }
@@ -134,6 +135,17 @@ async function loginWebMockWeb(page: import('@playwright/test').Page, userId: st
   await expect(tokenSessionCard).toContainText('yes', { timeout: 15000 })
 }
 
+async function loginTanMockAdmin(page: import('@playwright/test').Page) {
+  await page.goto(TANMOCK_WEB_URL)
+  await page.getByRole('link', { name: 'Mit Keycloak anmelden' }).click()
+  await expect(page).toHaveURL(/keycloak\.localhost:8443/)
+  await page.locator('#username').fill('tanmock-admin')
+  await page.locator('#password').fill('ChangeMe123!')
+  await page.getByRole('button', { name: /sign in|anmelden/i }).click()
+  await expect(page).toHaveURL(/tanmock\.localhost:8443/)
+  await expect(page.getByText('Admin-Session aktiv')).toBeVisible()
+}
+
 async function getInternalRedeemAccessToken(request: APIRequestContext) {
   const response = await request.post(KEYCLOAK_TOKEN_URL, {
     form: {
@@ -253,9 +265,26 @@ test('homepage contains key links', async ({ page }) => {
   await expect(page.getByText('Browser login and inline 2se step-up')).toBeVisible()
   const passwordBootstrapCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Device registration and password bootstrap' }) })
   await expect(passwordBootstrapCard).toContainText(/backend password setup/i)
+  await expect(passwordBootstrapCard).toContainText(/return verification options and flow state/i)
+  await expect(passwordBootstrapCard).toContainText(/check whether password credential exists/i)
   await expect(page.getByLabel('Browser login and inline 2se step-up actors')).toContainText('KC Extension')
+  const browserStepUpCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Browser login and inline 2se step-up' }) })
+  await expect(browserStepUpCard).toContainText(/detect stronger endpoint requirement/i)
+  await expect(browserStepUpCard).toContainText(/promote browser session to 2se/i)
   await expect(page.getByLabel('Device registration and password bootstrap mermaid sequence diagram')).toBeVisible()
   await expect(page.getByLabel('Refresh and logout lifecycle mermaid sequence diagram')).toBeVisible()
+  await expect(page.getByLabel('Device registration and password bootstrap step details')).toContainText(/mark password bootstrap complete/i)
+  await expect(page.getByLabel('Admin provisioning and registration identity step details')).toContainText(/reusable registration identity/i)
+  await expect(page.getByLabel('Device registration and password bootstrap step details')).toContainText(/backend-driven password setup/i)
+  const deviceLoginSteps = page.getByLabel('Encrypted device login and protected API use step details')
+  await expect(deviceLoginSteps).toContainText(/verify nonce, binding, and replay window/i)
+  await expect(deviceLoginSteps).toContainText(/RSASSA-PKCS1-v1_5/i)
+  await expect(deviceLoginSteps).toContainText(/matching publicKeyHash/i)
+  await expect(deviceLoginSteps).toContainText(/SHA256withRSA/i)
+  await expect(page.getByLabel('Refresh and logout lifecycle step details')).toContainText(/renewed token bundle/i)
+  await expect(page.getByLabel('SSO bootstrap from device app into WebMock step details')).toContainText(/prepared Keycloak launch URL/i)
+  await expect(page.getByLabel('Browser login and inline 2se step-up step details')).toContainText(/upgraded browser session and tokens that satisfy 2se/i)
+  await expect(page.getByLabel('Trace capture and inspection step details')).toContainText(/one request journey across the sandbox/i)
 })
 
 test('webmock web homepage serves the browser step-up app shell', async ({ page }) => {
@@ -319,6 +348,39 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   await expect(page.getByRole('tab', { name: /outgoing_response_body response_body/i })).toBeVisible()
   await page.getByRole('tab', { name: /outgoing_response_body response_body/i }).click()
   await expect(artifactViewer).toContainText('maskedTarget')
+})
+
+test('tanmock admin can provision one-time tan entries and broker login into keycloak', async ({ page }) => {
+  test.setTimeout(90000)
+
+  const userId = `tan-user-${Date.now()}`
+  const tan = `${Math.floor(Math.random() * 900000 + 100000)}`
+
+  await loginTanMockAdmin(page)
+  const tanmockForm = page.locator('form').first()
+  await tanmockForm.getByRole('textbox', { name: 'TAN', exact: true }).fill(tan)
+  await tanmockForm.getByRole('textbox', { name: 'User ID', exact: true }).fill(userId)
+  await tanmockForm.getByRole('textbox', { name: 'Source User ID', exact: true }).fill('tanmock-admin')
+  await page.getByRole('button', { name: 'TAN speichern' }).click()
+  await expect(page.getByLabel('Aktive TAN-Eintraege')).toContainText(userId)
+  await expect(page.getByLabel('Aktive TAN-Eintraege')).toContainText(tan)
+
+  await page.goto(MOCK_WEB_URL)
+  await page.getByRole('checkbox', { name: /TAN Mock Identity Broker statt direktem Keycloak-Login nutzen/i }).check()
+  await page.getByRole('button', { name: /Mit Keycloak 1se anmelden/i }).click()
+
+  await expect(page).toHaveURL(/keycloak\.localhost:8443|tanmock\.localhost:8443/, { timeout: 15000 })
+  if (page.url().includes('keycloak.localhost:8443')) {
+    await page.waitForURL(/tanmock\.localhost:8443\/oidc\/authorize/, { timeout: 15000 })
+  }
+  await page.getByLabel('User ID').fill(userId)
+  await page.getByLabel('TAN').fill(tan)
+  await page.getByRole('button', { name: 'Anmeldung fortsetzen' }).click()
+
+  await expect(page).toHaveURL(/webmock\.localhost:8443/)
+  await expect(page.locator('.card').filter({ has: page.getByRole('heading', { name: /token claims and browser session/i }) })).toContainText('yes', { timeout: 15000 })
+  await expect(page.getByLabel('Decoded access token claims')).toContainText(`tan_${userId}_${tan}`)
+  await expect(page.getByLabel('Decoded access token claims')).toContainText('tan_sub')
 })
 
 test('appmock can open webmock through bootstrap SSO', async ({ page, context, request }) => {

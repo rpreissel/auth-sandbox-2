@@ -121,6 +121,10 @@ body {
   font-family: "IBM Plex Serif", Georgia, serif;
 }
 
+.sequence-card header {
+  margin-bottom: 1rem;
+}
+
 .sequence-summary {
   margin-top: 0;
   margin-bottom: 0.9rem;
@@ -159,6 +163,53 @@ body {
   display: block;
   width: 100%;
   height: auto;
+}
+
+.sequence-steps {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sequence-step-item {
+  padding: 0.85rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(16, 32, 51, 0.08);
+}
+
+.sequence-step-heading {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.sequence-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  background: #102033;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sequence-step-route {
+  color: rgba(16, 32, 51, 0.62);
+  font-size: 0.9rem;
+}
+
+.sequence-step-detail {
+  margin: 0.5rem 0 0;
+  color: rgba(16, 32, 51, 0.88);
+  line-height: 1.5;
 }
 
 .mermaid-diagram [font-family] {
