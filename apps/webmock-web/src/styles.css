@@ -164,6 +164,17 @@ label {
   font-weight: 600;
 }
 
+.broker-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 500;
+}
+
+.broker-toggle input {
+  width: auto;
+}
+
 input,
 textarea {
   width: 100%;

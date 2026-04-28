@@ -350,7 +350,7 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
   await expect(artifactViewer).toContainText('maskedTarget')
 })
 
-test('tanmock admin can provision one-time tan entries and broker login into keycloak', async ({ page }) => {
+test('tanmock admin can provision one-time tan entries and broker login into keycloak', async ({ page, browser }) => {
   test.setTimeout(90000)
 
   const userId = `tan-user-${Date.now()}`
@@ -365,22 +365,27 @@ test('tanmock admin can provision one-time tan entries and broker login into key
   await expect(page.getByLabel('Aktive TAN-Eintraege')).toContainText(userId)
   await expect(page.getByLabel('Aktive TAN-Eintraege')).toContainText(tan)
 
-  await page.goto(MOCK_WEB_URL)
-  await page.getByRole('checkbox', { name: /TAN Mock Identity Broker statt direktem Keycloak-Login nutzen/i }).check()
-  await page.getByRole('button', { name: /Mit Keycloak 1se anmelden/i }).click()
+  const brokerContext = await browser.newContext({ ignoreHTTPSErrors: true })
+  const brokerPage = await brokerContext.newPage()
 
-  await expect(page).toHaveURL(/keycloak\.localhost:8443|tanmock\.localhost:8443/, { timeout: 15000 })
-  if (page.url().includes('keycloak.localhost:8443')) {
-    await page.waitForURL(/tanmock\.localhost:8443\/oidc\/authorize/, { timeout: 15000 })
+  await brokerPage.goto(MOCK_WEB_URL)
+  await brokerPage.getByRole('checkbox', { name: /TAN Mock Identity Broker statt direktem Keycloak-Login nutzen/i }).check()
+  await brokerPage.getByRole('button', { name: /Mit Keycloak 1se anmelden/i }).click()
+
+  await expect(brokerPage).toHaveURL(/keycloak\.localhost:8443|tanmock\.localhost:8443/, { timeout: 15000 })
+  if (brokerPage.url().includes('keycloak.localhost:8443')) {
+    await brokerPage.waitForURL(/tanmock\.localhost:8443\/oidc\/authorize/, { timeout: 15000 })
   }
-  await page.getByLabel('User ID').fill(userId)
-  await page.getByLabel('TAN').fill(tan)
-  await page.getByRole('button', { name: 'Anmeldung fortsetzen' }).click()
+  await brokerPage.getByLabel('User ID').fill(userId)
+  await brokerPage.getByLabel('TAN').fill(tan)
+  await brokerPage.getByRole('button', { name: 'Anmeldung fortsetzen' }).click()
 
-  await expect(page).toHaveURL(/webmock\.localhost:8443/)
-  await expect(page.locator('.card').filter({ has: page.getByRole('heading', { name: /token claims and browser session/i }) })).toContainText('yes', { timeout: 15000 })
-  await expect(page.getByLabel('Decoded access token claims')).toContainText(`tan_${userId}_${tan}`)
-  await expect(page.getByLabel('Decoded access token claims')).toContainText('tan_sub')
+  await expect(brokerPage).toHaveURL(/webmock\.localhost:8443/)
+  await expect(brokerPage.locator('.card').filter({ has: brokerPage.getByRole('heading', { name: /token claims and browser session/i }) })).toContainText('yes', { timeout: 15000 })
+  await expect(brokerPage.getByLabel('Decoded access token claims')).toContainText(`tan_${userId}_${tan}`)
+  await expect(brokerPage.getByLabel('Decoded access token claims')).toContainText('tan_sub')
+
+  await brokerContext.close()
 })
 
 test('appmock can open webmock through bootstrap SSO', async ({ page, context, request }) => {

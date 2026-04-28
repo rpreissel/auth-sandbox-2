@@ -65,3 +65,18 @@ variable "servicemock_api_audience" {
   type    = string
   default = "servicemock-api"
 }
+
+variable "tanmock_client_id" {
+  type    = string
+  default = "tanmock-broker"
+}
+
+variable "tanmock_client_secret" {
+  type      = string
+  sensitive = true
+}
+
+variable "tanmock_admin_client_id" {
+  type    = string
+  default = "tanmock-admin-web"
+}

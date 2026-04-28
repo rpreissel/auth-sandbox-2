@@ -69,6 +69,9 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
       KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID: ${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}
       KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET: ${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}
+      TANMOCK_CLIENT_ID: ${TANMOCK_CLIENT_ID:-tanmock-broker}
+      TANMOCK_CLIENT_SECRET: ${TANMOCK_CLIENT_SECRET:-change-me-tanmock-broker}
+      TANMOCK_ADMIN_CLIENT_ID: ${TANMOCK_ADMIN_CLIENT_ID:-tanmock-admin-web}
       SERVICEMOCK_API_AUDIENCE: ${SERVICEMOCK_API_AUDIENCE:-servicemock-api}
       TOFU_STATE_DIR: ${TOFU_STATE_DIR:-/state}
     depends_on:
@@ -185,6 +188,35 @@ services:
       keycloak-config:
         condition: service_started
 
+  tanmock-api:
+    build:
+      context: .
+      dockerfile: apps/tanmock-api/Dockerfile
+    environment:
+      TANMOCK_API_HOST: 0.0.0.0
+      TANMOCK_API_PORT: 3003
+      TANMOCK_API_PUBLIC_URL: https://tanmock.localhost:8443
+      TANMOCK_API_INTERNAL_URL: http://tanmock-api:3003
+      TANMOCK_ISSUER: https://tanmock.localhost:8443
+      TANMOCK_CLIENT_ID: ${TANMOCK_CLIENT_ID:-tanmock-broker}
+      TANMOCK_CLIENT_SECRET: ${TANMOCK_CLIENT_SECRET:-change-me-tanmock-broker}
+      TANMOCK_ADMIN_CLIENT_ID: ${TANMOCK_ADMIN_CLIENT_ID:-tanmock-admin-web}
+      OBSERVABILITY_SERVICE_NAME: tanmock-api
+      DATABASE_URL: postgresql://${AUTH_API_DB_USER:-auth_sandbox}:${AUTH_API_DB_PASSWORD:-auth_sandbox}@postgres:5432/${POSTGRES_DB:-auth_sandbox_2}
+      DATABASE_SCHEMA: ${AUTH_API_DB_SCHEMA:-auth_api}
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: https://keycloak.localhost:8443
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-auth-api-admin}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
+      CORS_ORIGIN: https://tanmock.localhost:8443
+      CI: 'true'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak-config:
+        condition: service_started
+
   adminer:
     image: docker.io/library/adminer:4.8.1-standalone
     environment:
@@ -208,10 +240,12 @@ services:
       - ./apps/trace-web/dist:/srv/trace-web:ro
       - ./apps/home-web/dist:/srv/home-web:ro
       - ./apps/webmock-web/dist:/srv/webmock-web:ro
+      - ./apps/tanmock-web/dist:/srv/tanmock-web:ro
       - ./runtime/caddy-logs:/var/log/caddy
     depends_on:
       - auth-api
       - servicemock-api
+      - tanmock-api
       - trace-api
       - adminer
       - keycloak

@@ -32,6 +32,9 @@ apply_config() {
     -var="admin_client_secret=${KEYCLOAK_ADMIN_CLIENT_SECRET}" \
     -var="internal_redeem_client_id=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_ID:-auth-api-internal-redeem}" \
     -var="internal_redeem_client_secret=${KEYCLOAK_INTERNAL_REDEEM_CLIENT_SECRET:-change-me-internal-redeem}" \
+    -var="tanmock_client_id=${TANMOCK_CLIENT_ID:-tanmock-broker}" \
+    -var="tanmock_client_secret=${TANMOCK_CLIENT_SECRET:-change-me-tanmock-broker}" \
+    -var="tanmock_admin_client_id=${TANMOCK_ADMIN_CLIENT_ID:-tanmock-admin-web}" \
     -var="servicemock_api_audience=${SERVICEMOCK_API_AUDIENCE:-servicemock-api}" \
     "$@"
 }

@@ -189,6 +189,32 @@ https://webmock.localhost:8443 {
   file_server
 }
 
+http://tanmock.localhost:8088 {
+  redir https://tanmock.localhost:8443{uri}
+}
+
+https://tanmock.localhost:8443 {
+  tls /etc/caddy/local-certs/localhost.crt /etc/caddy/local-certs/localhost.key
+  log
+  log_append host tanmock.localhost
+  log_append correlation_id {http.request.header.X-Correlation-Id}
+  log_append trace_id {http.request.header.X-Trace-Id}
+  log_append client_name {http.request.header.X-Client-Name}
+  log_append method {http.request.method}
+  log_append uri {http.request.uri}
+  handle /.well-known/* {
+    reverse_proxy tanmock-api:3003
+  }
+  handle /oidc/* {
+    reverse_proxy tanmock-api:3003
+  }
+  handle /api/* {
+    reverse_proxy tanmock-api:3003
+  }
+  root * /srv/tanmock-web
+  file_server
+}
+
 http://keycloak.localhost:8088 {
   redir https://keycloak.localhost:8443{uri}
 }

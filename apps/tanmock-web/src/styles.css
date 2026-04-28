@@ -1,0 +1,122 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #102033;
+  background: #dfe9f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, rgba(95, 155, 255, 0.24), transparent 30%), linear-gradient(180deg, #eef4fb, #d9e6f4);
+}
+
+button,
+.button-link,
+input {
+  font: inherit;
+}
+
+.tanmock-shell {
+  width: min(1120px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 28px;
+  padding: 1.2rem;
+  box-shadow: 0 24px 48px rgba(16, 32, 51, 0.1);
+}
+
+.tanmock-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+}
+
+.eyebrow {
+  margin: 0 0 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+  color: #4c647f;
+}
+
+.tanmock-hero h1,
+.section-head h2 {
+  margin: 0;
+}
+
+.button-link,
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 0;
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  background: #0b57d0;
+  color: white;
+  text-decoration: none;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.tanmock-form,
+.tanmock-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.tanmock-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.tanmock-form input {
+  border: 1px solid #bfd0e2;
+  border-radius: 14px;
+  padding: 0.78rem 0.88rem;
+  background: white;
+}
+
+.tanmock-list article {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid #d6e1ee;
+  border-radius: 18px;
+  padding: 0.85rem 0.95rem;
+}
+
+.error-card {
+  color: #8d1f1f;
+  background: #fff1f1;
+}
+
+.login-state {
+  font-weight: 700;
+  color: #0b57d0;
+}
+
+@media (max-width: 900px) {
+  .tanmock-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

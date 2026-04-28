@@ -9,6 +9,8 @@ export function buildAuthorizationUrl(input: {
   nonce: string
   traceHint?: string | null
   loginHint?: string | null
+  idpHint?: string | null
+  prompt?: string | null
 }) {
   const url = new URL(input.authorizationEndpoint)
   url.searchParams.set('client_id', input.clientId)
@@ -23,6 +25,12 @@ export function buildAuthorizationUrl(input: {
   }
   if (input.loginHint) {
     url.searchParams.set('login_hint', input.loginHint)
+  }
+  if (input.idpHint) {
+    url.searchParams.set('kc_idp_hint', input.idpHint)
+  }
+  if (input.prompt) {
+    url.searchParams.set('prompt', input.prompt)
   }
   return url.toString()
 }

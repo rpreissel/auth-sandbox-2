@@ -173,6 +173,35 @@ export type ServiceResultEnvelope = {
   serviceResultToken: string
 }
 
+export type TanMockAdminRecord = {
+  id: string
+  tan: string
+  userId: string
+  sourceUserId: string
+  active: boolean
+  consumedAt: IsoDateTime | null
+  createdAt: IsoDateTime
+}
+
+export type CreateTanMockAdminRecordInput = {
+  tan: string
+  userId: string
+  sourceUserId: string
+}
+
+export type TanMockSessionSummary = {
+  authorizationCode: string
+  clientId: string
+  redirectUri: string
+  scope: string
+  createdAt: IsoDateTime
+}
+
+export type TanMockAdminOverview = {
+  entries: TanMockAdminRecord[]
+  sessions: TanMockSessionSummary[]
+}
+
 export type SmsTanStartResponse = {
   status: 'challenge_sent'
   maskedTarget: string | null

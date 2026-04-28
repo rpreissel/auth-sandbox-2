@@ -1,0 +1,36 @@
+{
+  "name": "@auth-sandbox-2/tanmock-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "pnpm --filter @auth-sandbox-2/backend-core build && tsc -p tsconfig.json",
+    "start": "node dist/apps/tanmock-api/src/server.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "typecheck": "pnpm --filter @auth-sandbox-2/backend-core typecheck && tsc -p tsconfig.json --noEmit",
+    "format:check": "node --eval \"console.log('tanmock-api: format check skipped')\""
+  },
+  "dependencies": {
+    "@auth-sandbox-2/backend-core": "workspace:*",
+    "@auth-sandbox-2/shared-types": "workspace:*",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/sensible": "^6.0.3",
+    "dotenv": "^17.2.2",
+    "fastify": "^5.6.1",
+    "jose": "^6.1.0",
+    "pg": "^8.16.3",
+    "pino": "^9.9.5",
+    "pino-pretty": "^13.1.2",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

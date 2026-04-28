@@ -213,6 +213,7 @@ function WebMockApp() {
   const [stepUpTan, setStepUpTan] = useState('')
   const [loading, setLoading] = useState(false)
   const [stepUpTrace, setStepUpTrace] = useState<TraceState | null>(null)
+  const [useTanMock, setUseTanMock] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -390,16 +391,31 @@ function WebMockApp() {
         }
       ]
     }).finally(() => {
-      const url = buildAuthorizationUrl({
-        authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
-        clientId: CLIENT_ID,
-        redirectUri: REDIRECT_URI,
-        acrValues,
-        state: randomValue(),
-        nonce: randomValue(),
-        traceHint: trace.traceId,
-        loginHint: acrValues === '2se' ? loginHint : null
-      })
+      const url = useTanMock
+        ? buildAuthorizationUrl({
+            authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
+            clientId: CLIENT_ID,
+            redirectUri: REDIRECT_URI,
+            acrValues,
+            state: randomValue(),
+            nonce: randomValue(),
+            traceHint: trace.traceId,
+            loginHint: acrValues === '2se' ? loginHint : null,
+            idpHint: 'tanmock',
+            prompt: 'login'
+          })
+        : buildAuthorizationUrl({
+            authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
+            clientId: CLIENT_ID,
+            redirectUri: REDIRECT_URI,
+            acrValues,
+            state: randomValue(),
+            nonce: randomValue(),
+            traceHint: trace.traceId,
+            loginHint: acrValues === '2se' ? loginHint : null,
+            idpHint: null,
+            prompt: null
+          })
       window.location.assign(url)
     })
   }
@@ -494,6 +510,10 @@ function WebMockApp() {
           <button type="button" className="secondary" onClick={() => void startInteractiveStepUp()}>Step-up auf 2se starten</button>
           <button type="button" className="secondary" onClick={logout}>Lokale Sitzung leeren</button>
         </div>
+        <label className="broker-toggle">
+          <input type="checkbox" checked={useTanMock} onChange={(event) => setUseTanMock(event.target.checked)} />
+          TAN Mock Identity Broker statt direktem Keycloak-Login nutzen
+        </label>
       </section>
 
       {messageState && <section className={`message ${messageState.kind}`}>{messageState.text}</section>}
