@@ -62,6 +62,49 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
     ]
   },
   {
+    title: 'TAN Mock broker login into WebMock',
+    summary: 'WebMock can force a fresh browser login through the external TAN Mock OIDC provider so Keycloak creates a brokered user and returns a normal browser session.',
+    actors: ['WebMock Web', 'Keycloak', 'TanMock Web', 'TanMock API'],
+    steps: [
+      {
+        from: 'WebMock Web',
+        to: 'Keycloak',
+        label: 'Start brokered browser login',
+        detail: 'WebMock starts a fresh browser authorization request with kc_idp_hint=tanmock and prompt=login so Keycloak routes directly into the external broker instead of reusing another local browser session.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'TanMock Web',
+        label: 'Redirect to TAN Mock authorize page',
+        detail: 'Keycloak sends the browser to the external TAN Mock authorization page for the brokered login.'
+      },
+      {
+        from: 'TanMock Web',
+        to: 'TanMock API',
+        label: 'Submit userId and one-time TAN',
+        detail: 'The operator enters the configured userId plus one-time TAN and TanMock validates that this TAN is still active for that user.'
+      },
+      {
+        from: 'TanMock API',
+        to: 'Keycloak',
+        label: 'Return signed broker tokens and claims',
+        detail: 'TanMock returns signed OIDC tokens whose broker claims include tan_sub, source_user_id, copied profile data, and a unique broker email so Keycloak can treat the login as a new brokered identity.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'Keycloak',
+        label: 'Create brokered user on first login',
+        detail: 'Keycloak runs the TanMock first-broker flow, creates the tan_* user without extra profile prompts, and links the federated identity to that new realm user.'
+      },
+      {
+        from: 'Keycloak',
+        to: 'WebMock Web',
+        label: 'Return brokered browser session',
+        detail: 'The browser lands back in WebMock with a normal Keycloak session and broker-derived claims such as tan_sub ready for inspection.'
+      }
+    ]
+  },
+  {
     title: 'Device registration and password bootstrap',
     summary: 'AppMock Web runs the registration flow, stores the custom device credential, and triggers backend password setup when the user still has none.',
     actors: ['AppMock Web', 'Auth API', 'Postgres', 'Keycloak'],
@@ -484,7 +527,7 @@ function HomeApp() {
         <h1>Minimal device-login sandbox with Keycloak, OpenTofu, and browser tooling.</h1>
         <p>
           This project focuses only on registration codes, device registration, encrypted challenge login,
-          backend-driven password setup, token inspection, refresh, and logout.
+          backend-driven password setup, the TAN Mock identity broker, token inspection, refresh, and logout.
         </p>
       </section>
 
@@ -492,6 +535,7 @@ function HomeApp() {
         <LinkCard title="Homepage" href="https://home.localhost:8443" description="Overview, links, and sequence diagrams." />
         <LinkCard title="AppMock Web" href="https://appmock.localhost:8443" description="Register a device, log in, inspect tokens and claims." />
         <LinkCard title="WebMock Web" href="https://webmock.localhost:8443" description="Browser Keycloak login with 1se-by-default and an interactive 2se step-up path." />
+        <LinkCard title="TanMock Web" href="https://tanmock.localhost:8443" description="Manage one-time TAN entries and drive the external OIDC broker login." />
         <LinkCard title="Admin Web" href="https://admin.localhost:8443" description="Create registration codes and inspect existing device bindings." />
         <LinkCard title="Trace Viewer" href="https://trace.localhost:8443/" description="Inspect full demo traces, decoded JWTs, encrypted payloads, and proxy hops." />
         <LinkCard title="Auth API" href="https://auth.localhost:8443/api/health" description="Fastify backend health endpoint." />
@@ -518,8 +562,8 @@ function HomeApp() {
       <section className="panel">
         <h2>Sequence diagrams</h2>
         <p className="panel-copy">
-          The homepage now maps the full sandbox journey: admin provisioning, device enrollment, backend-driven password setup,
-          encrypted login, token lifecycle, SSO bootstrap, browser 2se step-up, and trace inspection.
+          The homepage now maps the full sandbox journey: admin provisioning, device enrollment, TAN-based broker login,
+          backend-driven password setup, encrypted login, token lifecycle, SSO bootstrap, browser 2se step-up, and trace inspection.
         </p>
         <div className="sequence-stack">
           {sequenceDiagrams.map((diagram) => (
