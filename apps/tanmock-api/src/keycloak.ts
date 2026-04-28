@@ -33,3 +33,31 @@ export async function verifyAdminAccessToken(token: string) {
 
   return claims
 }
+
+export async function fetchSourceUser(sourceUserId: string) {
+  const tokenResponse = await fetch(`${tanMockApiConfig.keycloakBaseUrl}/realms/${tanMockApiConfig.keycloakRealm}/protocol/openid-connect/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: tanMockApiConfig.keycloakAdminClientId,
+      client_secret: tanMockApiConfig.keycloakAdminClientSecret
+    })
+  })
+
+  if (!tokenResponse.ok) {
+    throw new Error('Failed to authenticate against Keycloak admin API')
+  }
+
+  const tokenBody = await tokenResponse.json() as { access_token: string }
+  const userResponse = await fetch(`${tanMockApiConfig.keycloakBaseUrl}/admin/realms/${tanMockApiConfig.keycloakRealm}/users?username=${encodeURIComponent(sourceUserId)}&exact=true`, {
+    headers: { authorization: `Bearer ${tokenBody.access_token}` }
+  })
+
+  if (!userResponse.ok) {
+    throw new Error('Failed to fetch source Keycloak user')
+  }
+
+  const users = await userResponse.json() as Array<Record<string, unknown>>
+  return users[0] ?? null
+}

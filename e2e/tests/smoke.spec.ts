@@ -13,7 +13,6 @@ const DB_VIEWER_URL = 'https://db.localhost:8443'
 const ADMIN_WEB_URL = 'https://admin.localhost:8443'
 const TRACE_WEB_URL = 'https://trace.localhost:8443/'
 const MOCK_WEB_URL = 'https://webmock.localhost:8443'
-const TANMOCK_WEB_URL = 'https://tanmock.localhost:8443'
 const ADMIN_PROXY_HEADERS = { authorization: 'Bearer change-me-admin-proxy-token' }
 const APP_PROXY_HEADERS = { authorization: 'Bearer change-me-app-proxy-token' }
 const TRACE_BROWSER_HEADERS = { authorization: 'Bearer change-me-trace-browser-token' }
@@ -136,14 +135,14 @@ async function loginWebMockWeb(page: import('@playwright/test').Page, userId: st
 }
 
 async function loginTanMockAdmin(page: import('@playwright/test').Page) {
-  await page.goto(TANMOCK_WEB_URL)
-  await page.getByRole('link', { name: 'Mit Keycloak anmelden' }).click()
+  await page.goto(ADMIN_WEB_URL)
+  await page.getByRole('link', { name: 'TanMock Admin Login' }).click()
   await expect(page).toHaveURL(/keycloak\.localhost:8443/)
   await page.locator('#username').fill('tanmock-admin')
   await page.locator('#password').fill('ChangeMe123!')
   await page.getByRole('button', { name: /sign in|anmelden/i }).click()
-  await expect(page).toHaveURL(/tanmock\.localhost:8443/)
-  await expect(page.getByText('Admin-Session aktiv')).toBeVisible()
+  await expect(page).toHaveURL(/admin\.localhost:8443/)
+  await expect(page.getByRole('button', { name: 'TAN speichern' })).toBeVisible()
 }
 
 async function getInternalRedeemAccessToken(request: APIRequestContext) {
@@ -247,19 +246,17 @@ test('homepage contains key links', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /minimal device-login sandbox/i })).toBeVisible()
   const appMockWebLink = page.getByRole('link', { name: /appmock web/i })
   const webMockWebLink = page.getByRole('link', { name: /webmock web/i })
-  const tanMockWebLink = page.getByRole('link', { name: /tanmock web/i })
   const dbViewerLink = page.getByRole('link', { name: /db viewer/i })
   await expect(appMockWebLink).toBeVisible()
   await expect(webMockWebLink).toBeVisible()
-  await expect(tanMockWebLink).toBeVisible()
   await expect(dbViewerLink).toBeVisible()
   await expect(appMockWebLink).toHaveAttribute('target', '_blank')
   await expect(webMockWebLink).toHaveAttribute('target', '_blank')
-  await expect(tanMockWebLink).toHaveAttribute('target', '_blank')
   await expect(dbViewerLink).toHaveAttribute('target', '_blank')
   await expect(page.getByRole('heading', { name: /db viewer login/i })).toBeVisible()
   await expect(page.getByText('auth_sandbox_2')).toBeVisible()
   await expect(page.getByText('auth_api, keycloak')).toBeVisible()
+  await expect(page.getByText(/manage TAN broker entries/i)).toBeVisible()
   await expect(page.getByRole('heading', { name: /sequence diagrams/i })).toBeVisible()
   await expect(page.getByText('Admin provisioning and registration identity')).toBeVisible()
   await expect(page.getByText('TAN Mock broker login into WebMock')).toBeVisible()
@@ -367,13 +364,17 @@ test('tanmock admin can provision one-time tan entries and broker login into key
   const tan = `${Math.floor(Math.random() * 900000 + 100000)}`
 
   await loginTanMockAdmin(page)
-  const tanmockForm = page.locator('form').first()
+  const tanmockForm = page.locator('section').filter({ has: page.getByRole('heading', { name: 'TAN-Broker-Eintrag anlegen' }) }).locator('form')
   await tanmockForm.getByRole('textbox', { name: 'TAN', exact: true }).fill(tan)
-  await tanmockForm.getByRole('textbox', { name: 'User ID', exact: true }).fill(userId)
+  await tanmockForm.locator('input[name="tanUserId"]').fill(userId)
   await tanmockForm.getByRole('textbox', { name: 'Source User ID', exact: true }).fill('tanmock-admin')
   await page.getByRole('button', { name: 'TAN speichern' }).click()
-  await expect(page.getByLabel('Aktive TAN-Eintraege')).toContainText(userId)
-  await expect(page.getByLabel('Aktive TAN-Eintraege')).toContainText(tan)
+  await expect(page.getByLabel('TAN-Eintraege', { exact: true })).toContainText(userId)
+  await expect(page.getByLabel('TAN-Eintraege', { exact: true })).toContainText(tan)
+
+  await page.locator('input[name="sourceUserId"]').fill(`missing-source-${Date.now()}`)
+  await page.getByRole('button', { name: 'TAN speichern' }).click()
+  await expect(page.getByRole('alert')).toContainText('Unknown source Keycloak user')
 
   const brokerContext = await browser.newContext({ ignoreHTTPSErrors: true })
   const brokerPage = await brokerContext.newPage()

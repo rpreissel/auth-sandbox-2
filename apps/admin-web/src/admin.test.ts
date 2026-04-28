@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DeviceRecord, RegistrationIdentityRecord } from '@auth-sandbox-2/shared-types'
+import type { DeviceRecord, RegistrationIdentityRecord, TanMockAdminRecord } from '@auth-sandbox-2/shared-types'
 
-import { TRACE_VIEWER_ENTRY, TRACE_VIEWER_URL, filterDevices, filterRegistrationIdentities, parseApiErrorMessage } from './main'
+import { TRACE_VIEWER_ENTRY, TRACE_VIEWER_URL, filterDevices, filterRegistrationIdentities, filterTanEntries, parseApiErrorMessage } from './main'
 
 const devices: DeviceRecord[] = [
   {
@@ -31,6 +31,18 @@ const identities: RegistrationIdentityRecord[] = [
   }
 ]
 
+const tanEntries: TanMockAdminRecord[] = [
+  {
+    id: 'tan-1',
+    tan: '471199',
+    userId: 'demo-user',
+    sourceUserId: 'tanmock-admin',
+    active: true,
+    consumedAt: null,
+    createdAt: '2026-03-18T12:00:00.000Z'
+  }
+]
+
 describe('admin overview helpers', () => {
   it('exposes a dedicated Trace Viewer entry', () => {
     expect(TRACE_VIEWER_URL).toBe('https://trace.localhost:8443/')
@@ -49,6 +61,12 @@ describe('admin overview helpers', () => {
     expect(filterRegistrationIdentities(identities, 'a1b2')).toHaveLength(1)
     expect(filterRegistrationIdentities(identities, '+49170')).toHaveLength(1)
     expect(filterRegistrationIdentities(identities, 'missing')).toHaveLength(0)
+  })
+
+  it('filters tan entries across user, source user, and tan fields', () => {
+    expect(filterTanEntries(tanEntries, 'demo')).toHaveLength(1)
+    expect(filterTanEntries(tanEntries, '4711')).toHaveLength(1)
+    expect(filterTanEntries(tanEntries, 'missing')).toHaveLength(0)
   })
 
   it('extracts structured API error messages for the admin form', () => {

@@ -80,6 +80,10 @@ https://admin.localhost:8443 {
     request_header Authorization "Bearer change-me-admin-proxy-token"
     reverse_proxy auth-api:3000
   }
+  handle /tanmock-api/* {
+    uri strip_prefix /tanmock-api
+    reverse_proxy tanmock-api:3003
+  }
   handle /trace/* {
     redir https://trace.localhost:8443/ 308
   }
@@ -202,17 +206,13 @@ https://tanmock.localhost:8443 {
   log_append client_name {http.request.header.X-Client-Name}
   log_append method {http.request.method}
   log_append uri {http.request.uri}
-  handle /.well-known/* {
+  @tanmock_api path /.well-known/* /oidc/* /api/*
+  handle @tanmock_api {
     reverse_proxy tanmock-api:3003
   }
-  handle /oidc/* {
-    reverse_proxy tanmock-api:3003
+  handle {
+    redir https://admin.localhost:8443/ 308
   }
-  handle /api/* {
-    reverse_proxy tanmock-api:3003
-  }
-  root * /srv/tanmock-web
-  file_server
 }
 
 http://keycloak.localhost:8088 {

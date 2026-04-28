@@ -470,8 +470,8 @@ resource "keycloak_openid_client" "tanmock_admin_web" {
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
   service_accounts_enabled     = false
-  valid_redirect_uris          = ["https://tanmock.localhost:8443/*"]
-  web_origins                  = ["https://tanmock.localhost:8443"]
+  valid_redirect_uris          = ["https://tanmock.localhost:8443/*", "https://admin.localhost:8443/*"]
+  web_origins                  = ["https://tanmock.localhost:8443", "https://admin.localhost:8443"]
 }
 
 resource "keycloak_openid_client_default_scopes" "tanmock_admin_default_scopes" {

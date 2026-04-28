@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { CreateTanMockAdminRecordInput, JsonObject } from '@auth-sandbox-2/shared-types'
 
 import { tanMockApiConfig } from './config.js'
-import { verifyAdminAccessToken } from './keycloak.js'
+import { fetchSourceUser, verifyAdminAccessToken } from './keycloak.js'
 import {
   consumeActiveTan,
   createAuthorizationCode,
@@ -149,30 +149,7 @@ function createLoginPage(args: {
 }
 
 async function getAdminClaims(sourceUserId: string) {
-  const tokenResponse = await fetch(`${tanMockApiConfig.keycloakBaseUrl}/realms/${tanMockApiConfig.keycloakRealm}/protocol/openid-connect/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: tanMockApiConfig.keycloakAdminClientId,
-      client_secret: tanMockApiConfig.keycloakAdminClientSecret
-    })
-  })
-
-  if (!tokenResponse.ok) {
-    throw new Error('Failed to authenticate against Keycloak admin API')
-  }
-  const tokenBody = await tokenResponse.json() as { access_token: string }
-  const userResponse = await fetch(`${tanMockApiConfig.keycloakBaseUrl}/admin/realms/${tanMockApiConfig.keycloakRealm}/users?username=${encodeURIComponent(sourceUserId)}&exact=true`, {
-    headers: { authorization: `Bearer ${tokenBody.access_token}` }
-  })
-
-  if (!userResponse.ok) {
-    throw new Error('Failed to fetch source Keycloak user')
-  }
-
-  const users = await userResponse.json() as Array<Record<string, unknown>>
-  const user = users[0]
+  const user = await fetchSourceUser(sourceUserId)
   if (!user) {
     throw new Error(`Unknown source Keycloak user ${sourceUserId}`)
   }
@@ -475,6 +452,12 @@ export async function registerRoutes(app: any) {
     }
 
     const body = adminCreateSchema.parse(request.body) satisfies CreateTanMockAdminRecordInput
+    const sourceUser = await fetchSourceUser(body.sourceUserId)
+    if (!sourceUser) {
+      reply.code(400)
+      return { message: `Unknown source Keycloak user ${body.sourceUserId}` }
+    }
+
     const created = await createEntry(body)
     reply.code(201)
     return created

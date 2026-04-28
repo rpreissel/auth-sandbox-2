@@ -209,7 +209,7 @@ services:
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-auth-sandbox-2}
       KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-auth-api-admin}
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-change-me-admin}
-      CORS_ORIGIN: https://tanmock.localhost:8443
+      CORS_ORIGIN: https://tanmock.localhost:8443,https://admin.localhost:8443
       CI: 'true'
     depends_on:
       postgres:
@@ -240,7 +240,6 @@ services:
       - ./apps/trace-web/dist:/srv/trace-web:ro
       - ./apps/home-web/dist:/srv/home-web:ro
       - ./apps/webmock-web/dist:/srv/webmock-web:ro
-      - ./apps/tanmock-web/dist:/srv/tanmock-web:ro
       - ./runtime/caddy-logs:/var/log/caddy
     depends_on:
       - auth-api
