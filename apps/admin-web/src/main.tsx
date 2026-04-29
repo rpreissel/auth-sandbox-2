@@ -22,89 +22,10 @@ export const TRACE_VIEWER_ENTRY = {
   highlights: ['Live-Trace-Liste mit Suche', 'Detailinspektion pro Trace', 'Artefakte, Proxy-Hops und JWT-Claims']
 } as const
 
-const TANMOCK_KEYCLOAK_BASE = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect'
-const TANMOCK_CLIENT_ID = 'tanmock-admin-web'
-const TANMOCK_REDIRECT_URI = 'https://admin.localhost:8443/'
-const TANMOCK_TOKEN_STORAGE_KEY = 'auth-sandbox-2.tanmock-admin.tokens'
-
-type StoredTokens = {
-  accessToken: string
-  expiresAt: number | null
-}
-
-function randomValue() {
-  return crypto.randomUUID()
-}
-
-function loadStoredTokens() {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  const raw = window.localStorage.getItem(TANMOCK_TOKEN_STORAGE_KEY)
-  if (!raw) {
-    return null
-  }
-
-  try {
-    return JSON.parse(raw) as StoredTokens
-  } catch {
-    window.localStorage.removeItem(TANMOCK_TOKEN_STORAGE_KEY)
-    return null
-  }
-}
-
-function persistTokens(tokens: StoredTokens | null) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  if (!tokens) {
-    window.localStorage.removeItem(TANMOCK_TOKEN_STORAGE_KEY)
-    return
-  }
-
-  window.localStorage.setItem(TANMOCK_TOKEN_STORAGE_KEY, JSON.stringify(tokens))
-}
-
-function buildTanMockAuthorizationUrl() {
-  const url = new URL(`${TANMOCK_KEYCLOAK_BASE}/auth`)
-  url.searchParams.set('client_id', TANMOCK_CLIENT_ID)
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', 'openid profile email')
-  url.searchParams.set('redirect_uri', TANMOCK_REDIRECT_URI)
-  url.searchParams.set('state', randomValue())
-  return url.toString()
-}
-
-async function exchangeTanMockCode(code: string) {
-  const response = await fetch(`${TANMOCK_KEYCLOAK_BASE}/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: TANMOCK_CLIENT_ID,
-      code,
-      redirect_uri: TANMOCK_REDIRECT_URI
-    })
-  })
-
-  if (!response.ok) {
-    throw new Error('Code exchange failed')
-  }
-
-  const body = await response.json() as { access_token: string; expires_in: number }
-  return {
-    accessToken: body.access_token,
-    expiresAt: Date.now() + body.expires_in * 1000
-  } satisfies StoredTokens
-}
-
-async function requestTanMock<T>(path: string, token: string, init?: RequestInit) {
+async function requestTanMock<T>(path: string, init?: RequestInit) {
   const response = await fetch(path, {
     ...init,
     headers: {
-      authorization: `Bearer ${token}`,
       'content-type': 'application/json',
       ...(init?.headers ?? {})
     }
@@ -117,13 +38,8 @@ async function requestTanMock<T>(path: string, token: string, init?: RequestInit
   return response.json() as Promise<T>
 }
 
-export function filterTanEntries(entries: TanMockAdminRecord[], query: string) {
-  const normalizedQuery = query.trim().toLowerCase()
-  if (!normalizedQuery) {
-    return entries
-  }
-
-  return entries.filter((entry) => [entry.userId, entry.sourceUserId, entry.tan].join(' ').toLowerCase().includes(normalizedQuery))
+export function getTanEntriesForUser(entries: TanMockAdminRecord[], userId: string) {
+  return entries.filter((entry) => entry.sourceUserId === userId)
 }
 
 function createAdminHeaders() {
@@ -203,11 +119,10 @@ export function filterRegistrationIdentities(registrationIdentities: Registratio
 }
 
 function AdminApp() {
-  const [tanMockTokens, setTanMockTokens] = useState<StoredTokens | null>(() => loadStoredTokens())
   const [tanOverview, setTanOverview] = useState<TanMockAdminOverview | null>(null)
-  const [tanQuery, setTanQuery] = useState('')
   const [tanSaveError, setTanSaveError] = useState<string | null>(null)
   const [tanSavePending, setTanSavePending] = useState(false)
+  const [selectedIdentityUserId, setSelectedIdentityUserId] = useState('demo-user')
   const [devices, setDevices] = useState<DeviceRecord[]>([])
   const [registrationIdentities, setRegistrationIdentities] = useState<RegistrationIdentityRecord[]>([])
   const [deviceQuery, setDeviceQuery] = useState('')
@@ -225,27 +140,8 @@ function AdminApp() {
   })
   const [tanForm, setTanForm] = useState<CreateTanMockAdminRecordInput>({
     tan: '471199',
-    userId: 'demo-user',
     sourceUserId: 'demo-user'
   })
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    if (!code) {
-      return
-    }
-
-    void exchangeTanMockCode(code)
-      .then((nextTokens) => {
-        setTanMockTokens(nextTokens)
-        persistTokens(nextTokens)
-        window.history.replaceState({}, document.title, window.location.pathname)
-      })
-      .catch((error) => {
-        setTanSaveError(error instanceof Error ? error.message : 'Keycloak login failed')
-      })
-  }, [])
 
   async function refresh() {
     const [devicesResult, registrationIdentitiesResult] = await Promise.all([
@@ -261,21 +157,40 @@ function AdminApp() {
   }, [])
 
   useEffect(() => {
-    if (!tanMockTokens) {
-      return
-    }
-
-    void requestTanMock<TanMockAdminOverview>('/tanmock-api/api/admin/entries', tanMockTokens.accessToken)
+    void requestTanMock<TanMockAdminOverview>('/tanmock-api/api/admin/entries')
       .then(setTanOverview)
       .catch((error) => {
         setTanSaveError(error instanceof Error ? error.message : 'TAN-Ueberblick konnte nicht geladen werden.')
       })
-  }, [tanMockTokens])
+  }, [])
+
+  useEffect(() => {
+    if (!registrationIdentities.length) {
+      return
+    }
+
+    const hasSelectedIdentity = registrationIdentities.some((identity) => identity.userId === selectedIdentityUserId)
+    if (hasSelectedIdentity) {
+      return
+    }
+
+    const fallbackUserId = registrationIdentities[0]?.userId
+    if (!fallbackUserId) {
+      return
+    }
+
+    setSelectedIdentityUserId(fallbackUserId)
+    setTanForm((current) => ({
+      ...current,
+      sourceUserId: fallbackUserId
+    }))
+  }, [registrationIdentities, selectedIdentityUserId])
 
   async function handleCreateIdentity(event: FormEvent) {
     event.preventDefault()
     setIdentitySavePending(true)
     setIdentitySaveError(null)
+    const nextUserId = identityForm.userId
 
     try {
       await request('/api/admin/registration-identities', {
@@ -283,6 +198,7 @@ function AdminApp() {
         body: JSON.stringify(identityForm)
       })
       await refresh()
+      focusIdentityForTan(nextUserId)
     } catch (error) {
       setIdentitySaveError(error instanceof Error ? error.message : 'Identitaet konnte nicht gespeichert werden.')
     } finally {
@@ -291,25 +207,18 @@ function AdminApp() {
   }
 
   async function refreshTanOverview() {
-    if (!tanMockTokens) {
-      return
-    }
-
-    const nextOverview = await requestTanMock<TanMockAdminOverview>('/tanmock-api/api/admin/entries', tanMockTokens.accessToken)
+    const nextOverview = await requestTanMock<TanMockAdminOverview>('/tanmock-api/api/admin/entries')
     setTanOverview(nextOverview)
   }
 
   async function handleCreateTan(event: FormEvent) {
     event.preventDefault()
-    if (!tanMockTokens) {
-      return
-    }
 
     setTanSavePending(true)
     setTanSaveError(null)
 
     try {
-      await requestTanMock('/tanmock-api/api/admin/entries', tanMockTokens.accessToken, {
+      await requestTanMock('/tanmock-api/api/admin/entries', {
         method: 'POST',
         body: JSON.stringify(tanForm)
       })
@@ -321,13 +230,20 @@ function AdminApp() {
     }
   }
 
+  function focusIdentityForTan(userId: string) {
+    setSelectedIdentityUserId(userId)
+    setTanForm((current) => ({
+      ...current,
+      sourceUserId: userId
+    }))
+  }
+
   const filteredDevices = useMemo(() => filterDevices(devices, deviceQuery), [deviceQuery, devices])
 
   const filteredRegistrationIdentities = useMemo(
     () => filterRegistrationIdentities(registrationIdentities, identityQuery),
     [identityQuery, registrationIdentities]
   )
-  const filteredTanEntries = useMemo(() => filterTanEntries(tanOverview?.entries ?? [], tanQuery), [tanOverview?.entries, tanQuery])
   const activeTanEntries = tanOverview?.entries.filter((entry) => entry.active) ?? []
 
   return (
@@ -416,41 +332,16 @@ function AdminApp() {
           </form>
         </section>
 
-        <section className="card admin-form-card">
-          <div className="list-card-header">
-            <div>
-              <h2>TAN-Broker-Eintrag anlegen</h2>
-              <p className="section-copy">Lege einmalig nutzbare TANs direkt im Admin-Web an. Der Source User wird schon beim Speichern gegen Keycloak validiert, damit Broker-Logins nicht spaeter mit einem 500er scheitern.</p>
-            </div>
-            {!tanMockTokens ? <a className="button-link" href={buildTanMockAuthorizationUrl()}>TanMock Admin Login</a> : <strong>{activeTanEntries.length}</strong>}
-          </div>
-          {tanSaveError ? <p className="form-error" role="alert">{tanSaveError}</p> : null}
-          <form className="grid" onSubmit={handleCreateTan}>
-            <label>
-              TAN
-              <input name="tan" value={tanForm.tan} onChange={(event) => setTanForm({ ...tanForm, tan: event.target.value })} disabled={!tanMockTokens || tanSavePending} />
-            </label>
-            <label>
-              User ID
-              <input name="tanUserId" value={tanForm.userId} onChange={(event) => setTanForm({ ...tanForm, userId: event.target.value })} disabled={!tanMockTokens || tanSavePending} />
-            </label>
-            <label>
-              Source User ID
-              <input name="sourceUserId" value={tanForm.sourceUserId} onChange={(event) => setTanForm({ ...tanForm, sourceUserId: event.target.value })} disabled={!tanMockTokens || tanSavePending} />
-            </label>
-            <button type="submit" disabled={!tanMockTokens || tanSavePending}>{tanSavePending ? 'Speichert...' : 'TAN speichern'}</button>
-          </form>
-        </section>
-
         <section className="admin-list-grid">
           <section className="card list-card admin-list-card">
             <div className="list-card-header">
               <div>
                 <h2>Registrierungsidentitaeten</h2>
-                <p className="section-copy">Vorbereitete Personen mit optionalem Code und optionaler SMS-Zielnummer.</p>
+                <p className="section-copy">Vorbereitete Personen mit optionalem Code, optionaler SMS-Zielnummer und direkt zugeordneten TAN-Broker-Aktionen.</p>
               </div>
               <strong>{registrationIdentities.length}</strong>
             </div>
+            {tanSaveError ? <p className="form-error" role="alert">{tanSaveError}</p> : null}
             <label className="admin-list-search">
               Identitaeten durchsuchen
                 <input
@@ -463,12 +354,48 @@ function AdminApp() {
             </label>
             <div className="list admin-list-scroll">
               {filteredRegistrationIdentities.map((identity) => (
-                <article key={identity.id}>
-                  <strong>{identity.userId}</strong>
-                  <span>{identity.firstName} {identity.lastName}</span>
-                  <span>Geburtsdatum: {identity.birthDate}</span>
-                  <span>Code: {identity.code ?? 'nicht gesetzt'}</span>
-                  <span>SMS: {identity.phoneNumber ?? 'nicht gesetzt'}</span>
+                <article key={identity.id} className="admin-identity-record">
+                  <div className="identity-card-head">
+                    <div className="identity-meta">
+                      <strong>{identity.userId}</strong>
+                      <span>{identity.firstName} {identity.lastName}</span>
+                      <span>Geburtsdatum: {identity.birthDate}</span>
+                      <span>Code: {identity.code ?? 'nicht gesetzt'}</span>
+                      <span>SMS: {identity.phoneNumber ?? 'nicht gesetzt'}</span>
+                    </div>
+                    <div className="identity-action-row">
+                      <button type="button" className="button-link-ghost" onClick={() => focusIdentityForTan(identity.userId)}>
+                        TAN vorbereiten
+                      </button>
+                    </div>
+                  </div>
+                  <div className="identity-tan-block">
+                    <span>Aktive TANs fuer diese Identitaet</span>
+                    <div className="identity-tan-chip-row">
+                      {getTanEntriesForUser(activeTanEntries, identity.userId).map((entry) => (
+                        <article key={entry.id} className="identity-tan-chip">
+                          <strong>{entry.tan}</strong>
+                        </article>
+                      ))}
+                      {!getTanEntriesForUser(activeTanEntries, identity.userId).length ? <p className="identity-tan-empty">Noch keine aktive TAN fuer diese Identitaet.</p> : null}
+                    </div>
+                  </div>
+                  {selectedIdentityUserId === identity.userId ? (
+                    <form className="identity-tan-form" onSubmit={handleCreateTan} aria-label={`TAN fuer ${identity.userId} anlegen`}>
+                      <div className="identity-tan-focus">
+                        <strong>Neue TAN</strong>
+                        <span>{identity.firstName} {identity.lastName}</span>
+                        <span>Quelle ist immer diese ausgewaehlte Identitaet. Das Broker-Ziel wird automatisch als `tan_{identity.userId}_hash` abgeleitet.</span>
+                      </div>
+                      <div className="grid">
+                        <label>
+                          TAN
+                          <input name="tan" value={tanForm.tan} onChange={(event) => setTanForm({ ...tanForm, tan: event.target.value })} disabled={tanSavePending} />
+                        </label>
+                      </div>
+                      <button type="submit" disabled={tanSavePending}>{tanSavePending ? 'Speichert...' : 'TAN speichern'}</button>
+                    </form>
+                  ) : null}
                 </article>
               ))}
               {!filteredRegistrationIdentities.length && <p>{registrationIdentities.length ? 'Keine Identitaeten passen zur aktuellen Suche.' : 'Noch keine Registrierungsidentitaeten vorbereitet.'}</p>}
@@ -502,37 +429,6 @@ function AdminApp() {
                 </article>
               ))}
               {!filteredDevices.length && <p>{devices.length ? 'Keine Geraete passen zur aktuellen Suche.' : 'Noch keine Geraete registriert.'}</p>}
-            </div>
-          </section>
-
-          <section className="card list-card admin-list-card">
-            <div className="list-card-header">
-              <div>
-                <h2>TAN-Broker-Eintraege</h2>
-                <p className="section-copy">Aktive und bereits verbrauchte TANs fuer den externen TanMock Identity Broker.</p>
-              </div>
-              <strong>{tanOverview?.entries.length ?? 0}</strong>
-            </div>
-            <label className="admin-list-search">
-              TAN-Eintraege durchsuchen
-              <input
-                name="tanQuery"
-                aria-label="TAN-Eintraege durchsuchen"
-                placeholder="User ID, Source User ID oder TAN suchen"
-                value={tanQuery}
-                onChange={(event) => setTanQuery(event.target.value)}
-              />
-            </label>
-            <div className="list admin-list-scroll" aria-label="TAN-Eintraege">
-              {filteredTanEntries.map((entry) => (
-                <article key={entry.id}>
-                  <strong>{entry.userId}</strong>
-                  <span>TAN: {entry.tan}</span>
-                  <span>Quelle: {entry.sourceUserId}</span>
-                  <span>Status: {entry.active ? 'aktiv' : 'verbraucht'}</span>
-                </article>
-              ))}
-              {!filteredTanEntries.length && <p>{tanOverview?.entries.length ? 'Keine TAN-Eintraege passen zur aktuellen Suche.' : 'Noch keine TAN-Eintraege vorhanden.'}</p>}
             </div>
           </section>
         </section>

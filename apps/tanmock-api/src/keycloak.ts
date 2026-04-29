@@ -1,63 +1,43 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { pool } from '@auth-sandbox-2/backend-core'
 
-import { tanMockApiConfig } from './config.js'
-
-const keycloakJwks = createRemoteJWKSet(new URL(`${tanMockApiConfig.keycloakBaseUrl}/realms/${tanMockApiConfig.keycloakRealm}/protocol/openid-connect/certs`))
-
-type KeycloakAdminClaims = {
-  sub?: string
-  preferred_username?: string
-  azp?: string
-  realm_access?: {
-    roles?: string[]
-  }
-  resource_access?: Record<string, { roles?: string[] }>
+export type SourceIdentity = {
+  userId: string
+  firstName: string
+  lastName: string
+  birthDate: string
+  phoneNumber: string | null
 }
 
-export async function verifyAdminAccessToken(token: string) {
-  const { payload } = await jwtVerify(token, keycloakJwks, {
-    issuer: `${tanMockApiConfig.keycloakPublicUrl}/realms/${tanMockApiConfig.keycloakRealm}`
-  })
+export async function fetchSourceIdentity(sourceUserId: string): Promise<SourceIdentity | null> {
+  const result = await pool.query<{
+    user_id: string
+    first_name: string
+    last_name: string
+    birth_date: string
+    phone_number: string | null
+  }>(`
+    select
+      people.user_id,
+      people.first_name,
+      people.last_name,
+      people.birth_date::text,
+      sms.phone_number
+    from registration_people people
+    left join registration_person_sms_numbers sms on sms.person_id = people.id
+    where people.user_id = $1
+    limit 1
+  `, [sourceUserId])
 
-  const claims = payload as KeycloakAdminClaims
-  const roles = new Set<string>([
-    ...(claims.realm_access?.roles ?? []),
-    ...(claims.resource_access?.[tanMockApiConfig.clientId]?.roles ?? []),
-    ...(claims.resource_access?.[tanMockApiConfig.adminClientId]?.roles ?? [])
-  ])
-
-  const hasExpectedIdentity = claims.preferred_username === 'tanmock-admin' && claims.azp === tanMockApiConfig.adminClientId
-  if (!hasExpectedIdentity && !roles.has('tanmock-admin')) {
-    throw new Error('Missing tanmock-admin role')
+  const row = result.rows[0]
+  if (!row) {
+    return null
   }
 
-  return claims
-}
-
-export async function fetchSourceUser(sourceUserId: string) {
-  const tokenResponse = await fetch(`${tanMockApiConfig.keycloakBaseUrl}/realms/${tanMockApiConfig.keycloakRealm}/protocol/openid-connect/token`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: tanMockApiConfig.keycloakAdminClientId,
-      client_secret: tanMockApiConfig.keycloakAdminClientSecret
-    })
-  })
-
-  if (!tokenResponse.ok) {
-    throw new Error('Failed to authenticate against Keycloak admin API')
+  return {
+    userId: row.user_id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    birthDate: row.birth_date,
+    phoneNumber: row.phone_number
   }
-
-  const tokenBody = await tokenResponse.json() as { access_token: string }
-  const userResponse = await fetch(`${tanMockApiConfig.keycloakBaseUrl}/admin/realms/${tanMockApiConfig.keycloakRealm}/users?username=${encodeURIComponent(sourceUserId)}&exact=true`, {
-    headers: { authorization: `Bearer ${tokenBody.access_token}` }
-  })
-
-  if (!userResponse.ok) {
-    throw new Error('Failed to fetch source Keycloak user')
-  }
-
-  const users = await userResponse.json() as Array<Record<string, unknown>>
-  return users[0] ?? null
 }

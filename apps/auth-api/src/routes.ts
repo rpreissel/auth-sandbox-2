@@ -24,6 +24,7 @@ import {
   completeFlowService,
   createSsoLaunch,
   createRegistrationIdentity,
+  deleteRegistrationIdentity,
   deleteDevice,
   finishLogin,
   listRegistrationIdentities,
@@ -529,6 +530,20 @@ export async function registerRoutes(app: any) {
       return listRegistrationIdentities()
     }
   }))
+  app.delete('/api/admin/registration-identities/:userId', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.adminProxyToken, 'admin proxy')
+    const params = z.object({ userId: z.string().min(1) }).parse(request.params)
+    await tracedRoute({
+      request,
+      reply,
+      traceType: 'admin_registration_identity_delete',
+      title: `Delete registration identity ${params.userId}`,
+      summary: 'Admin cleanup removed a registration identity and its dependent sandbox records.',
+      userId: params.userId,
+      run: () => deleteRegistrationIdentity(params.userId)
+    })
+    reply.code(204)
+  })
   app.get('/api/admin/devices', async (request: FastifyRequest, reply: FastifyReply) => tracedRoute({
     request,
     reply,

@@ -273,6 +273,34 @@ export async function deleteDevice(id: string) {
   )
 }
 
+export async function deleteRegistrationIdentity(userId: string) {
+  await runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'delete_registration_identity',
+      userId,
+      notes: 'Delete registration identity and associated sandbox state.'
+    },
+    async () => {
+      const devicesResult = await pool.query<DeviceRow>('select * from devices where user_id = $1', [userId])
+      for (const device of devicesResult.rows) {
+        if (device.keycloak_credential_id) {
+          await adminClient.deleteDeviceCredential(device.user_id, device.keycloak_credential_id)
+        }
+      }
+
+      await pool.query('delete from devices where user_id = $1', [userId])
+      await pool.query('delete from tanmock_entries where source_user_id = $1', [userId])
+      await pool.query('delete from tanmock_authorization_codes where source_user_id = $1', [userId])
+      await pool.query('delete from tanmock_refresh_tokens where source_user_id = $1', [userId])
+      await pool.query('delete from registration_people where user_id = $1', [userId])
+      await adminClient.deleteUser(userId)
+    }
+  )
+}
+
 export async function startFlowService(flowId: string, service: AssuranceFlowService) {
   return runWithSpan(
     {

@@ -13,7 +13,6 @@ type ClaimsRow = {
 function mapAdminRecord(row: {
   id: string
   tan: string
-  user_id: string
   source_user_id: string
   active: boolean
   consumed_at: string | null
@@ -22,7 +21,6 @@ function mapAdminRecord(row: {
   return {
     id: row.id,
     tan: row.tan,
-    userId: row.user_id,
     sourceUserId: row.source_user_id,
     active: row.active,
     consumedAt: row.consumed_at,
@@ -33,7 +31,7 @@ function mapAdminRecord(row: {
 export async function listOverview(): Promise<TanMockAdminOverview> {
   const [entriesResult, sessionsResult] = await Promise.all([
     pool.query(`
-      select id, tan, user_id, source_user_id, active, consumed_at::text, created_at::text
+      select id, tan, source_user_id, active, consumed_at::text, created_at::text
       from tanmock_entries
       order by created_at desc
     `),
@@ -60,22 +58,22 @@ export async function listOverview(): Promise<TanMockAdminOverview> {
 
 export async function createEntry(input: CreateTanMockAdminRecordInput) {
   const result = await pool.query(`
-    insert into tanmock_entries (tan, user_id, source_user_id)
-    values ($1, $2, $3)
-    returning id, tan, user_id, source_user_id, active, consumed_at::text, created_at::text
-  `, [input.tan, input.userId, input.sourceUserId])
+    insert into tanmock_entries (tan, source_user_id)
+    values ($1, $2)
+    returning id, tan, source_user_id, active, consumed_at::text, created_at::text
+  `, [input.tan, input.sourceUserId])
 
   return mapAdminRecord(result.rows[0])
 }
 
-export async function consumeActiveTan(tan: string) {
+export async function consumeActiveTan(sourceUserId: string, tan: string) {
   return withTransaction(async (client) => {
     const result = await client.query(`
-      select id, tan, user_id, source_user_id, active, consumed_at::text, created_at::text
+      select id, tan, source_user_id, active, consumed_at::text, created_at::text
       from tanmock_entries
-      where tan = $1 and active = true and consumed_at is null
+      where source_user_id = $1 and tan = $2 and active = true and consumed_at is null
       for update
-    `, [tan])
+    `, [sourceUserId, tan])
 
     const row = result.rows[0]
     if (!row) {

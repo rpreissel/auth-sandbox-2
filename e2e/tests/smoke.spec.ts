@@ -16,11 +16,52 @@ const MOCK_WEB_URL = 'https://webmock.localhost:8443'
 const ADMIN_PROXY_HEADERS = { authorization: 'Bearer change-me-admin-proxy-token' }
 const APP_PROXY_HEADERS = { authorization: 'Bearer change-me-app-proxy-token' }
 const TRACE_BROWSER_HEADERS = { authorization: 'Bearer change-me-trace-browser-token' }
+const CLEANUP_USER_PREFIXES = ['tan-user-', 'tan-source-', 'e2e-', 'webmock-web-', 'admin-error-']
 
 type TraceListItem = {
   traceId: string
   traceType: string
   actors: string[]
+}
+
+const e2eCleanupUserIds = new Set<string>()
+
+function trackCleanupUserId(userId: string) {
+  e2eCleanupUserIds.add(userId)
+  return userId
+}
+
+async function deleteRegistrationIdentityIfPresent(request: APIRequestContext, userId: string) {
+  const response = await request.delete(`${AUTH_API_URL}/api/admin/registration-identities/${encodeURIComponent(userId)}`, {
+    headers: ADMIN_PROXY_HEADERS
+  })
+
+  expect([204, 404].includes(response.status())).toBeTruthy()
+}
+
+async function cleanupTrackedTestIdentities(request: APIRequestContext) {
+  const trackedIds = [...e2eCleanupUserIds]
+  e2eCleanupUserIds.clear()
+
+  if (!trackedIds.length) {
+    return
+  }
+
+  await Promise.all(trackedIds.map((userId) => deleteRegistrationIdentityIfPresent(request, userId)))
+}
+
+async function cleanupExistingTestIdentities(request: APIRequestContext) {
+  const response = await request.get(`${AUTH_API_URL}/api/admin/registration-identities`, {
+    headers: ADMIN_PROXY_HEADERS
+  })
+  expect(response.ok()).toBeTruthy()
+
+  const identities = await response.json() as Array<{ userId: string }>
+  const testUserIds = identities
+    .map((identity) => identity.userId)
+    .filter((userId) => CLEANUP_USER_PREFIXES.some((prefix) => userId.startsWith(prefix)))
+
+  await Promise.all(testUserIds.map((userId) => deleteRegistrationIdentityIfPresent(request, userId)))
 }
 
 function createSigningKeys() {
@@ -90,7 +131,7 @@ async function waitForTrace(request: APIRequestContext, userId: string, traceTyp
 }
 
 async function createBrowserUser(request: APIRequestContext, suffix: string) {
-  const userId = `webmock-web-${suffix}-${Date.now()}`
+  const userId = trackCleanupUserId(`webmock-web-${suffix}-${Date.now()}`)
   const password = 'ChangeMe123!'
   const response = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     headers: ADMIN_PROXY_HEADERS,
@@ -136,13 +177,7 @@ async function loginWebMockWeb(page: import('@playwright/test').Page, userId: st
 
 async function loginTanMockAdmin(page: import('@playwright/test').Page) {
   await page.goto(ADMIN_WEB_URL)
-  await page.getByRole('link', { name: 'TanMock Admin Login' }).click()
-  await expect(page).toHaveURL(/keycloak\.localhost:8443/)
-  await page.locator('#username').fill('tanmock-admin')
-  await page.locator('#password').fill('ChangeMe123!')
-  await page.getByRole('button', { name: /sign in|anmelden/i }).click()
-  await expect(page).toHaveURL(/admin\.localhost:8443/)
-  await expect(page.getByRole('button', { name: 'TAN speichern' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Registrierungsidentitaeten', exact: true })).toBeVisible()
 }
 
 async function getInternalRedeemAccessToken(request: APIRequestContext) {
@@ -190,6 +225,10 @@ async function loginWithDevice(request: APIRequestContext, input: { publicKeyHas
 
 test.beforeEach(async ({ request }) => {
   await waitForRuntimeReady(request)
+})
+
+test.afterEach(async ({ request }) => {
+  await cleanupTrackedTestIdentities(request)
 })
 
 test('shared postgres runtime exposes auth, trace, and keycloak endpoints', async ({ request }) => {
@@ -360,21 +399,42 @@ test('webmock web browser login, step-up, and tracing work end to end', async ({
 test('tanmock admin can provision one-time tan entries and broker login into keycloak', async ({ page, browser }) => {
   test.setTimeout(90000)
 
-  const userId = `tan-user-${Date.now()}`
+  const userId = trackCleanupUserId(`tan-user-${Date.now()}`)
+  const sourceUserId = trackCleanupUserId(`tan-source-${Date.now()}`)
   const tan = `${Math.floor(Math.random() * 900000 + 100000)}`
+  const tanHash = createHash('sha256').update(tan).digest('hex').slice(0, 12)
 
   await loginTanMockAdmin(page)
-  const tanmockForm = page.locator('section').filter({ has: page.getByRole('heading', { name: 'TAN-Broker-Eintrag anlegen' }) }).locator('form')
-  await tanmockForm.getByRole('textbox', { name: 'TAN', exact: true }).fill(tan)
-  await tanmockForm.locator('input[name="tanUserId"]').fill(userId)
-  await tanmockForm.getByRole('textbox', { name: 'Source User ID', exact: true }).fill('tanmock-admin')
-  await page.getByRole('button', { name: 'TAN speichern' }).click()
-  await expect(page.getByLabel('TAN-Eintraege', { exact: true })).toContainText(userId)
-  await expect(page.getByLabel('TAN-Eintraege', { exact: true })).toContainText(tan)
+  const identityForm = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Registrierungsidentität vorbereiten' }) }).locator('form')
+  await identityForm.locator('input[name="userId"]').fill(sourceUserId)
+  await identityForm.locator('input[name="firstName"]').fill('Source')
+  await identityForm.locator('input[name="lastName"]').fill('Identity')
+  await identityForm.locator('input[name="birthDate"]').fill('1991-02-03')
+  await identityForm.locator('input[name="phoneNumber"]').fill('+491701234568')
+  await identityForm.getByRole('button', { name: 'Identität speichern' }).click()
 
-  await page.locator('input[name="sourceUserId"]').fill(`missing-source-${Date.now()}`)
-  await page.getByRole('button', { name: 'TAN speichern' }).click()
-  await expect(page.getByRole('alert')).toContainText('Unknown source Keycloak user')
+  await identityForm.locator('input[name="userId"]').fill(userId)
+  await identityForm.locator('input[name="firstName"]').fill('Tan')
+  await identityForm.locator('input[name="lastName"]').fill('User')
+  await identityForm.locator('input[name="birthDate"]').fill('1990-01-01')
+  await identityForm.locator('input[name="phoneNumber"]').fill('+491701234567')
+  await identityForm.getByRole('button', { name: 'Identität speichern' }).click()
+
+  const identitySearch = page.getByRole('textbox', { name: 'Identitaeten durchsuchen' })
+  await identitySearch.fill(sourceUserId)
+  const sourceIdentityCard = page.locator('article.admin-identity-record').filter({ has: page.getByText(sourceUserId, { exact: true }) }).first()
+  await sourceIdentityCard.getByRole('button', { name: 'TAN vorbereiten' }).click()
+  const tanForm = sourceIdentityCard.getByRole('form', { name: `TAN fuer ${sourceUserId} anlegen` })
+  await tanForm.getByRole('textbox', { name: 'TAN', exact: true }).fill(tan)
+  const saveTanResponsePromise = page.waitForResponse((response) => response.url().includes('/tanmock-api/api/admin/entries') && response.request().method() === 'POST')
+  await tanForm.getByRole('button', { name: 'TAN speichern' }).click()
+  const saveTanResponse = await saveTanResponsePromise
+  expect(saveTanResponse.ok()).toBeTruthy()
+  await page.reload()
+  await identitySearch.fill(sourceUserId)
+  const refreshedIdentityCard = page.locator('article.admin-identity-record').filter({ has: page.getByText(sourceUserId, { exact: true }) }).first()
+  await expect(refreshedIdentityCard.getByText(tan, { exact: true })).toBeVisible()
+  await expect(refreshedIdentityCard.getByText(tan, { exact: true })).toBeVisible()
 
   const brokerContext = await browser.newContext({ ignoreHTTPSErrors: true })
   const brokerPage = await brokerContext.newPage()
@@ -387,14 +447,15 @@ test('tanmock admin can provision one-time tan entries and broker login into key
   if (brokerPage.url().includes('keycloak.localhost:8443')) {
     await brokerPage.waitForURL(/tanmock\.localhost:8443\/oidc\/authorize/, { timeout: 15000 })
   }
-  await brokerPage.getByLabel('User ID').fill(userId)
+  await brokerPage.getByLabel('User ID').fill(sourceUserId)
   await brokerPage.getByLabel('TAN').fill(tan)
   await brokerPage.getByRole('button', { name: 'Anmeldung fortsetzen' }).click()
 
   await expect(brokerPage).toHaveURL(/webmock\.localhost:8443/)
   await expect(brokerPage.locator('.card').filter({ has: brokerPage.getByRole('heading', { name: /token claims and browser session/i }) })).toContainText('yes', { timeout: 15000 })
-  await expect(brokerPage.getByLabel('Decoded access token claims')).toContainText(`tan_${userId}_${tan}`)
+  await expect(brokerPage.getByLabel('Decoded access token claims')).toContainText(`tan_${sourceUserId}_${tanHash}`)
   await expect(brokerPage.getByLabel('Decoded access token claims')).toContainText('tan_sub')
+  await expect(brokerPage.getByLabel('Decoded access token claims')).toContainText(`Tan ${tanHash}`)
 
   await brokerContext.close()
 })
@@ -402,7 +463,7 @@ test('tanmock admin can provision one-time tan entries and broker login into key
 test('appmock can open webmock through bootstrap SSO', async ({ page, context, request }) => {
   test.setTimeout(90000)
 
-  const userId = `e2e-sso-${Date.now()}`
+  const userId = trackCleanupUserId(`e2e-sso-${Date.now()}`)
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     headers: ADMIN_PROXY_HEADERS,
     data: {
@@ -509,7 +570,7 @@ test('appmock can open webmock through bootstrap SSO', async ({ page, context, r
 
 test('device login flow supports tokens refresh and logout', async ({ page, request }) => {
   test.setTimeout(45000)
-  const userId = `e2e-user-${Date.now()}`
+  const userId = trackCleanupUserId(`e2e-user-${Date.now()}`)
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
     headers: ADMIN_PROXY_HEADERS,
     data: {
@@ -738,7 +799,7 @@ test('device login flow supports tokens refresh and logout', async ({ page, requ
 })
 
 test('registration and step-up flow APIs support service selection, concrete service lifecycle, finalize, and redeem', async ({ page, request }) => {
-  const userId = `e2e-flow-${Date.now()}`
+  const userId = trackCleanupUserId(`e2e-flow-${Date.now()}`)
   const registrationCode = `FLOW${Date.now().toString(36).toUpperCase()}`
   const signingKeys = createSigningKeys()
   const withBearer = (token: string) => ({
@@ -940,7 +1001,7 @@ test('registration and step-up flow APIs support service selection, concrete ser
 })
 
 test('missing saved device binding is cleared instead of failing with a server error', async ({ page, request }) => {
-  const userId = `e2e-missing-device-${Date.now()}`
+  const userId = trackCleanupUserId(`e2e-missing-device-${Date.now()}`)
   const deviceName = 'Missing Device Test'
   const registrationCode = `MISS${Date.now().toString(36).toUpperCase()}`
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {
@@ -1007,7 +1068,7 @@ test('missing saved device binding is cleared instead of failing with a server e
 })
 
 test('registration verification shows inline error feedback for invalid code attempts', async ({ page, request }) => {
-  const userId = `e2e-invalid-code-${Date.now()}`
+  const userId = trackCleanupUserId(`e2e-invalid-code-${Date.now()}`)
   const registrationCode = `CODE${Date.now().toString(36).toUpperCase()}`
 
   const registrationResponse = await request.post(`${AUTH_API_URL}/api/admin/registration-identities`, {

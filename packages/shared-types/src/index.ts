@@ -176,7 +176,6 @@ export type ServiceResultEnvelope = {
 export type TanMockAdminRecord = {
   id: string
   tan: string
-  userId: string
   sourceUserId: string
   active: boolean
   consumedAt: IsoDateTime | null
@@ -185,7 +184,6 @@ export type TanMockAdminRecord = {
 
 export type CreateTanMockAdminRecordInput = {
   tan: string
-  userId: string
   sourceUserId: string
 }
 

@@ -262,6 +262,21 @@ export class KeycloakAdminClient {
     return users[0]
   }
 
+  async deleteUser(userId: string) {
+    const user = await this.getUserByUsername(userId)
+    if (!user) {
+      return
+    }
+
+    const token = await this.getAdminToken()
+    await fetchNoContent(`${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${user.id}`, {
+      method: 'DELETE',
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    })
+  }
+
   async getCredentials(userId: string) {
     const user = await this.getUserByUsername(userId)
     if (!user) {

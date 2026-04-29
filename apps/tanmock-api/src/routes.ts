@@ -8,7 +8,7 @@ import { z } from 'zod'
 import type { CreateTanMockAdminRecordInput, JsonObject } from '@auth-sandbox-2/shared-types'
 
 import { tanMockApiConfig } from './config.js'
-import { fetchSourceUser, verifyAdminAccessToken } from './keycloak.js'
+import { fetchSourceIdentity } from './keycloak.js'
 import {
   consumeActiveTan,
   createAuthorizationCode,
@@ -54,7 +54,6 @@ const tokenBodySchema = z.object({
 
 const adminCreateSchema = z.object({
   tan: z.string().trim().min(4),
-  userId: z.string().trim().min(1),
   sourceUserId: z.string().trim().min(1)
 })
 
@@ -148,13 +147,27 @@ function createLoginPage(args: {
 </html>`
 }
 
-async function getAdminClaims(sourceUserId: string) {
-  const user = await fetchSourceUser(sourceUserId)
-  if (!user) {
-    throw new Error(`Unknown source Keycloak user ${sourceUserId}`)
+function buildTanIdentityHash(tan: string) {
+  return createHash('sha256').update(tan).digest('hex').slice(0, 12)
+}
+
+function isDuplicateTanError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false
   }
 
-  return user
+  return error.message.includes('tanmock_entries_tan_key')
+    || error.message.includes('idx_tanmock_entries_user_tan_unique')
+    || error.message.includes('idx_tanmock_entries_source_user_tan_unique')
+}
+
+async function getSourceIdentityClaims(sourceUserId: string) {
+  const identity = await fetchSourceIdentity(sourceUserId)
+  if (!identity) {
+    throw new Error(`Unknown source registration identity ${sourceUserId}`)
+  }
+
+  return identity
 }
 
 function sanitizeClaimValue(value: unknown): JsonObject[string] {
@@ -178,39 +191,34 @@ function sanitizeClaimValue(value: unknown): JsonObject[string] {
 }
 
 function buildBrokerClaims(args: {
-  userId: string
   tan: string
   sourceUserId: string
-  sourceUser: Record<string, unknown>
+  sourceIdentity: {
+    firstName: string
+    lastName: string
+    phoneNumber: string | null
+  }
 }): JsonObject {
-  const brokerUsername = `tan_${args.userId}_${args.tan}`
-  const sourceEmail = typeof args.sourceUser.email === 'string' ? args.sourceUser.email : undefined
-  const brokerEmail = sourceEmail
-    ? sourceEmail.replace('@', `+${brokerUsername}@`)
-    : `${brokerUsername}@tanmock.localhost`
-  const sourceAttributes = typeof args.sourceUser.attributes === 'object' && args.sourceUser.attributes !== null
-    ? args.sourceUser.attributes as Record<string, unknown>
-    : {}
+  const tanHash = buildTanIdentityHash(args.tan)
+  const brokerUsername = `tan_${args.sourceUserId}_${tanHash}`
+  const displayName = `Tan ${tanHash}`
 
   const claims: JsonObject = {
     sub: brokerUsername,
     tan_sub: brokerUsername,
     preferred_username: brokerUsername,
     userId: brokerUsername,
-    email: brokerEmail,
-    email_verified: typeof args.sourceUser.emailVerified === 'boolean' ? args.sourceUser.emailVerified : false,
-    given_name: typeof args.sourceUser.firstName === 'string' ? args.sourceUser.firstName : undefined,
-    family_name: typeof args.sourceUser.lastName === 'string' ? args.sourceUser.lastName : undefined,
-    name: [args.sourceUser.firstName, args.sourceUser.lastName].filter((value): value is string => typeof value === 'string' && value.trim().length > 0).join(' ') || brokerUsername,
+    email: `${brokerUsername}@tanmock.localhost`,
+    email_verified: false,
+    given_name: 'Tan',
+    family_name: tanHash,
+    name: displayName,
     source_user_id: args.sourceUserId
   }
 
-  for (const [key, value] of Object.entries(sourceAttributes)) {
-    if (key === 'tan_sub' || key === 'preferred_username' || key === 'sub' || key === 'userId' || key === 'email') {
-      continue
-    }
-    claims[key] = sanitizeClaimValue(value)
-  }
+  claims.source_identity_first_name = sanitizeClaimValue(args.sourceIdentity.firstName)
+  claims.source_identity_last_name = sanitizeClaimValue(args.sourceIdentity.lastName)
+  claims.source_identity_phone_number = sanitizeClaimValue(args.sourceIdentity.phoneNumber)
 
   return claims
 }
@@ -263,14 +271,6 @@ async function signTokens(args: {
     expires_in: tanMockApiConfig.accessTokenTtlSeconds,
     scope: args.scope
   }
-}
-
-async function requireAdmin(request: FastifyRequest) {
-  const authorization = request.headers.authorization
-  if (!authorization?.startsWith('Bearer ')) {
-    throw new Error('Missing bearer token')
-  }
-  return verifyAdminAccessToken(authorization.slice('Bearer '.length))
 }
 
 export async function registerRoutes(app: any) {
@@ -332,8 +332,8 @@ export async function registerRoutes(app: any) {
       })
     }
 
-    const entry = await consumeActiveTan(body.tan)
-    if (!entry || entry.userId !== body.userId) {
+    const entry = await consumeActiveTan(body.userId, body.tan)
+    if (!entry) {
       reply.type('text/html; charset=utf-8')
       return createLoginPage({
         clientId: body.client_id,
@@ -348,13 +348,12 @@ export async function registerRoutes(app: any) {
       })
     }
 
-    const sourceUser = await getAdminClaims(entry.sourceUserId)
-    const brokerUsername = `tan_${entry.userId}_${entry.tan}`
+    const sourceIdentity = await getSourceIdentityClaims(entry.sourceUserId)
+    const brokerUsername = `tan_${entry.sourceUserId}_${buildTanIdentityHash(entry.tan)}`
     const claims = buildBrokerClaims({
-      userId: entry.userId,
       tan: entry.tan,
       sourceUserId: entry.sourceUserId,
-      sourceUser
+      sourceIdentity
     })
 
     const code = await createAuthorizationCode({
@@ -433,32 +432,29 @@ export async function registerRoutes(app: any) {
   })
 
   app.get('/api/admin/entries', async (request: FastifyRequest, reply: any) => {
-    try {
-      await requireAdmin(request)
-    } catch {
-      reply.code(401)
-      return { message: 'Unauthorized admin access' }
-    }
-
     return listOverview()
   })
 
   app.post('/api/admin/entries', async (request: FastifyRequest, reply: any) => {
-    try {
-      await requireAdmin(request)
-    } catch {
-      reply.code(401)
-      return { message: 'Unauthorized admin access' }
-    }
-
     const body = adminCreateSchema.parse(request.body) satisfies CreateTanMockAdminRecordInput
-    const sourceUser = await fetchSourceUser(body.sourceUserId)
-    if (!sourceUser) {
+    const sourceIdentity = await fetchSourceIdentity(body.sourceUserId)
+    if (!sourceIdentity) {
       reply.code(400)
-      return { message: `Unknown source Keycloak user ${body.sourceUserId}` }
+      return { message: `Unknown source registration identity ${body.sourceUserId}` }
     }
 
-    const created = await createEntry(body)
+    let created
+    try {
+      created = await createEntry(body)
+    } catch (error) {
+      if (isDuplicateTanError(error)) {
+        reply.code(400)
+        return { message: `TAN ${body.tan} existiert fuer Quelle ${body.sourceUserId} bereits.` }
+      }
+
+      throw error
+    }
+
     reply.code(201)
     return created
   })

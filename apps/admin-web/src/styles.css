@@ -221,6 +221,76 @@ button {
   font-weight: 600;
 }
 
+.admin-identity-record {
+  gap: 1rem;
+}
+
+.identity-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.identity-meta,
+.identity-action-row,
+.identity-tan-block,
+.identity-tan-chip,
+.identity-tan-chip-row,
+.identity-tan-focus,
+.identity-tan-form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.identity-tan-form {
+  padding-top: 0.25rem;
+}
+
+.identity-action-row {
+  justify-items: end;
+}
+
+.identity-tan-block {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(14, 34, 52, 0.04);
+  border: 1px solid rgba(14, 34, 52, 0.08);
+}
+
+.identity-tan-chip-row {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.identity-tan-chip {
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(14, 34, 52, 0.08);
+}
+
+.identity-tan-empty {
+  margin: 0;
+  color: rgba(14, 34, 52, 0.68);
+}
+
+.identity-tan-focus {
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  background: rgba(170, 77, 31, 0.09);
+  border: 1px solid rgba(170, 77, 31, 0.14);
+}
+
+.button-link-ghost {
+  background: transparent;
+  color: #0e2234;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
 .trace-browser-shell {
   align-content: start;
 }
@@ -605,6 +675,14 @@ button {
 
   .list-card-header {
     flex-direction: column;
+  }
+
+   .identity-card-head {
+    flex-direction: column;
+   }
+
+  .identity-action-row {
+    justify-items: start;
   }
 
   .trace-list-row-header,
