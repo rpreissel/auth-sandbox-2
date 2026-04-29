@@ -1,7 +1,12 @@
 :root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #0e2234;
-  background: linear-gradient(180deg, #f5efe4 0%, #eaf4f6 100%);
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color: #1a1d23;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 100%, rgba(14, 165, 233, 0.06), transparent 40%),
+    linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -10,6 +15,7 @@
 
 body {
   margin: 0;
+  line-height: 1.6;
 }
 
 input,
@@ -20,61 +26,86 @@ button {
 .shell {
   width: min(1180px, calc(100vw - 2rem));
   margin: 0 auto;
-  padding: 2rem 0 4rem;
+  padding: 2.5rem 0 5rem;
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.82);
-  border-radius: 24px;
-  padding: 1.4rem;
-  border: 1px solid rgba(14, 34, 52, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 1.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(8px);
 }
 
 h1,
 h2,
 h3 {
   font-family: "IBM Plex Serif", Georgia, serif;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
 }
 
 .eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #aa4d1f;
+  color: #6366f1;
+  margin-bottom: 0.5rem;
 }
 
 input {
-  border-radius: 14px;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid rgba(14, 34, 52, 0.16);
+  border-radius: 10px;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
 button {
   border: 0;
-  border-radius: 999px;
-  padding: 0.85rem 1.1rem;
-  background: linear-gradient(135deg, #0e2234 0%, #34657d 100%);
+  border-radius: 12px;
+  padding: 0.75rem 1.25rem;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .secondary-button {
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
 }
 
 .trace-hero {
-  background: linear-gradient(135deg, rgba(14, 34, 52, 0.96), rgba(42, 77, 96, 0.92));
-  color: #f5efe4;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  color: #fafbfc;
 }
 
 .trace-hero h1 {
-  color: #f5efe4;
+  color: #fafbfc;
 }
 
 .trace-warning {
   margin: 0;
-  color: #ffdca8;
+  color: #fde68a;
 }
 
 .trace-browser-shell {
@@ -85,7 +116,7 @@ button {
 .trace-inspector-layout {
   display: grid;
   grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
-  gap: 1rem;
+  gap: 1.25rem;
   align-items: start;
 }
 
@@ -120,13 +151,16 @@ button {
 
 .section-copy {
   margin: 0.35rem 0 0;
-  color: rgba(14, 34, 52, 0.72);
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 .trace-search {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.4rem;
   font-weight: 600;
+  font-size: 0.875rem;
+  color: #475569;
 }
 
 .trace-list,
@@ -151,13 +185,19 @@ button {
   min-width: 0;
   text-align: left;
   background: rgba(255, 255, 255, 0.95);
-  color: #0e2234;
+  color: #1e293b;
   display: grid;
   gap: 0.3rem;
   cursor: pointer;
-  padding: 1rem;
-  border-radius: 18px;
-  border: 1px solid rgba(14, 34, 52, 0.12);
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.trace-list-item:hover,
+.trace-span-item:hover {
+  border-color: rgba(99, 102, 241, 0.2);
 }
 
 .trace-list-row-header,
@@ -177,13 +217,14 @@ button {
 }
 
 .trace-list-timestamp {
-  color: rgba(14, 34, 52, 0.72);
+  color: #94a3b8;
+  font-size: 0.8rem;
 }
 
 .trace-chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .trace-chip,
@@ -192,45 +233,46 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
   line-height: 1;
+  font-weight: 500;
 }
 
 .trace-chip {
-  background: rgba(14, 34, 52, 0.08);
-  color: #0e2234;
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .trace-chip-alert {
-  background: rgba(170, 77, 31, 0.12);
-  color: #aa4d1f;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
 }
 
 .trace-status-chip {
-  background: rgba(14, 34, 52, 0.12);
+  background: #e2e8f0;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .trace-status-success {
-  background: rgba(37, 119, 63, 0.14);
-  color: #25773f;
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
 }
 
 .trace-status-running {
-  background: rgba(179, 124, 16, 0.16);
-  color: #9a6a07;
+  background: rgba(234, 179, 8, 0.1);
+  color: #ca8a04;
 }
 
 .trace-status-error {
-  background: rgba(160, 31, 31, 0.14);
-  color: #a01f1f;
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
 }
 
 .trace-flow-list {
   display: grid;
-  gap: 0.9rem;
+  gap: 1rem;
 }
 
 .trace-flow-item {
@@ -241,18 +283,18 @@ button {
 }
 
 .trace-flow-time {
-  padding-top: 0.95rem;
-  color: rgba(14, 34, 52, 0.68);
-  font-size: 0.9rem;
+  padding-top: 0.9rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
 }
 
 .trace-flow-copy {
   display: grid;
   gap: 0.5rem;
-  padding: 0.95rem 1rem;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(14, 34, 52, 0.12);
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .trace-browser-detail {
@@ -267,49 +309,50 @@ button {
 .trace-spotlight {
   display: grid;
   gap: 1rem;
-  padding: 1.1rem 1.15rem;
-  border-radius: 20px;
-  background: rgba(14, 34, 52, 0.06);
-  border: 1px solid rgba(14, 34, 52, 0.08);
+  padding: 1.25rem;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid rgba(0, 0, 0, 0.05);
   min-width: 0;
 }
 
 .trace-spotlight-compact {
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
 .trace-spotlight-header {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.6rem;
   min-width: 0;
 }
 
 .trace-spotlight-header h3 {
   margin: 0;
-  font-size: 1.35rem;
-  line-height: 1.2;
+  font-size: 1.25rem;
+  line-height: 1.3;
   overflow-wrap: anywhere;
+  color: #0f172a;
 }
 
 .trace-summary-lead {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1.6;
-  color: rgba(14, 34, 52, 0.88);
+  color: #475569;
 }
 
 .trace-summary-lead-compact {
-  font-size: 0.96rem;
+  font-size: 0.9rem;
 }
 
 .trace-fact-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem;
 }
 
 .trace-fact-list-compact {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
 
 .trace-fact-list article {
@@ -321,18 +364,20 @@ button {
 .trace-fact-list strong {
   min-width: 0;
   overflow-wrap: anywhere;
+  color: #1e293b;
 }
 
 .trace-fact-list span,
 .trace-support-meta {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  color: #64748b;
 }
 
 .trace-support-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
-  color: rgba(14, 34, 52, 0.58);
+  color: #94a3b8;
 }
 
 .trace-support-meta span {
@@ -341,20 +386,20 @@ button {
 }
 
 .is-active {
-  border-color: rgba(170, 77, 31, 0.7);
-  box-shadow: 0 0 0 3px rgba(170, 77, 31, 0.14);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .artifact-viewer {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.75rem;
   padding-top: 0.35rem;
 }
 
 .artifact-tab-bar {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .artifact-tab {
@@ -362,19 +407,24 @@ button {
   gap: 0.15rem;
   min-width: 0;
   padding: 0.6rem 0.75rem;
-  border-radius: 12px;
-  border: 1px solid rgba(14, 34, 52, 0.14);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(255, 255, 255, 0.96);
-  color: #0e2234;
+  color: #1e293b;
   cursor: pointer;
   text-align: left;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.artifact-tab:hover {
+  border-color: rgba(99, 102, 241, 0.2);
 }
 
 .artifact-tab.is-active {
-  border-color: rgba(170, 77, 31, 0.55);
-  background: linear-gradient(180deg, rgba(170, 77, 31, 0.13), rgba(170, 77, 31, 0.07));
-  box-shadow: 0 0 0 2px rgba(170, 77, 31, 0.12);
+  border-color: rgba(99, 102, 241, 0.5);
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.1), rgba(99, 102, 241, 0.05));
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
 .artifact-tab strong,
@@ -384,7 +434,7 @@ button {
 
 .artifact-block {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .artifact-view-stack,
@@ -400,38 +450,33 @@ button {
 }
 
 .artifact-json-section {
-  padding: 0.7rem 0.8rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(14, 34, 52, 0.1);
-  box-shadow: 0 10px 24px rgba(14, 34, 52, 0.04);
+  padding: 0.875rem 1rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .artifact-json-section-header strong {
-  font-size: 0.96rem;
-  color: #102433;
+  font-size: 0.9rem;
+  color: #1e293b;
 }
 
 .artifact-json-field {
   width: 100%;
   resize: none;
-  border: 1px solid rgba(14, 34, 52, 0.14);
-  border-radius: 10px;
-  background: #f7f4ee;
-  color: rgba(14, 34, 52, 0.88);
-  font-family: "IBM Plex Mono", monospace;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
   font-size: 0.8rem;
-  line-height: 1.45;
-  padding: 0.55rem 0.65rem;
+  line-height: 1.5;
+  padding: 0.6rem 0.75rem;
   overflow: auto;
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: pre-wrap;
-}
-
-.artifact-json-field {
-  min-height: 6rem;
-  box-shadow: inset 0 1px 2px rgba(14, 34, 52, 0.05);
 }
 
 .artifact-nested-group {
@@ -441,7 +486,7 @@ button {
 
 .artifact-nested-panel {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.4rem;
 }
 
 .artifact-nested-header {
@@ -449,42 +494,45 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  color: rgba(14, 34, 52, 0.74);
- }
+  color: #64748b;
+}
 
 .artifact-nested-header strong {
-  color: #0e2234;
+  color: #1e293b;
 }
 
 .artifact-block > span {
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  font-size: 0.78rem;
-  color: #aa4d1f;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #6366f1;
 }
 
 .artifact-block pre {
   margin: 0;
-  padding: 0.8rem;
-  border-radius: 14px;
-  background: #102433;
-  color: #f5efe4;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  font-size: 0.85rem;
+  line-height: 1.6;
 }
 
 .explanation-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
 }
 
 .explanation-list article {
-  background: rgba(255, 248, 240, 0.96);
-  border: 1px solid rgba(170, 77, 31, 0.12);
-  border-radius: 14px;
-  padding: 0.75rem;
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  border-radius: 12px;
+  padding: 0.875rem;
 }
 
 .proxy-log-panel {
@@ -494,7 +542,9 @@ button {
 }
 
 .proxy-log-entry {
-  background: rgba(14, 34, 52, 0.05);
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 0.75rem;
 }
 
 @media (max-width: 980px) {
