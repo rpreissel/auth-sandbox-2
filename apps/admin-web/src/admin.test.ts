@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { DeviceRecord, RegistrationIdentityRecord, TanMockAdminRecord } from '@auth-sandbox-2/shared-types'
 
-import { TRACE_VIEWER_ENTRY, TRACE_VIEWER_URL, filterDevices, filterRegistrationIdentities, getTanEntriesForUser, parseApiErrorMessage } from './main'
+import { TRACE_VIEWER_ENTRY, TRACE_VIEWER_URL, createSuggestedTan, filterDevices, filterRegistrationIdentities, getTanEntriesForUser, parseApiErrorMessage } from './main'
 
 const devices: DeviceRecord[] = [
   {
@@ -65,6 +65,10 @@ describe('admin overview helpers', () => {
   it('maps tan entries onto a specific identity by user id', () => {
     expect(getTanEntriesForUser(tanEntries, 'demo-user')).toHaveLength(1)
     expect(getTanEntriesForUser(tanEntries, 'missing')).toHaveLength(0)
+  })
+
+  it('suggests a tan that is not already present', () => {
+    expect(createSuggestedTan(tanEntries)).not.toBe('471199')
   })
 
   it('extracts structured API error messages for the admin form', () => {

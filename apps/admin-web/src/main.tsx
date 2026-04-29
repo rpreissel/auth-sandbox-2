@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useState } from 'react'
+import { StrictMode, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createRoot } from 'react-dom/client'
 
@@ -40,6 +40,26 @@ async function requestTanMock<T>(path: string, init?: RequestInit) {
 
 export function getTanEntriesForUser(entries: TanMockAdminRecord[], userId: string) {
   return entries.filter((entry) => entry.sourceUserId === userId)
+}
+
+export function createSuggestedTan(entries: TanMockAdminRecord[]) {
+  const existingTans = new Set(entries.map((entry) => entry.tan))
+
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const candidate = `${Math.floor(Math.random() * 900000 + 100000)}`
+    if (!existingTans.has(candidate)) {
+      return candidate
+    }
+  }
+
+  for (let candidate = 100000; candidate <= 999999; candidate += 1) {
+    const nextValue = `${candidate}`
+    if (!existingTans.has(nextValue)) {
+      return nextValue
+    }
+  }
+
+  return '000000'
 }
 
 function createAdminHeaders() {
@@ -119,10 +139,11 @@ export function filterRegistrationIdentities(registrationIdentities: Registratio
 }
 
 function AdminApp() {
+  const suppressTanDialogUntilRef = useRef(0)
   const [tanOverview, setTanOverview] = useState<TanMockAdminOverview | null>(null)
   const [tanSaveError, setTanSaveError] = useState<string | null>(null)
   const [tanSavePending, setTanSavePending] = useState(false)
-  const [selectedIdentityUserId, setSelectedIdentityUserId] = useState('demo-user')
+  const [tanDialogIdentityUserId, setTanDialogIdentityUserId] = useState<string | null>(null)
   const [devices, setDevices] = useState<DeviceRecord[]>([])
   const [registrationIdentities, setRegistrationIdentities] = useState<RegistrationIdentityRecord[]>([])
   const [deviceQuery, setDeviceQuery] = useState('')
@@ -165,26 +186,17 @@ function AdminApp() {
   }, [])
 
   useEffect(() => {
-    if (!registrationIdentities.length) {
+    if (!tanDialogIdentityUserId) {
       return
     }
 
-    const hasSelectedIdentity = registrationIdentities.some((identity) => identity.userId === selectedIdentityUserId)
+    const hasSelectedIdentity = registrationIdentities.some((identity) => identity.userId === tanDialogIdentityUserId)
     if (hasSelectedIdentity) {
       return
     }
 
-    const fallbackUserId = registrationIdentities[0]?.userId
-    if (!fallbackUserId) {
-      return
-    }
-
-    setSelectedIdentityUserId(fallbackUserId)
-    setTanForm((current) => ({
-      ...current,
-      sourceUserId: fallbackUserId
-    }))
-  }, [registrationIdentities, selectedIdentityUserId])
+    setTanDialogIdentityUserId(null)
+  }, [registrationIdentities, tanDialogIdentityUserId])
 
   async function handleCreateIdentity(event: FormEvent) {
     event.preventDefault()
@@ -198,7 +210,11 @@ function AdminApp() {
         body: JSON.stringify(identityForm)
       })
       await refresh()
-      focusIdentityForTan(nextUserId)
+      suppressTanDialogUntilRef.current = Date.now() + 300
+      setTanForm((current) => ({
+        ...current,
+        sourceUserId: nextUserId
+      }))
     } catch (error) {
       setIdentitySaveError(error instanceof Error ? error.message : 'Identitaet konnte nicht gespeichert werden.')
     } finally {
@@ -223,6 +239,7 @@ function AdminApp() {
         body: JSON.stringify(tanForm)
       })
       await refreshTanOverview()
+      setTanDialogIdentityUserId(null)
     } catch (error) {
       setTanSaveError(error instanceof Error ? error.message : 'TAN konnte nicht gespeichert werden.')
     } finally {
@@ -230,12 +247,21 @@ function AdminApp() {
     }
   }
 
-  function focusIdentityForTan(userId: string) {
-    setSelectedIdentityUserId(userId)
-    setTanForm((current) => ({
-      ...current,
+  function openTanDialog(userId: string) {
+    if (Date.now() < suppressTanDialogUntilRef.current) {
+      return
+    }
+
+    setTanDialogIdentityUserId(userId)
+    setTanSaveError(null)
+    setTanForm({
+      tan: createSuggestedTan(tanOverview?.entries ?? []),
       sourceUserId: userId
-    }))
+    })
+  }
+
+  function closeTanDialog() {
+    setTanDialogIdentityUserId(null)
   }
 
   const filteredDevices = useMemo(() => filterDevices(devices, deviceQuery), [deviceQuery, devices])
@@ -245,6 +271,9 @@ function AdminApp() {
     [identityQuery, registrationIdentities]
   )
   const activeTanEntries = tanOverview?.entries.filter((entry) => entry.active) ?? []
+  const tanDialogIdentity = tanDialogIdentityUserId
+    ? registrationIdentities.find((identity) => identity.userId === tanDialogIdentityUserId) ?? null
+    : null
 
   return (
     <main className="shell admin-overview-shell">
@@ -341,7 +370,6 @@ function AdminApp() {
               </div>
               <strong>{registrationIdentities.length}</strong>
             </div>
-            {tanSaveError ? <p className="form-error" role="alert">{tanSaveError}</p> : null}
             <label className="admin-list-search">
               Identitaeten durchsuchen
                 <input
@@ -364,7 +392,7 @@ function AdminApp() {
                       <span>SMS: {identity.phoneNumber ?? 'nicht gesetzt'}</span>
                     </div>
                     <div className="identity-action-row">
-                      <button type="button" className="button-link-ghost" onClick={() => focusIdentityForTan(identity.userId)}>
+                      <button type="button" className="button-link-ghost" onClick={() => openTanDialog(identity.userId)}>
                         TAN vorbereiten
                       </button>
                     </div>
@@ -380,22 +408,6 @@ function AdminApp() {
                       {!getTanEntriesForUser(activeTanEntries, identity.userId).length ? <p className="identity-tan-empty">Noch keine aktive TAN fuer diese Identitaet.</p> : null}
                     </div>
                   </div>
-                  {selectedIdentityUserId === identity.userId ? (
-                    <form className="identity-tan-form" onSubmit={handleCreateTan} aria-label={`TAN fuer ${identity.userId} anlegen`}>
-                      <div className="identity-tan-focus">
-                        <strong>Neue TAN</strong>
-                        <span>{identity.firstName} {identity.lastName}</span>
-                        <span>Quelle ist immer diese ausgewaehlte Identitaet. Das Broker-Ziel wird automatisch als `tan_{identity.userId}_hash` abgeleitet.</span>
-                      </div>
-                      <div className="grid">
-                        <label>
-                          TAN
-                          <input name="tan" value={tanForm.tan} onChange={(event) => setTanForm({ ...tanForm, tan: event.target.value })} disabled={tanSavePending} />
-                        </label>
-                      </div>
-                      <button type="submit" disabled={tanSavePending}>{tanSavePending ? 'Speichert...' : 'TAN speichern'}</button>
-                    </form>
-                  ) : null}
                 </article>
               ))}
               {!filteredRegistrationIdentities.length && <p>{registrationIdentities.length ? 'Keine Identitaeten passen zur aktuellen Suche.' : 'Noch keine Registrierungsidentitaeten vorbereitet.'}</p>}
@@ -433,6 +445,40 @@ function AdminApp() {
           </section>
         </section>
       </section>
+
+      {tanDialogIdentity ? (
+        <div className="modal-backdrop" onClick={closeTanDialog}>
+          <section
+            className="card modal-card identity-tan-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`TAN fuer ${tanDialogIdentity.userId} anlegen`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="list-card-header">
+              <div className="identity-tan-focus">
+                <strong>Neue TAN</strong>
+                <span>{tanDialogIdentity.firstName} {tanDialogIdentity.lastName}</span>
+                <span>Quelle ist immer diese ausgewaehlte Identitaet. Das Broker-Ziel wird automatisch als `tan_{tanDialogIdentity.userId}_hash` abgeleitet.</span>
+              </div>
+              <button type="button" className="button-link-ghost" onClick={closeTanDialog}>Schliessen</button>
+            </div>
+            {tanSaveError ? <p className="form-error" role="alert">{tanSaveError}</p> : null}
+            <form className="identity-tan-form" onSubmit={handleCreateTan}>
+              <div className="grid">
+                <label>
+                  TAN
+                  <input name="tan" value={tanForm.tan} onChange={(event) => setTanForm({ ...tanForm, tan: event.target.value })} disabled={tanSavePending} />
+                </label>
+              </div>
+              <div className="button-row modal-actions">
+                <button type="button" className="button-link-ghost" onClick={closeTanDialog} disabled={tanSavePending}>Abbrechen</button>
+                <button type="submit" disabled={tanSavePending}>{tanSavePending ? 'Speichert...' : 'TAN speichern'}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </main>
   )
 }

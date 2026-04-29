@@ -247,6 +247,32 @@ button {
   padding-top: 0.25rem;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(14, 34, 52, 0.42);
+}
+
+.modal-card {
+  width: min(38rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  box-shadow: 0 24px 80px rgba(14, 34, 52, 0.24);
+}
+
+.identity-tan-modal {
+  display: grid;
+  gap: 1rem;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+}
+
 .identity-action-row {
   justify-items: end;
 }
@@ -677,12 +703,16 @@ button {
     flex-direction: column;
   }
 
-   .identity-card-head {
+  .identity-card-head {
     flex-direction: column;
-   }
+  }
 
   .identity-action-row {
     justify-items: start;
+  }
+
+  .modal-card {
+    width: min(100vw - 1.5rem, 38rem);
   }
 
   .trace-list-row-header,
