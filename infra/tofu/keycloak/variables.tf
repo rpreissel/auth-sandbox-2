@@ -80,3 +80,8 @@ variable "tanmock_admin_client_id" {
   type    = string
   default = "tanmock-admin-web"
 }
+
+variable "tan_login_client_id" {
+  type    = string
+  default = "webmock-tan-login"
+}

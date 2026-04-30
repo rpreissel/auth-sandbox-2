@@ -163,24 +163,6 @@ resource "keycloak_authentication_execution" "browser_cookie" {
   priority          = 10
 }
 
-resource "keycloak_authentication_execution" "browser_identity_provider_redirector" {
-  realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
-  authenticator     = "identity-provider-redirector"
-  requirement       = "ALTERNATIVE"
-  priority          = 20
-}
-
-resource "keycloak_authentication_execution_config" "browser_identity_provider_redirector" {
-  realm_id     = keycloak_realm.realm.id
-  execution_id = keycloak_authentication_execution.browser_identity_provider_redirector.id
-  alias        = "browser-identity-provider-redirector"
-
-  config = {
-    defaultProvider = keycloak_oidc_identity_provider.tanmock.alias
-  }
-}
-
 resource "keycloak_authentication_subflow" "browser_auth_flow" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
@@ -237,11 +219,82 @@ resource "keycloak_authentication_execution" "bootstrap_device_login_authenticat
   priority          = 10
 }
 
+# ── TAN Login Flow (Erstlogin via TAN-Mock-Broker) ──────────────────────────
+
+resource "keycloak_authentication_flow" "browser_tan_login_flow" {
+  realm_id    = keycloak_realm.realm.id
+  alias       = "browser-tan-login-flow"
+  description = "Browser flow for initial TAN-Mock login (LoA 1 only, no step-up)"
+  provider_id = "basic-flow"
+}
+
+resource "keycloak_authentication_execution" "tan_login_cookie" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_tan_login_flow.alias
+  authenticator     = "auth-cookie"
+  requirement       = "ALTERNATIVE"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution" "tan_login_idp_redirect" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_tan_login_flow.alias
+  authenticator     = "identity-provider-redirector"
+  requirement       = "ALTERNATIVE"
+  priority          = 20
+}
+
+resource "keycloak_authentication_execution_config" "tan_login_idp_redirect" {
+  realm_id     = keycloak_realm.realm.id
+  execution_id = keycloak_authentication_execution.tan_login_idp_redirect.id
+  alias        = "tan-login-idp-redirect"
+
+  config = {
+    defaultProvider = keycloak_oidc_identity_provider.tanmock.alias
+  }
+}
+
+resource "keycloak_openid_client" "tan_login_app" {
+  realm_id                     = keycloak_realm.realm.id
+  client_id                    = var.tan_login_client_id
+  name                         = var.tan_login_client_id
+  access_type                  = "PUBLIC"
+  standard_flow_enabled        = true
+  direct_access_grants_enabled = false
+  service_accounts_enabled     = false
+  valid_redirect_uris          = ["https://webmock.localhost:8443/*"]
+  web_origins                  = ["https://webmock.localhost:8443"]
+
+  extra_config = {
+    "default.acr.values" = "1se"
+    "minimum.acr.value"  = "1se"
+  }
+
+  authentication_flow_binding_overrides {
+    browser_id = keycloak_authentication_flow.browser_tan_login_flow.id
+  }
+}
+
+resource "keycloak_openid_client_default_scopes" "tan_login_default_scopes" {
+  realm_id  = keycloak_realm.realm.id
+  client_id = keycloak_openid_client.tan_login_app.id
+  default_scopes = [
+    "acr",
+    "profile",
+    "email",
+    keycloak_openid_client_scope.broker_profile_scope.name,
+    keycloak_openid_client_scope.profile_scope.name,
+    keycloak_openid_client_scope.servicemock_api_scope.name
+  ]
+}
+
+# ── LoA-1 Zweig: Username/Password ───────────────────────────────────────────
+
 resource "keycloak_authentication_subflow" "browser_loa_1_flow" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_subflow.browser_auth_flow.alias
   alias             = "browser-step-up-loa-1"
-  description       = "Initial password login for LoA 1"
+  description       = "LoA-1 branch: username/password login"
   provider_id       = "basic-flow"
   requirement       = "CONDITIONAL"
   priority          = 10
@@ -266,13 +319,15 @@ resource "keycloak_authentication_execution_config" "browser_loa_1_condition" {
   }
 }
 
-resource "keycloak_authentication_execution" "browser_username_password" {
+resource "keycloak_authentication_execution" "browser_loa_1_username_password" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_subflow.browser_loa_1_flow.alias
   authenticator     = "auth-username-password-form"
   requirement       = "REQUIRED"
   priority          = 20
 }
+
+# ── Step-up Flow (LoA 2 via SMS-TAN, setzt LoA-1-Session voraus) ─────────────
 
 resource "keycloak_authentication_subflow" "browser_loa_2_flow" {
   realm_id          = keycloak_realm.realm.id

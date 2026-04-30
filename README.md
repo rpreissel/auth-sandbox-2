@@ -104,10 +104,17 @@ sequenceDiagram
   Mock->>KC: Verify JWT via JWKS
   Mock-->>Device: Protected response
 
-  Browser->>KC: Browser login with acr_values=1se
-  KC-->>Browser: Browser session / tokens
+  Note over Browser,KC: TAN bootstrap login (webmock-tan-login client)
+  Browser->>KC: Auth request via webmock-tan-login\nacr_values=1se, state=tan:…
+  KC->>KC: browser-tan-login-flow:\nCookie check → IDP-Redirect tanmock
+  KC-->>Browser: Redirect to tanmock IDP login
+  Browser->>KC: TAN submitted, code returned
+  Note over Browser,KC: Silent SSO (webmock-web client, prompt=none)
+  Browser->>KC: Auth request via webmock-web\nprompt=none (reuse KC session)
+  KC-->>Browser: Code → exchanged for tokens (1se)
 
-  Browser->>KC: Fresh auth request with acr_values=2se
+  Note over Browser,KC: Browser step-up to 2se
+  Browser->>KC: Fresh auth request via webmock-web\nacr_values=2se
   KC->>Ext: Start inline browser step-up
   Ext->>Auth: POST /api/internal/browser-step-up/start\nBearer internal redeem token
   Auth->>DB: Create step-up flow + SMS challenge
@@ -120,7 +127,7 @@ sequenceDiagram
   Auth->>DB: Consume result_code
   Auth-->>Ext: achievedAcr + amr + authTime
   Ext-->>KC: Upgrade browser session
-  KC-->>Browser: Upgraded browser session / tokens
+  KC-->>Browser: Upgraded browser session / tokens (2se)
 ```
 
 ## Additional flows

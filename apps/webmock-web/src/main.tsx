@@ -9,6 +9,7 @@ import { buildAuthorizationUrl, getServiceMockApiAccessLabel, normalizeAcr, norm
 const KEYCLOAK_BASE = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect'
 const SERVICEMOCK_API_BASE = import.meta.env.VITE_SERVICEMOCK_API_URL ?? '/servicemock-api/api/mock'
 const CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'webmock-web'
+const TAN_LOGIN_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_TAN_LOGIN_CLIENT_ID ?? 'webmock-tan-login'
 const REDIRECT_URI = 'https://webmock.localhost:8443/'
 const TOKEN_STORAGE_KEY = 'auth-sandbox-2.webmock-web.tokens'
 const AUTH_API_BASE = 'https://auth.localhost:8443'
@@ -152,10 +153,10 @@ function persistTokens(tokens: StoredTokens | null) {
   window.localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens))
 }
 
-async function exchangeCode(code: string) {
+async function exchangeCode(code: string, clientId: string = CLIENT_ID) {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
-    client_id: CLIENT_ID,
+    client_id: clientId,
     code,
     redirect_uri: REDIRECT_URI
   })
@@ -227,7 +228,25 @@ function WebMockApp() {
       return
     }
 
-    void exchangeCode(code)
+    const state = params.get('state') ?? ''
+
+    if (state.startsWith('tan:')) {
+      // TAN bootstrap complete — now do silent SSO with the real client
+      window.history.replaceState({}, document.title, window.location.pathname)
+      const ssoUrl = buildAuthorizationUrl({
+        authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI,
+        acrValues: '1se',
+        state: randomValue(),
+        nonce: randomValue(),
+        prompt: 'none'
+      })
+      window.location.assign(ssoUrl)
+      return
+    }
+
+    void exchangeCode(code, CLIENT_ID)
       .then((nextTokens) => {
         setTokens(nextTokens)
         persistTokens(nextTokens)
@@ -394,15 +413,12 @@ function WebMockApp() {
       const url = useTanMock
         ? buildAuthorizationUrl({
             authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
-            clientId: CLIENT_ID,
+            clientId: TAN_LOGIN_CLIENT_ID,
             redirectUri: REDIRECT_URI,
-            acrValues,
-            state: randomValue(),
+            acrValues: '1se',
+            state: `tan:${randomValue()}`,
             nonce: randomValue(),
-            traceHint: trace.traceId,
-            loginHint: acrValues === '2se' ? loginHint : null,
-            idpHint: 'tanmock',
-            prompt: 'login'
+            traceHint: trace.traceId
           })
         : buildAuthorizationUrl({
             authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
@@ -412,9 +428,7 @@ function WebMockApp() {
             state: randomValue(),
             nonce: randomValue(),
             traceHint: trace.traceId,
-            loginHint: acrValues === '2se' ? loginHint : null,
-            idpHint: null,
-            prompt: null
+            loginHint: acrValues === '2se' ? loginHint : null
           })
       window.location.assign(url)
     })

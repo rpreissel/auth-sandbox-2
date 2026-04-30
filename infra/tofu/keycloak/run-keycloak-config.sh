@@ -35,6 +35,7 @@ apply_config() {
     -var="tanmock_client_id=${TANMOCK_CLIENT_ID:-tanmock-broker}" \
     -var="tanmock_client_secret=${TANMOCK_CLIENT_SECRET:-change-me-tanmock-broker}" \
     -var="tanmock_admin_client_id=${TANMOCK_ADMIN_CLIENT_ID:-tanmock-admin-web}" \
+    -var="tan_login_client_id=${TAN_LOGIN_CLIENT_ID:-webmock-tan-login}" \
     -var="servicemock_api_audience=${SERVICEMOCK_API_AUDIENCE:-servicemock-api}" \
     "$@"
 }

@@ -1,5 +1,11 @@
+/* === 3 font sizes only: sm=0.75rem  base=0.875rem  lg=1.125rem === */
 :root {
+  --fs-sm:   0.75rem;
+  --fs-base: 0.875rem;
+  --fs-lg:   1.125rem;
+
   font-family: "IBM Plex Sans", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  font-size: var(--fs-base);
   color: #1a1d23;
   background:
     radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.08), transparent 40%),
@@ -69,7 +75,7 @@ textarea {
   justify-content: space-between;
   padding: 0.4rem 0.5rem 0.75rem;
   color: rgba(255, 255, 255, 0.94);
-  font-size: 0.82rem;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
@@ -134,7 +140,7 @@ textarea {
 .binding-stack strong,
 .token-empty h3,
 .prompt-sheet h3 {
-  font-family: "IBM Plex Serif", Georgia, serif;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
 }
 
 .hero h1,
@@ -180,18 +186,18 @@ textarea {
 }
 
 .hero h1 {
-  font-size: clamp(2.35rem, 2.1vw + 1.7rem, 3.55rem);
+  font-size: var(--fs-lg);
   line-height: 0.96;
 }
 
 .hero-card-compact h1 {
-  font-size: clamp(1.9rem, 1.2vw + 1.35rem, 2.8rem);
+  font-size: var(--fs-lg);
   line-height: 1.02;
   max-width: 10ch;
 }
 
 .hero-card-compact .eyebrow {
-  font-size: 0.68rem;
+  font-size: var(--fs-sm);
   letter-spacing: 0.14em;
 }
 
@@ -214,7 +220,7 @@ textarea {
   margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  font-size: 0.72rem;
+  font-size: var(--fs-sm);
 }
 
 .eyebrow,
@@ -241,7 +247,7 @@ textarea {
 
 .muted-copy {
   color: rgba(16, 32, 51, 0.66);
-  font-size: 0.9rem;
+  font-size: var(--fs-base);
 }
 
 .status-strip {
@@ -256,7 +262,7 @@ textarea {
 }
 
 .authenticated-sidebar-card h2 {
-  font-size: 1.2rem;
+  font-size: var(--fs-lg);
 }
 
 .authenticated-sidebar-summary {
@@ -280,7 +286,7 @@ textarea {
 
 .authenticated-sidebar-summary p {
   color: rgba(16, 32, 51, 0.62);
-  font-size: 0.84rem;
+  font-size: var(--fs-base);
 }
 
 .status-pill {
@@ -291,7 +297,7 @@ textarea {
   border-radius: 999px;
   background: rgba(11, 87, 208, 0.1);
   color: #0b57d0;
-  font-size: 0.82rem;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
@@ -401,7 +407,7 @@ button {
   color: #fff;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--fs-base);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -512,7 +518,7 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: rgba(228, 243, 255, 0.76);
-  font-size: 0.82rem;
+  font-size: var(--fs-base);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -537,7 +543,7 @@ select {
   background: rgba(78, 182, 255, 0.1);
   border: 1px solid rgba(126, 200, 255, 0.14);
   color: #9fd8ff;
-  font-size: 0.74rem;
+  font-size: var(--fs-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -559,8 +565,8 @@ select {
 }
 
 .android-tabs-header strong {
-  font-family: "IBM Plex Serif", Georgia, serif;
-  font-size: 1rem;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: var(--fs-base);
 }
 
 .android-tabs {
@@ -658,7 +664,7 @@ select {
   border-radius: 50%;
   background: rgba(11, 87, 208, 0.12);
   color: #0b57d0;
-  font-size: 0.95rem;
+  font-size: var(--fs-base);
 }
 
 .android-tab-active .android-tab-icon {
@@ -672,7 +678,7 @@ select {
 
 .android-tab-label {
   grid-area: label;
-  font-size: 0.75rem;
+  font-size: var(--fs-sm);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -683,7 +689,7 @@ select {
 
 .android-tab strong {
   grid-area: title;
-  font-size: 0.98rem;
+  font-size: var(--fs-base);
   line-height: 1.2;
   color: #18314a;
   position: relative;
@@ -704,7 +710,7 @@ select {
 .servicemock-api-status {
   margin: 0;
   color: #9fd8ff;
-  font-size: 0.92rem;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
@@ -750,7 +756,7 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
-  font-size: 0.78rem;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #7ec8ff;
@@ -772,18 +778,18 @@ select {
 .token-overview span {
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  font-size: 0.72rem;
+  font-size: var(--fs-sm);
   color: #0d63c9;
 }
 
 .token-overview strong {
-  font-size: 1rem;
+  font-size: var(--fs-base);
 }
 
 .token-overview p {
   margin: 0;
   color: rgba(16, 32, 51, 0.64);
-  font-size: 0.86rem;
+  font-size: var(--fs-base);
   line-height: 1.45;
 }
 
@@ -907,7 +913,7 @@ select {
 
 .claims-table tbody th {
   width: 28%;
-  font-size: 0.92rem;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 
@@ -935,7 +941,7 @@ select {
 
 .claim-secondary {
   color: rgba(16, 32, 51, 0.6);
-  font-size: 0.86rem;
+  font-size: var(--fs-base);
 }
 
 .claim-structured {
@@ -945,7 +951,7 @@ select {
   background: rgba(16, 32, 51, 0.04);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 0.86rem;
+  font-size: var(--fs-base);
 }
 
 .claims-row-compact th,
@@ -993,7 +999,7 @@ select {
   border-radius: 50%;
   background: linear-gradient(135deg, rgba(11, 87, 208, 0.12), rgba(43, 123, 255, 0.2));
   color: #0b57d0;
-  font-size: 1rem;
+  font-size: var(--fs-base);
   font-weight: 700;
 }
 
@@ -1023,8 +1029,8 @@ select {
   }
 
   .app-shell {
-    grid-template-columns: minmax(290px, 340px) minmax(0, 1fr);
-    align-items: stretch;
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+    align-items: start;
     gap: 0.65rem;
   }
 
@@ -1045,12 +1051,12 @@ select {
   }
 
   .hero-card-compact h1 {
-    font-size: clamp(1.55rem, 0.75vw + 1.15rem, 2.05rem);
+    font-size: var(--fs-lg);
     max-width: 8ch;
   }
 
   .hero-card-compact .lede {
-    font-size: 0.84rem;
+    font-size: var(--fs-base);
     line-height: 1.42;
     max-width: 18rem;
   }
@@ -1065,12 +1071,12 @@ select {
   }
 
   .status-card strong {
-    font-size: 0.95rem;
+    font-size: var(--fs-base);
     line-height: 1.3;
   }
 
   .status-card .muted-copy {
-    font-size: 0.84rem;
+    font-size: var(--fs-base);
   }
 
   .status-strip {
@@ -1082,13 +1088,13 @@ select {
   }
 
   .hero:not(.hero-card-compact) h1 {
-    font-size: clamp(2rem, 1.4vw + 1.45rem, 3rem);
+    font-size: var(--fs-lg);
     line-height: 0.98;
     max-width: 8.2ch;
   }
 
   .hero:not(.hero-card-compact) .lede {
-    font-size: 0.9rem;
+    font-size: var(--fs-base);
     line-height: 1.4;
   }
 
@@ -1153,21 +1159,21 @@ select {
   }
 
   .prompt-sheet h3 {
-    font-size: 1.5rem;
+    font-size: var(--fs-lg);
     line-height: 1.02;
   }
 
   .prompt-sheet .muted-copy,
   .prompt-sheet p,
   .prompt-helper p {
-    font-size: 0.92rem;
+    font-size: var(--fs-base);
     line-height: 1.38;
   }
 
   .prompt-icon {
     width: 2.9rem;
     height: 2.9rem;
-    font-size: 0.92rem;
+    font-size: var(--fs-base);
   }
 
   .prompt-helper {

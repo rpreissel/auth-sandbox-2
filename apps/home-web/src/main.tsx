@@ -63,17 +63,17 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   },
   {
     title: 'TAN Mock broker login into WebMock',
-    summary: 'WebMock can force a fresh browser login through the external TAN Mock OIDC provider so Keycloak creates a brokered user and returns a normal browser session.',
-    actors: ['WebMock Web', 'Keycloak', 'TanMock Web', 'TanMock API'],
+    summary: 'WebMock bootstraps a Keycloak session through the dedicated webmock-tan-login client and browser-tan-login-flow, then silently promotes that session to a full webmock-web token via prompt=none.',
+    actors: ['WebMock Web', 'Keycloak (tan client)', 'TanMock Web', 'TanMock API', 'Keycloak (webmock client)'],
     steps: [
       {
         from: 'WebMock Web',
-        to: 'Keycloak',
-        label: 'Start brokered browser login',
-        detail: 'WebMock starts a fresh browser authorization request with kc_idp_hint=tanmock and prompt=login so Keycloak routes directly into the external broker instead of reusing another local browser session.'
+        to: 'Keycloak (tan client)',
+        label: 'Start TAN bootstrap login',
+        detail: 'WebMock starts a browser authorization request against the dedicated webmock-tan-login client with acr_values=1se and state=tan:<random>. The browser-tan-login-flow checks for an existing Keycloak cookie first; if none is present it routes directly to the TAN Mock IDP.'
       },
       {
-        from: 'Keycloak',
+        from: 'Keycloak (tan client)',
         to: 'TanMock Web',
         label: 'Redirect to TAN Mock authorize page',
         detail: 'Keycloak sends the browser to the external TAN Mock authorization page for the brokered login.'
@@ -86,21 +86,27 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       },
       {
         from: 'TanMock API',
-        to: 'Keycloak',
+        to: 'Keycloak (tan client)',
         label: 'Return signed broker tokens and claims',
         detail: 'TanMock returns signed OIDC tokens whose broker claims include tan_sub, source_user_id, copied profile data, and a unique broker email so Keycloak can treat the login as a new brokered identity.'
       },
       {
-        from: 'Keycloak',
-        to: 'Keycloak',
-        label: 'Create brokered user on first login',
-        detail: 'Keycloak runs the TanMock first-broker flow, creates the tan_* user without extra profile prompts, and links the federated identity to that new realm user.'
+        from: 'Keycloak (tan client)',
+        to: 'Keycloak (tan client)',
+        label: 'Create brokered user and establish KC session',
+        detail: 'Keycloak runs the TanMock first-broker flow, creates the tan_* user, links the federated identity, and establishes a Keycloak browser session. The code is returned to WebMock but is not exchanged — the session cookie is all that matters here.'
       },
       {
-        from: 'Keycloak',
+        from: 'WebMock Web',
+        to: 'Keycloak (webmock client)',
+        label: 'Silent SSO with prompt=none',
+        detail: 'WebMock detects the tan: state prefix in the callback and immediately starts a fresh authorization request against the webmock-web client with prompt=none. Keycloak reuses the browser session from the TAN bootstrap without prompting the user again.'
+      },
+      {
+        from: 'Keycloak (webmock client)',
         to: 'WebMock Web',
-        label: 'Return brokered browser session',
-        detail: 'The browser lands back in WebMock with a normal Keycloak session and broker-derived claims such as tan_sub ready for inspection.'
+        label: 'Return 1se session and tokens',
+        detail: 'Keycloak issues a code for the webmock-web client. WebMock exchanges it for access, ID, and refresh tokens that satisfy acr=1se and contain the brokered identity claims.'
       }
     ]
   },
@@ -374,14 +380,14 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   },
   {
     title: 'Browser login and inline 2se step-up',
-    summary: 'WebMock Web starts at 1se, then Keycloak upgrades the browser session through the inline SMS-TAN backchannel flow.',
+    summary: 'WebMock reaches 1se through TAN bootstrap or silent SSO, then Keycloak upgrades the browser session to 2se through the inline SMS-TAN backchannel flow.',
     actors: ['WebMock Web', 'Keycloak', 'KC Extension', 'Auth API', 'Postgres'],
     steps: [
       {
         from: 'WebMock Web',
         to: 'Keycloak',
-        label: 'Sign in with acr_values=1se',
-        detail: 'WebMock starts a normal browser login at assurance level 1se.'
+        label: 'Reach 1se via password or TAN bootstrap',
+        detail: 'WebMock acquires a 1se session either through username/password login (browser-step-up-loa-1 branch), or through the TAN bootstrap flow (webmock-tan-login client → tanmock IDP → prompt=none with webmock-web). Both paths satisfy acr=1se and establish a Keycloak browser session.'
       },
       {
         from: 'Keycloak',
@@ -399,13 +405,13 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
         from: 'WebMock Web',
         to: 'Keycloak',
         label: 'Start fresh auth with acr_values=2se',
-        detail: 'For step-up, WebMock sends the browser through a fresh OIDC authorization request with acr_values=2se so Keycloak can re-run the authentication flow and decide whether extra authenticators must execute.'
+        detail: 'For step-up, WebMock sends the browser through a fresh OIDC authorization request with acr_values=2se against the webmock-web client so Keycloak can re-run the authentication flow and decide whether extra authenticators must execute.'
       },
       {
         from: 'Keycloak',
         to: 'KC Extension',
         label: 'Enter inline browser step-up branch',
-        detail: 'Keycloak routes the stronger request into the custom inline step-up branch.'
+        detail: 'Keycloak routes the stronger request into the custom inline step-up branch. The browser-step-up-flow now handles only the 2se path; there is no LoA-1 subflow in this flow.'
       },
       {
         from: 'KC Extension',
