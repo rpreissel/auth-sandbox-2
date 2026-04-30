@@ -19,13 +19,30 @@ describe('webmock helpers', () => {
     expect(url).toContain('trace_hint=trace-1')
   })
 
+  it('allows overriding scopes for bootstrap flows', () => {
+    const url = buildAuthorizationUrl({
+      authorizationEndpoint: 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect/auth',
+      clientId: 'webmock-ekw-login',
+      redirectUri: 'https://webmock.localhost:8443/',
+      acrValues: 'ekw',
+      scope: 'openid profile email',
+      state: 'state-2',
+      nonce: 'nonce-2'
+    })
+
+    expect(url).toContain('scope=openid+profile+email')
+    expect(url).not.toContain('servicemock-api-access')
+  })
+
   it('treats 2se as satisfying 1se endpoints', () => {
     expect(satisfiesAssuranceLevel('2se', '1se')).toBe(true)
     expect(satisfiesAssuranceLevel('1se', '2se')).toBe(false)
+    expect(satisfiesAssuranceLevel('ekw', '1se')).toBe(false)
   })
 
   it('describes API access based on current acr', () => {
     expect(getServiceMockApiAccessLabel('2se')).toContain('1se als auch 2se')
     expect(getServiceMockApiAccessLabel('1se')).toContain('nur 1se')
+    expect(getServiceMockApiAccessLabel('ekw')).toContain('einmalige Browser-Handoff')
   })
 })

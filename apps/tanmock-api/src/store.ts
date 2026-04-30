@@ -14,6 +14,7 @@ function mapAdminRecord(row: {
   id: string
   tan: string
   source_user_id: string
+  allowed_target_client_id: string
   active: boolean
   consumed_at: string | null
   created_at: string
@@ -22,6 +23,7 @@ function mapAdminRecord(row: {
     id: row.id,
     tan: row.tan,
     sourceUserId: row.source_user_id,
+    allowedTargetClientId: row.allowed_target_client_id,
     active: row.active,
     consumedAt: row.consumed_at,
     createdAt: row.created_at
@@ -31,7 +33,7 @@ function mapAdminRecord(row: {
 export async function listOverview(): Promise<TanMockAdminOverview> {
   const [entriesResult, sessionsResult] = await Promise.all([
     pool.query(`
-      select id, tan, source_user_id, active, consumed_at::text, created_at::text
+      select id, tan, source_user_id, allowed_target_client_id, active, consumed_at::text, created_at::text
       from tanmock_entries
       order by created_at desc
     `),
@@ -58,10 +60,10 @@ export async function listOverview(): Promise<TanMockAdminOverview> {
 
 export async function createEntry(input: CreateTanMockAdminRecordInput) {
   const result = await pool.query(`
-    insert into tanmock_entries (tan, source_user_id)
-    values ($1, $2)
-    returning id, tan, source_user_id, active, consumed_at::text, created_at::text
-  `, [input.tan, input.sourceUserId])
+    insert into tanmock_entries (tan, source_user_id, allowed_target_client_id)
+    values ($1, $2, $3)
+    returning id, tan, source_user_id, allowed_target_client_id, active, consumed_at::text, created_at::text
+  `, [input.tan, input.sourceUserId, input.allowedTargetClientId])
 
   return mapAdminRecord(result.rows[0])
 }
@@ -69,7 +71,7 @@ export async function createEntry(input: CreateTanMockAdminRecordInput) {
 export async function consumeActiveTan(sourceUserId: string, tan: string) {
   return withTransaction(async (client) => {
     const result = await client.query(`
-      select id, tan, source_user_id, active, consumed_at::text, created_at::text
+      select id, tan, source_user_id, allowed_target_client_id, active, consumed_at::text, created_at::text
       from tanmock_entries
       where source_user_id = $1 and tan = $2 and active = true and consumed_at is null
       for update

@@ -36,6 +36,7 @@ const tanEntries: TanMockAdminRecord[] = [
     id: 'tan-1',
     tan: '471199',
     sourceUserId: 'demo-user',
+    allowedTargetClientId: 'webmock-web',
     active: true,
     consumedAt: null,
     createdAt: '2026-03-18T12:00:00.000Z'

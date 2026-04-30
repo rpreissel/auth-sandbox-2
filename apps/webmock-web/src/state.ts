@@ -7,6 +7,7 @@ export function buildAuthorizationUrl(input: {
   acrValues: string
   state: string
   nonce: string
+  scope?: string
   traceHint?: string | null
   loginHint?: string | null
   idpHint?: string | null
@@ -16,7 +17,7 @@ export function buildAuthorizationUrl(input: {
   url.searchParams.set('client_id', input.clientId)
   url.searchParams.set('redirect_uri', input.redirectUri)
   url.searchParams.set('response_type', 'code')
-  url.searchParams.set('scope', 'openid profile email servicemock-api-access')
+  url.searchParams.set('scope', input.scope ?? 'openid profile email servicemock-api-access')
   url.searchParams.set('acr_values', input.acrValues)
   url.searchParams.set('state', input.state)
   url.searchParams.set('nonce', input.nonce)
@@ -62,6 +63,9 @@ export function getServiceMockApiAccessLabel(acr: string | null) {
   }
   if (acr === '1se') {
     return 'Mit 1se darfst du nur 1se Endpunkte aufrufen.'
+  }
+  if (acr === 'ekw') {
+    return 'Mit ekw ist nur der einmalige Browser-Handoff zum Ziel-Client erlaubt.'
   }
   return 'Noch keine Sitzung vorhanden.'
 }

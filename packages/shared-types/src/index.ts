@@ -177,6 +177,7 @@ export type TanMockAdminRecord = {
   id: string
   tan: string
   sourceUserId: string
+  allowedTargetClientId: string
   active: boolean
   consumedAt: IsoDateTime | null
   createdAt: IsoDateTime
@@ -185,6 +186,7 @@ export type TanMockAdminRecord = {
 export type CreateTanMockAdminRecordInput = {
   tan: string
   sourceUserId: string
+  allowedTargetClientId: string
 }
 
 export type TanMockSessionSummary = {

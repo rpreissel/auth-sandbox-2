@@ -9,7 +9,7 @@ import { buildAuthorizationUrl, getServiceMockApiAccessLabel, normalizeAcr, norm
 const KEYCLOAK_BASE = 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect'
 const SERVICEMOCK_API_BASE = import.meta.env.VITE_SERVICEMOCK_API_URL ?? '/servicemock-api/api/mock'
 const CLIENT_ID = import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? 'webmock-web'
-const TAN_LOGIN_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_TAN_LOGIN_CLIENT_ID ?? 'webmock-tan-login'
+const EKW_LOGIN_CLIENT_ID = import.meta.env.VITE_KEYCLOAK_EKW_LOGIN_CLIENT_ID ?? 'webmock-ekw-login'
 const REDIRECT_URI = 'https://webmock.localhost:8443/'
 const TOKEN_STORAGE_KEY = 'auth-sandbox-2.webmock-web.tokens'
 const AUTH_API_BASE = 'https://auth.localhost:8443'
@@ -230,14 +230,14 @@ function WebMockApp() {
 
     const state = params.get('state') ?? ''
 
-    if (state.startsWith('tan:')) {
-      // TAN bootstrap complete — now do silent SSO with the real client
+    if (state.startsWith('ekw:')) {
+      // EKW bootstrap complete — now do silent SSO with the real client.
       window.history.replaceState({}, document.title, window.location.pathname)
       const ssoUrl = buildAuthorizationUrl({
         authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
         clientId: CLIENT_ID,
         redirectUri: REDIRECT_URI,
-        acrValues: '1se',
+        acrValues: 'ekw',
         state: randomValue(),
         nonce: randomValue(),
         prompt: 'none'
@@ -413,10 +413,11 @@ function WebMockApp() {
       const url = useTanMock
         ? buildAuthorizationUrl({
             authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
-            clientId: TAN_LOGIN_CLIENT_ID,
+            clientId: EKW_LOGIN_CLIENT_ID,
             redirectUri: REDIRECT_URI,
-            acrValues: '1se',
-            state: `tan:${randomValue()}`,
+            acrValues: 'ekw',
+            scope: 'openid profile email',
+            state: `ekw:${randomValue()}`,
             nonce: randomValue(),
             traceHint: trace.traceId
           })

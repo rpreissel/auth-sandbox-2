@@ -54,7 +54,8 @@ const tokenBodySchema = z.object({
 
 const adminCreateSchema = z.object({
   tan: z.string().trim().min(4),
-  sourceUserId: z.string().trim().min(1)
+  sourceUserId: z.string().trim().min(1),
+  allowedTargetClientId: z.string().trim().min(1)
 })
 
 const keyPair = generateKeyPairSync('rsa', {
@@ -107,7 +108,7 @@ function createLoginPage(args: {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TAN Mock Login</title>
+    <title>EKW Mock Login</title>
     <style>
       :root { color-scheme: light; font-family: Inter, system-ui, sans-serif; }
       body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: linear-gradient(180deg, #eef4fb, #dce8f5); color: #102033; }
@@ -126,8 +127,8 @@ function createLoginPage(args: {
   <body>
     <main>
       <p class="eyebrow">Mock OIDC Identity Provider</p>
-      <h1>Mit User ID und TAN anmelden</h1>
-      <p>Jede gueltige TAN wird genau einmal verbraucht und erzeugt einen neuen brokered User in Keycloak.</p>
+      <h1>Mit User ID und EKW anmelden</h1>
+      <p>Jeder gueltige EKW wird genau einmal verbraucht und erzeugt einen neuen brokered User in Keycloak.</p>
       ${args.error ? `<p class="error">${escapeHtml(args.error)}</p>` : ''}
       <form method="post" action="/oidc/login">
         <input type="hidden" name="client_id" value="${escapeHtml(args.clientId)}" />
@@ -138,7 +139,7 @@ function createLoginPage(args: {
         <input type="hidden" name="code_challenge" value="${escapeHtml(args.codeChallenge ?? '')}" />
         <input type="hidden" name="code_challenge_method" value="${escapeHtml(args.codeChallengeMethod ?? '')}" />
         <label>User ID<input name="userId" value="${escapeHtml(args.userId ?? '')}" autocomplete="username" /></label>
-        <label>TAN<input name="tan" inputmode="numeric" autocomplete="one-time-code" /></label>
+        <label>EKW<input name="tan" inputmode="numeric" autocomplete="one-time-code" /></label>
         <button type="submit">Anmeldung fortsetzen</button>
       </form>
       <p class="hint">Client: ${escapeHtml(args.clientId)}</p>
@@ -147,7 +148,7 @@ function createLoginPage(args: {
 </html>`
 }
 
-function buildTanIdentityHash(tan: string) {
+function buildEkwIdentityHash(tan: string) {
   return createHash('sha256').update(tan).digest('hex').slice(0, 12)
 }
 
@@ -193,27 +194,29 @@ function sanitizeClaimValue(value: unknown): JsonObject[string] {
 function buildBrokerClaims(args: {
   tan: string
   sourceUserId: string
+  allowedTargetClientId: string
   sourceIdentity: {
     firstName: string
     lastName: string
     phoneNumber: string | null
   }
 }): JsonObject {
-  const tanHash = buildTanIdentityHash(args.tan)
-  const brokerUsername = `tan_${args.sourceUserId}_${tanHash}`
-  const displayName = `Tan ${tanHash}`
+  const ekwHash = buildEkwIdentityHash(args.tan)
+  const brokerUsername = `ekw_${args.sourceUserId}_${ekwHash}`
+  const displayName = `Ekw ${ekwHash}`
 
   const claims: JsonObject = {
     sub: brokerUsername,
-    tan_sub: brokerUsername,
+    ekw_sub: brokerUsername,
     preferred_username: brokerUsername,
     userId: brokerUsername,
     email: `${brokerUsername}@tanmock.localhost`,
     email_verified: false,
-    given_name: 'Tan',
-    family_name: tanHash,
+    given_name: 'Ekw',
+    family_name: ekwHash,
     name: displayName,
-    source_user_id: args.sourceUserId
+    source_user_id: args.sourceUserId,
+    allowed_target_client_id: args.allowedTargetClientId
   }
 
   claims.source_identity_first_name = sanitizeClaimValue(args.sourceIdentity.firstName)
@@ -287,7 +290,7 @@ export async function registerRoutes(app: any) {
     id_token_signing_alg_values_supported: ['RS256'],
     scopes_supported: ['openid', 'profile', 'email'],
     token_endpoint_auth_methods_supported: ['client_secret_post'],
-    claims_supported: ['sub', 'tan_sub', 'preferred_username', 'userId', 'email', 'email_verified', 'given_name', 'family_name', 'name']
+    claims_supported: ['sub', 'ekw_sub', 'preferred_username', 'userId', 'email', 'email_verified', 'given_name', 'family_name', 'name', 'allowed_target_client_id']
   }))
 
   app.get('/oidc/jwks', async () => ({ keys: [{ ...publicJwk, kid: signingKeyId, alg: 'RS256', use: 'sig' }] }))
@@ -344,15 +347,16 @@ export async function registerRoutes(app: any) {
         codeChallenge: body.code_challenge,
         codeChallengeMethod: body.code_challenge_method,
         userId: body.userId,
-        error: 'Die TAN ist ungueltig, verbraucht oder nicht fuer diese User ID freigegeben.'
+        error: 'Der EKW ist ungueltig, verbraucht oder nicht fuer diese User ID freigegeben.'
       })
     }
 
     const sourceIdentity = await getSourceIdentityClaims(entry.sourceUserId)
-    const brokerUsername = `tan_${entry.sourceUserId}_${buildTanIdentityHash(entry.tan)}`
+    const brokerUsername = `ekw_${entry.sourceUserId}_${buildEkwIdentityHash(entry.tan)}`
     const claims = buildBrokerClaims({
       tan: entry.tan,
       sourceUserId: entry.sourceUserId,
+      allowedTargetClientId: entry.allowedTargetClientId,
       sourceIdentity
     })
 
@@ -449,7 +453,7 @@ export async function registerRoutes(app: any) {
     } catch (error) {
       if (isDuplicateTanError(error)) {
         reply.code(400)
-        return { message: `TAN ${body.tan} existiert fuer Quelle ${body.sourceUserId} bereits.` }
+        return { message: `EKW ${body.tan} existiert fuer Quelle ${body.sourceUserId} bereits.` }
       }
 
       throw error

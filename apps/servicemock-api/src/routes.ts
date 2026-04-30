@@ -239,7 +239,7 @@ export async function registerMockRoutes(app: any) {
       claims = await requireAssuranceLevel(request, '1se')
     } catch {
       reply.code(403)
-      return { message: 'This endpoint requires a token with acr 1se or 2se.' }
+      return { message: 'This endpoint requires a token with acr 1se or 2se. ekw does not satisfy this endpoint.' }
     }
 
     const userId = getUserId(claims)

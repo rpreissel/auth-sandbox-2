@@ -62,51 +62,51 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
     ]
   },
   {
-    title: 'TAN Mock broker login into WebMock',
-    summary: 'WebMock bootstraps a Keycloak session through the dedicated webmock-tan-login client and browser-tan-login-flow, then silently promotes that session to a full webmock-web token via prompt=none.',
-    actors: ['WebMock Web', 'Keycloak (tan client)', 'TanMock Web', 'TanMock API', 'Keycloak (webmock client)'],
+    title: 'EKW broker login into WebMock',
+    summary: 'WebMock bootstraps a Keycloak session through the dedicated webmock-ekw-login client and browser-ekw-login-flow, then silently promotes that session to a single target-client handoff via prompt=none.',
+    actors: ['WebMock Web', 'Keycloak (ekw client)', 'TanMock Web', 'TanMock API', 'Keycloak (webmock client)'],
     steps: [
       {
         from: 'WebMock Web',
-        to: 'Keycloak (tan client)',
-        label: 'Start TAN bootstrap login',
-        detail: 'WebMock starts a browser authorization request against the dedicated webmock-tan-login client with acr_values=1se and state=tan:<random>. The browser-tan-login-flow checks for an existing Keycloak cookie first; if none is present it routes directly to the TAN Mock IDP.'
+        to: 'Keycloak (ekw client)',
+        label: 'Start EKW bootstrap login',
+        detail: 'WebMock starts a browser authorization request against the dedicated webmock-ekw-login client with acr_values=ekw and state=ekw:<random>. The browser-ekw-login-flow checks for an existing Keycloak cookie first; if none is present it routes directly to the EKW Mock IDP.'
       },
       {
-        from: 'Keycloak (tan client)',
+        from: 'Keycloak (ekw client)',
         to: 'TanMock Web',
-        label: 'Redirect to TAN Mock authorize page',
-        detail: 'Keycloak sends the browser to the external TAN Mock authorization page for the brokered login.'
+        label: 'Redirect to EKW Mock authorize page',
+        detail: 'Keycloak sends the browser to the external EKW Mock authorization page for the brokered login.'
       },
       {
         from: 'TanMock Web',
         to: 'TanMock API',
-        label: 'Submit userId and one-time TAN',
-        detail: 'The operator enters the configured userId plus one-time TAN and TanMock validates that this TAN is still active for that user.'
+        label: 'Submit userId and one-time EKW',
+        detail: 'The operator enters the configured userId plus one-time EKW and TanMock validates that this EKW is still active for that user.'
       },
       {
         from: 'TanMock API',
-        to: 'Keycloak (tan client)',
+        to: 'Keycloak (ekw client)',
         label: 'Return signed broker tokens and claims',
-        detail: 'TanMock returns signed OIDC tokens whose broker claims include tan_sub, source_user_id, copied profile data, and a unique broker email so Keycloak can treat the login as a new brokered identity.'
+         detail: 'TanMock returns signed OIDC tokens whose broker claims include ekw_sub, source_user_id, allowed_target_client_id, copied profile data, and a unique broker email so Keycloak can treat the login as a new brokered identity.'
       },
       {
-        from: 'Keycloak (tan client)',
-        to: 'Keycloak (tan client)',
+        from: 'Keycloak (ekw client)',
+        to: 'Keycloak (ekw client)',
         label: 'Create brokered user and establish KC session',
-        detail: 'Keycloak runs the TanMock first-broker flow, creates the tan_* user, links the federated identity, and establishes a Keycloak browser session. The code is returned to WebMock but is not exchanged — the session cookie is all that matters here.'
+        detail: 'Keycloak runs the TanMock first-broker flow, creates the ekw_* user, links the federated identity, and establishes a Keycloak browser session marked with acr=ekw. The code is returned to WebMock but is not exchanged — the session cookie is all that matters here.'
       },
       {
         from: 'WebMock Web',
         to: 'Keycloak (webmock client)',
         label: 'Silent SSO with prompt=none',
-        detail: 'WebMock detects the tan: state prefix in the callback and immediately starts a fresh authorization request against the webmock-web client with prompt=none. Keycloak reuses the browser session from the TAN bootstrap without prompting the user again.'
+        detail: 'WebMock detects the ekw: state prefix in the callback and immediately starts a fresh authorization request against the webmock-web client with prompt=none and acr_values=ekw. Keycloak reuses the browser session from the EKW bootstrap exactly once for the configured target client.'
       },
       {
         from: 'Keycloak (webmock client)',
         to: 'WebMock Web',
-        label: 'Return 1se session and tokens',
-        detail: 'Keycloak issues a code for the webmock-web client. WebMock exchanges it for access, ID, and refresh tokens that satisfy acr=1se and contain the brokered identity claims.'
+        label: 'Return ekw handoff session and tokens',
+        detail: 'Keycloak issues a code for the webmock-web client. WebMock exchanges it for access, ID, and refresh tokens that carry acr=ekw and the brokered identity claims without satisfying 1se or 2se.'
       }
     ]
   },
@@ -380,14 +380,14 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   },
   {
     title: 'Browser login and inline 2se step-up',
-    summary: 'WebMock reaches 1se through TAN bootstrap or silent SSO, then Keycloak upgrades the browser session to 2se through the inline SMS-TAN backchannel flow.',
+    summary: 'WebMock reaches 1se through password login, or receives a one-time EKW handoff that stays at acr=ekw, then Keycloak can upgrade the browser session to 2se through the inline SMS-TAN backchannel flow.',
     actors: ['WebMock Web', 'Keycloak', 'KC Extension', 'Auth API', 'Postgres'],
     steps: [
       {
         from: 'WebMock Web',
         to: 'Keycloak',
-        label: 'Reach 1se via password or TAN bootstrap',
-        detail: 'WebMock acquires a 1se session either through username/password login (browser-step-up-loa-1 branch), or through the TAN bootstrap flow (webmock-tan-login client → tanmock IDP → prompt=none with webmock-web). Both paths satisfy acr=1se and establish a Keycloak browser session.'
+        label: 'Reach login session via password or EKW handoff',
+        detail: 'WebMock acquires a 1se session through username/password login, or receives a one-time ekw handoff through the EKW bootstrap flow (webmock-ekw-login client → ekwmock IDP → prompt=none with webmock-web). The ekw handoff does not itself satisfy 1se.'
       },
       {
         from: 'Keycloak',

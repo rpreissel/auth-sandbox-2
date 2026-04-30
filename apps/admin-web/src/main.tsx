@@ -161,7 +161,8 @@ function AdminApp() {
   })
   const [tanForm, setTanForm] = useState<CreateTanMockAdminRecordInput>({
     tan: '471199',
-    sourceUserId: 'demo-user'
+    sourceUserId: 'demo-user',
+    allowedTargetClientId: 'webmock-web'
   })
 
   async function refresh() {
@@ -256,7 +257,8 @@ function AdminApp() {
     setTanSaveError(null)
     setTanForm({
       tan: createSuggestedTan(tanOverview?.entries ?? []),
-      sourceUserId: userId
+      sourceUserId: userId,
+      allowedTargetClientId: 'webmock-web'
     })
   }
 
@@ -295,7 +297,7 @@ function AdminApp() {
                 <strong>{devices.length}</strong>
               </article>
               <article className="admin-summary-chip">
-                <span>Aktive TANs</span>
+                 <span>Aktive EKWs</span>
                 <strong>{activeTanEntries.length}</strong>
               </article>
             </div>
@@ -366,7 +368,7 @@ function AdminApp() {
             <div className="list-card-header">
               <div>
                 <h2>Registrierungsidentitaeten</h2>
-                <p className="section-copy">Vorbereitete Personen mit optionalem Code, optionaler SMS-Zielnummer und direkt zugeordneten TAN-Broker-Aktionen.</p>
+                 <p className="section-copy">Vorbereitete Personen mit optionalem Code, optionaler SMS-Zielnummer und direkt zugeordneten EKW-Broker-Aktionen.</p>
               </div>
               <strong>{registrationIdentities.length}</strong>
             </div>
@@ -393,19 +395,19 @@ function AdminApp() {
                     </div>
                     <div className="identity-action-row">
                       <button type="button" className="button-link-ghost" onClick={() => openTanDialog(identity.userId)}>
-                        TAN vorbereiten
+                         EKW vorbereiten
                       </button>
                     </div>
                   </div>
                   <div className="identity-tan-block">
-                    <span>Aktive TANs fuer diese Identitaet</span>
+                     <span>Aktive EKWs fuer diese Identitaet</span>
                     <div className="identity-tan-chip-row">
                       {getTanEntriesForUser(activeTanEntries, identity.userId).map((entry) => (
                         <article key={entry.id} className="identity-tan-chip">
                           <strong>{entry.tan}</strong>
                         </article>
                       ))}
-                      {!getTanEntriesForUser(activeTanEntries, identity.userId).length ? <p className="identity-tan-empty">Noch keine aktive TAN fuer diese Identitaet.</p> : null}
+                       {!getTanEntriesForUser(activeTanEntries, identity.userId).length ? <p className="identity-tan-empty">Noch kein aktiver EKW fuer diese Identitaet.</p> : null}
                     </div>
                   </div>
                 </article>
@@ -452,14 +454,14 @@ function AdminApp() {
             className="card modal-card identity-tan-modal"
             role="dialog"
             aria-modal="true"
-            aria-label={`TAN fuer ${tanDialogIdentity.userId} anlegen`}
+             aria-label={`EKW fuer ${tanDialogIdentity.userId} anlegen`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="list-card-header">
               <div className="identity-tan-focus">
-                <strong>Neue TAN</strong>
-                <span>{tanDialogIdentity.firstName} {tanDialogIdentity.lastName}</span>
-                <span>Quelle ist immer diese ausgewaehlte Identitaet. Das Broker-Ziel wird automatisch als `tan_{tanDialogIdentity.userId}_hash` abgeleitet.</span>
+                 <strong>Neuer EKW</strong>
+                 <span>{tanDialogIdentity.firstName} {tanDialogIdentity.lastName}</span>
+                 <span>Quelle ist immer diese ausgewaehlte Identitaet. Der EKW darf genau einmal per Cookie-SSO an den ausgewaehlten Ziel-Client weitergereicht werden.</span>
               </div>
               <button type="button" className="button-link-ghost" onClick={closeTanDialog}>Schliessen</button>
             </div>
@@ -467,13 +469,24 @@ function AdminApp() {
             <form className="identity-tan-form" onSubmit={handleCreateTan}>
               <div className="grid">
                 <label>
-                  TAN
-                  <input name="tan" value={tanForm.tan} onChange={(event) => setTanForm({ ...tanForm, tan: event.target.value })} disabled={tanSavePending} />
-                </label>
-              </div>
+                   EKW
+                   <input name="tan" value={tanForm.tan} onChange={(event) => setTanForm({ ...tanForm, tan: event.target.value })} disabled={tanSavePending} />
+                 </label>
+                 <label>
+                   Ziel-Client
+                   <select
+                     name="allowedTargetClientId"
+                     value={tanForm.allowedTargetClientId}
+                     onChange={(event) => setTanForm({ ...tanForm, allowedTargetClientId: event.target.value })}
+                     disabled={tanSavePending}
+                   >
+                     <option value="webmock-web">webmock-web</option>
+                   </select>
+                 </label>
+               </div>
               <div className="button-row modal-actions">
                 <button type="button" className="button-link-ghost" onClick={closeTanDialog} disabled={tanSavePending}>Abbrechen</button>
-                <button type="submit" disabled={tanSavePending}>{tanSavePending ? 'Speichert...' : 'TAN speichern'}</button>
+                 <button type="submit" disabled={tanSavePending}>{tanSavePending ? 'Speichert...' : 'EKW speichern'}</button>
               </div>
             </form>
           </section>
