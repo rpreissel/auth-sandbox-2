@@ -1,5 +1,6 @@
 package dev.authsandbox.keycloak;
 
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
@@ -22,7 +23,46 @@ public class EkwSessionArmAuthenticator implements Authenticator {
     public void authenticate(AuthenticationFlowContext context) {
         AuthFlowTraceSupport.AuthenticatorTrace trace = AuthFlowTraceSupport.start(context, EkwSessionArmAuthenticatorFactory.PROVIDER_ID, "authenticate");
         try {
-            if ("true".equals(context.getAuthenticationSession().getAuthNote("SSO_AUTH"))) {
+            String ssoAuth = context.getAuthenticationSession().getAuthNote("SSO_AUTH");
+            if ("true".equals(ssoAuth)) {
+                String targetClientId = context.getAuthenticationSession().getClient() != null
+                        ? context.getAuthenticationSession().getClient().getClientId()
+                        : null;
+                String allowedTargetClientId = context.getAuthenticationSession().getUserSessionNote(EKW_TARGET_CLIENT_ID_NOTE);
+                boolean isEkwSession = "true".equals(context.getAuthenticationSession().getUserSessionNote(EKW_MARKER_NOTE));
+                String requestedAcrValues = context.getAuthenticationSession().getClientNote("acr_values");
+                if (requestedAcrValues == null || requestedAcrValues.isBlank()) {
+                    requestedAcrValues = context.getHttpRequest().getUri().getQueryParameters().getFirst("acr_values");
+                }
+                boolean requestedEkw = requestedAcrValues != null && requestedAcrValues.contains("ekw");
+                boolean promptNone = "none".equals(context.getAuthenticationSession().getClientNote("prompt"));
+
+                if (requestedEkw) {
+                    if (!isEkwSession) {
+                        trace.error("prompt=none cookie SSO succeeded but session is not an EKW session.");
+                        if (promptNone) {
+                            context.failure(AuthenticationFlowError.ACCESS_DENIED);
+                        } else {
+                            Response response = context.form()
+                                    .setError("Die Cookie-SSO-Session darf fuer acr=ekw nicht wiederverwendet werden.")
+                                    .createErrorPage(Response.Status.UNAUTHORIZED);
+                            context.failure(AuthenticationFlowError.ACCESS_DENIED, response);
+                        }
+                        return;
+                    }
+                    if (allowedTargetClientId != null && !allowedTargetClientId.equals(targetClientId)) {
+                        trace.error("EKW cookie SSO succeeded but target client mismatch.");
+                        if (promptNone) {
+                            context.failure(AuthenticationFlowError.ACCESS_DENIED);
+                        } else {
+                            Response response = context.form()
+                                    .setError("Die EKW-Session darf fuer diesen Client nicht mehr per Cookie-SSO wiederverwendet werden.")
+                                    .createErrorPage(Response.Status.UNAUTHORIZED);
+                            context.failure(AuthenticationFlowError.ACCESS_DENIED, response);
+                        }
+                        return;
+                    }
+                }
                 trace.success("Skipped EKW session arming for an existing SSO session.");
                 context.success();
                 return;
