@@ -81,7 +81,7 @@ variable "tanmock_admin_client_id" {
   default = "tanmock-admin-web"
 }
 
-variable "tan_login_client_id" {
+variable "ekw_login_client_id" {
   type    = string
-  default = "webmock-tan-login"
+  default = "webmock-ekw-login"
 }

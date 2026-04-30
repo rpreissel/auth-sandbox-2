@@ -72,7 +72,7 @@ services:
       TANMOCK_CLIENT_ID: ${TANMOCK_CLIENT_ID:-tanmock-broker}
       TANMOCK_CLIENT_SECRET: ${TANMOCK_CLIENT_SECRET:-change-me-tanmock-broker}
       TANMOCK_ADMIN_CLIENT_ID: ${TANMOCK_ADMIN_CLIENT_ID:-tanmock-admin-web}
-      TAN_LOGIN_CLIENT_ID: ${TAN_LOGIN_CLIENT_ID:-webmock-tan-login}
+      EKW_LOGIN_CLIENT_ID: ${EKW_LOGIN_CLIENT_ID:-webmock-ekw-login}
       SERVICEMOCK_API_AUDIENCE: ${SERVICEMOCK_API_AUDIENCE:-servicemock-api}
       TOFU_STATE_DIR: ${TOFU_STATE_DIR:-/state}
     depends_on:

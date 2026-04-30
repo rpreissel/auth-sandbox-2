@@ -104,14 +104,14 @@ sequenceDiagram
   Mock->>KC: Verify JWT via JWKS
   Mock-->>Device: Protected response
 
-  Note over Browser,KC: TAN bootstrap login (webmock-tan-login client)
-  Browser->>KC: Auth request via webmock-tan-login\nacr_values=1se, state=tan:…
-  KC->>KC: browser-tan-login-flow:\nCookie check → IDP-Redirect tanmock
-  KC-->>Browser: Redirect to tanmock IDP login
-  Browser->>KC: TAN submitted, code returned
-  Note over Browser,KC: Silent SSO (webmock-web client, prompt=none)
-  Browser->>KC: Auth request via webmock-web\nprompt=none (reuse KC session)
-  KC-->>Browser: Code → exchanged for tokens (1se)
+  Note over Browser,KC: EKW bootstrap login (webmock-ekw-login client)
+  Browser->>KC: Auth request via webmock-ekw-login\nacr_values=ekw, state=ekw:…
+  KC->>KC: browser-ekw-login-flow:\nCookie check → IDP-Redirect ekwmock
+  KC-->>Browser: Redirect to ekwmock IDP login
+  Browser->>KC: EKW submitted, code returned
+  Note over Browser,KC: One-time silent handoff (webmock-web client, prompt=none)
+  Browser->>KC: Auth request via webmock-web\nprompt=none + acr_values=ekw
+  KC-->>Browser: Code → exchanged for tokens (ekw only)
 
   Note over Browser,KC: Browser step-up to 2se
   Browser->>KC: Fresh auth request via webmock-web\nacr_values=2se

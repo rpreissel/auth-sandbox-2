@@ -26,6 +26,7 @@ resource "keycloak_realm" "realm" {
 
   attributes = {
     "acr.loa.map" = jsonencode({
+      "ekw" = 0
       "1se" = 1
       "2se" = 2
     })
@@ -107,17 +108,17 @@ resource "keycloak_openid_client_scope" "servicemock_api_scope" {
 
 resource "keycloak_openid_client_scope" "broker_profile_scope" {
   realm_id               = keycloak_realm.realm.id
-  name                   = "tanmock-broker-profile"
+  name                   = "ekwmock-broker-profile"
   description            = "Expose broker-specific user attributes in tokens"
   include_in_token_scope = true
 }
 
-resource "keycloak_openid_user_attribute_protocol_mapper" "broker_tan_sub" {
+resource "keycloak_openid_user_attribute_protocol_mapper" "broker_ekw_sub" {
   realm_id        = keycloak_realm.realm.id
   client_scope_id = keycloak_openid_client_scope.broker_profile_scope.id
-  name            = "broker-tan-sub"
-  user_attribute  = "tan_sub"
-  claim_name      = "tan_sub"
+  name            = "broker-ekw-sub"
+  user_attribute  = "ekw_sub"
+  claim_name      = "ekw_sub"
   claim_value_type = "String"
   add_to_access_token = true
   add_to_id_token     = true
@@ -148,6 +149,18 @@ resource "keycloak_openid_user_attribute_protocol_mapper" "broker_source_user_id
   add_to_userinfo     = true
 }
 
+resource "keycloak_openid_user_attribute_protocol_mapper" "broker_allowed_target_client_id" {
+  realm_id        = keycloak_realm.realm.id
+  client_scope_id = keycloak_openid_client_scope.broker_profile_scope.id
+  name            = "broker-allowed-target-client-id"
+  user_attribute  = "allowed_target_client_id"
+  claim_name      = "allowed_target_client_id"
+  claim_value_type = "String"
+  add_to_access_token = true
+  add_to_id_token     = true
+  add_to_userinfo     = true
+}
+
 resource "keycloak_authentication_flow" "browser_step_up_flow" {
   realm_id    = keycloak_realm.realm.id
   alias       = "browser-step-up-flow"
@@ -163,6 +176,14 @@ resource "keycloak_authentication_execution" "browser_cookie" {
   priority          = 10
 }
 
+resource "keycloak_authentication_execution" "browser_ekw_session_reuse_guard" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
+  authenticator     = "ekw-session-reuse-guard"
+  requirement       = "REQUIRED"
+  priority          = 20
+}
+
 resource "keycloak_authentication_subflow" "browser_auth_flow" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
@@ -170,7 +191,7 @@ resource "keycloak_authentication_subflow" "browser_auth_flow" {
   description       = "Interactive browser authentication with LoA-aware branches"
   provider_id       = "basic-flow"
   requirement       = "ALTERNATIVE"
-  priority          = 30
+  priority          = 40
 }
 
 resource "keycloak_authentication_flow" "tanmock_first_broker_login_flow" {
@@ -219,45 +240,53 @@ resource "keycloak_authentication_execution" "bootstrap_device_login_authenticat
   priority          = 10
 }
 
-# ── TAN Login Flow (Erstlogin via TAN-Mock-Broker) ──────────────────────────
+# ── EKW Login Flow (Erstlogin via EKW-Mock-Broker) ──────────────────────────
 
-resource "keycloak_authentication_flow" "browser_tan_login_flow" {
+resource "keycloak_authentication_flow" "browser_ekw_login_flow" {
   realm_id    = keycloak_realm.realm.id
-  alias       = "browser-tan-login-flow"
-  description = "Browser flow for initial TAN-Mock login (LoA 1 only, no step-up)"
+  alias       = "browser-ekw-login-flow"
+  description = "Browser flow for initial EKW-Mock login (acr ekw only, no step-up)"
   provider_id = "basic-flow"
 }
 
-resource "keycloak_authentication_execution" "tan_login_cookie" {
+resource "keycloak_authentication_execution" "ekw_login_cookie" {
   realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.browser_tan_login_flow.alias
+  parent_flow_alias = keycloak_authentication_flow.browser_ekw_login_flow.alias
   authenticator     = "auth-cookie"
   requirement       = "ALTERNATIVE"
   priority          = 10
 }
 
-resource "keycloak_authentication_execution" "tan_login_idp_redirect" {
+resource "keycloak_authentication_execution" "ekw_login_idp_redirect" {
   realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.browser_tan_login_flow.alias
+  parent_flow_alias = keycloak_authentication_flow.browser_ekw_login_flow.alias
   authenticator     = "identity-provider-redirector"
   requirement       = "ALTERNATIVE"
   priority          = 20
 }
 
-resource "keycloak_authentication_execution_config" "tan_login_idp_redirect" {
+resource "keycloak_authentication_execution_config" "ekw_login_idp_redirect" {
   realm_id     = keycloak_realm.realm.id
-  execution_id = keycloak_authentication_execution.tan_login_idp_redirect.id
-  alias        = "tan-login-idp-redirect"
+  execution_id = keycloak_authentication_execution.ekw_login_idp_redirect.id
+  alias        = "ekw-login-idp-redirect"
 
   config = {
-    defaultProvider = keycloak_oidc_identity_provider.tanmock.alias
+    defaultProvider = keycloak_oidc_identity_provider.ekwmock.alias
   }
 }
 
-resource "keycloak_openid_client" "tan_login_app" {
+resource "keycloak_authentication_execution" "ekw_session_arm" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_flow.browser_ekw_login_flow.alias
+  authenticator     = "ekw-session-arm"
+  requirement       = "REQUIRED"
+  priority          = 30
+}
+
+resource "keycloak_openid_client" "ekw_login_app" {
   realm_id                     = keycloak_realm.realm.id
-  client_id                    = var.tan_login_client_id
-  name                         = var.tan_login_client_id
+  client_id                    = var.ekw_login_client_id
+  name                         = var.ekw_login_client_id
   access_type                  = "PUBLIC"
   standard_flow_enabled        = true
   direct_access_grants_enabled = false
@@ -266,18 +295,18 @@ resource "keycloak_openid_client" "tan_login_app" {
   web_origins                  = ["https://webmock.localhost:8443"]
 
   extra_config = {
-    "default.acr.values" = "1se"
-    "minimum.acr.value"  = "1se"
+    "default.acr.values" = "ekw"
+    "minimum.acr.value"  = "ekw"
   }
 
   authentication_flow_binding_overrides {
-    browser_id = keycloak_authentication_flow.browser_tan_login_flow.id
+    browser_id = keycloak_authentication_flow.browser_ekw_login_flow.id
   }
 }
 
-resource "keycloak_openid_client_default_scopes" "tan_login_default_scopes" {
+resource "keycloak_openid_client_default_scopes" "ekw_login_default_scopes" {
   realm_id  = keycloak_realm.realm.id
-  client_id = keycloak_openid_client.tan_login_app.id
+  client_id = keycloak_openid_client.ekw_login_app.id
   default_scopes = [
     "acr",
     "profile",
@@ -400,11 +429,6 @@ resource "keycloak_openid_client" "browser_app" {
   service_accounts_enabled     = false
   valid_redirect_uris          = ["https://webmock.localhost:8443/*"]
   web_origins                  = ["https://webmock.localhost:8443"]
-
-  extra_config = {
-    "default.acr.values" = "1se"
-    "minimum.acr.value"  = "1se"
-  }
 
   authentication_flow_binding_overrides {
     browser_id = keycloak_authentication_flow.browser_step_up_flow.id
@@ -538,10 +562,10 @@ resource "keycloak_openid_client_default_scopes" "tanmock_admin_default_scopes" 
   ]
 }
 
-resource "keycloak_oidc_identity_provider" "tanmock" {
+resource "keycloak_oidc_identity_provider" "ekwmock" {
   realm                    = keycloak_realm.realm.id
-  alias                    = "tanmock"
-  display_name             = "TAN Mock"
+  alias                    = "ekwmock"
+  display_name             = "EKW Mock"
   authorization_url        = "https://tanmock.localhost:8443/oidc/authorize"
   token_url                = "http://tanmock-api:3003/oidc/token"
   user_info_url            = "http://tanmock-api:3003/oidc/userinfo"
@@ -563,21 +587,21 @@ resource "keycloak_oidc_identity_provider" "tanmock" {
   }
 }
 
-resource "keycloak_user_template_importer_identity_provider_mapper" "tanmock_username" {
+resource "keycloak_user_template_importer_identity_provider_mapper" "ekwmock_username" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-username-template"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
-  template                = "$${CLAIM.tan_sub}"
+  name                    = "ekwmock-username-template"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
+  template                = "$${CLAIM.ekw_sub}"
 
   extra_config = {
     syncMode = "INHERIT"
   }
 }
 
-resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_email" {
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_email" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-email"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
+  name                    = "ekwmock-email"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
   user_attribute          = "email"
   claim_name              = "email"
 
@@ -586,22 +610,22 @@ resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_email" 
   }
 }
 
-resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_tan_sub" {
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_ekw_sub" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-tan-sub"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
-  user_attribute          = "tan_sub"
-  claim_name              = "tan_sub"
+  name                    = "ekwmock-ekw-sub"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
+  user_attribute          = "ekw_sub"
+  claim_name              = "ekw_sub"
 
   extra_config = {
     syncMode = "INHERIT"
   }
 }
 
-resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_user_id" {
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_user_id" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-user-id"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
+  name                    = "ekwmock-user-id"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
   user_attribute          = "userId"
   claim_name              = "userId"
 
@@ -610,10 +634,10 @@ resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_user_id
   }
 }
 
-resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_first_name" {
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_first_name" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-first-name"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
+  name                    = "ekwmock-first-name"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
   user_attribute          = "firstName"
   claim_name              = "given_name"
 
@@ -622,10 +646,10 @@ resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_first_n
   }
 }
 
-resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_last_name" {
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_last_name" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-last-name"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
+  name                    = "ekwmock-last-name"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
   user_attribute          = "lastName"
   claim_name              = "family_name"
 
@@ -634,12 +658,24 @@ resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_last_na
   }
 }
 
-resource "keycloak_attribute_importer_identity_provider_mapper" "tanmock_source_user_id" {
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_source_user_id" {
   realm                   = keycloak_realm.realm.id
-  name                    = "tanmock-source-user-id"
-  identity_provider_alias = keycloak_oidc_identity_provider.tanmock.alias
+  name                    = "ekwmock-source-user-id"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
   user_attribute          = "source_user_id"
   claim_name              = "source_user_id"
+
+  extra_config = {
+    syncMode = "INHERIT"
+  }
+}
+
+resource "keycloak_attribute_importer_identity_provider_mapper" "ekwmock_allowed_target_client_id" {
+  realm                   = keycloak_realm.realm.id
+  name                    = "ekwmock-allowed-target-client-id"
+  identity_provider_alias = keycloak_oidc_identity_provider.ekwmock.alias
+  user_attribute          = "allowed_target_client_id"
+  claim_name              = "allowed_target_client_id"
 
   extra_config = {
     syncMode = "INHERIT"

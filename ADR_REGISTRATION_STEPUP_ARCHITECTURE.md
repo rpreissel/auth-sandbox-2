@@ -205,13 +205,13 @@ flowchart LR
   KC[Keycloak]
   Ext[KC extension]
   DB[(Postgres)]
-  TanClient[webmock-tan-login\nclient / browser-tan-login-flow]
+  EkwClient[webmock-ekw-login\nclient / browser-ekw-login-flow]
 
   Admin --> Caddy -->|admin proxy token| Auth
   Device --> Caddy -->|app proxy token for set-password| Auth
   Device --> Auth
-  Browser -->|TAN bootstrap: acr=1se, state=tan:…| TanClient --> KC
-  Browser -->|silent SSO prompt=none + step-up 2se| KC
+  Browser -->|EKW bootstrap: acr=ekw, state=ekw:…| EkwClient --> KC
+  Browser -->|one-time silent handoff prompt=none + acr=ekw, then optional step-up 2se| KC
   Browser --> Caddy -->|trace browser token| Trace
   Device --> Caddy -->|trace browser token| Trace
   Admin --> Caddy -->|trace browser token| Trace
