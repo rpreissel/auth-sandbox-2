@@ -113,7 +113,7 @@ export function filterDevices(devices: DeviceRecord[], query: string) {
   }
 
   return devices.filter((device) => {
-    const haystack = [device.userId, device.deviceName, device.publicKeyHash].join(' ').toLowerCase()
+    const haystack = [device.deviceName, device.publicKeyHash].join(' ').toLowerCase()
     return haystack.includes(normalizedQuery)
   })
 }
@@ -437,9 +437,9 @@ function AdminApp() {
             <div className="list admin-list-scroll">
               {filteredDevices.map((device) => (
                 <article key={device.id}>
-                  <strong>{device.userId}</strong>
-                  <span>{device.deviceName}</span>
+                  <strong>{device.deviceName}</strong>
                   <span>{device.publicKeyHash}</span>
+                  <span>{device.active ? 'aktiv' : 'inaktiv'}</span>
                 </article>
               ))}
               {!filteredDevices.length && <p>{devices.length ? 'Keine Geraete passen zur aktuellen Suche.' : 'Noch keine Geraete registriert.'}</p>}

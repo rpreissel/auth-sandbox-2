@@ -13,10 +13,6 @@ import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Map;
 
@@ -58,8 +54,7 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
 
             String userId = token.sub();
             String publicKeyHash = token.publicKeyHash();
-            String encryptedData = token.encryptedData();
-            String signature = token.signature();
+            String handoverProof = token.handoverProof();
 
             LOG.infof("Device login token received for user '%s' and publicKeyHash '%s'", userId, publicKeyHash);
 
@@ -85,15 +80,20 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             }
 
             DeviceCredentialModel deviceCredential = DeviceCredentialModel.createFromCredentialModel(matched);
-            PublicKey publicKey = readPublicKey(deviceCredential.getPublicKey());
-            Signature verifier = Signature.getInstance("SHA256withRSA");
-            verifier.initVerify(publicKey);
-            verifier.update(Base64.getDecoder().decode(encryptedData));
-            boolean valid = verifier.verify(Base64.getDecoder().decode(signature));
+            String expectedProof = LoginTokenSupport.createHandoverProof(
+                    deviceCredential.getUserHandoverSecret(),
+                    userId,
+                    publicKeyHash,
+                    token.nonce(),
+                    token.exp(),
+                    token.jti().toString(),
+                    token.acr()
+            );
+            boolean valid = expectedProof.equals(handoverProof);
 
             if (!valid) {
-                LOG.warnf("Invalid signature for device login user '%s' and credential '%s'", userId, matched.getId());
-                trace.error("Device login signature validation failed.");
+                LOG.warnf("Invalid handover proof for device login user '%s' and credential '%s'", userId, matched.getId());
+                trace.error("Device login handover proof validation failed.");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
             }
@@ -104,8 +104,8 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
                     "requestedAcr", token.acr() == null ? "" : token.acr(),
                     "credentialId", matched.getId(),
                     "publicKeyHash", publicKeyHash,
-                    "hasEncryptedData", encryptedData != null && !encryptedData.isBlank()
-            ), "Validated device login token and matched the stored credential.");
+                    "hasHandoverProof", handoverProof != null && !handoverProof.isBlank()
+            ), "Validated device login token against the stored per-user handover secret.");
             long authTime = System.currentTimeMillis() / 1000;
             String achievedAcr = STRONG_DEVICE_LOGIN_ACR.equals(token.acr()) ? STRONG_DEVICE_LOGIN_ACR : DEVICE_LOGIN_ACR;
             int achievedLoa = STRONG_DEVICE_LOGIN_ACR.equals(achievedAcr) ? STRONG_DEVICE_LOGIN_LOA : DEVICE_LOGIN_LOA;
@@ -135,15 +135,6 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
         if (loaMap != null) {
             context.getAuthenticationSession().setUserSessionNote("loa-map", loaMap);
         }
-    }
-
-    private PublicKey readPublicKey(String pem) throws Exception {
-        String body = pem
-                .replace("-----BEGIN PUBLIC KEY-----", "")
-                .replace("-----END PUBLIC KEY-----", "")
-                .replaceAll("\\s+", "");
-        byte[] decoded = Base64.getDecoder().decode(body);
-        return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decoded));
     }
 
     @Override

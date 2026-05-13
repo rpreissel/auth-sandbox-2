@@ -41,12 +41,18 @@ export type RegistrationIdentityRow = {
 
 export type DeviceRow = {
   id: string
-  user_id: string
   device_name: string
   public_key: string
   public_key_hash: string
-  enc_pub_key: string
-  keycloak_user_id: string
+  active: boolean
+  created_at: string
+}
+
+export type DeviceBindingRow = {
+  id: string
+  device_id: string
+  user_id: string
+  keycloak_user_id: string | null
   keycloak_credential_id: string | null
   active: boolean
   created_at: string

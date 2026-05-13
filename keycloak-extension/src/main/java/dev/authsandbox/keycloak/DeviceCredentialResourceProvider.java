@@ -46,19 +46,14 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
                     .entity(Map.of("error", "device_name_required"))
                     .build();
         }
-        if (request.publicKey() == null || request.publicKey().isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "public_key_required"))
-                    .build();
-        }
         if (request.publicKeyHash() == null || request.publicKeyHash().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "public_key_hash_required"))
                     .build();
         }
-        if (request.encPrivKey() == null || request.encPrivKey().isBlank()) {
+        if (request.userHandoverSecret() == null || request.userHandoverSecret().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "enc_priv_key_required"))
+                    .entity(Map.of("error", "user_handover_secret_required"))
                     .build();
         }
 
@@ -73,9 +68,8 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
         }
 
         DeviceCredentialModel credential = DeviceCredentialModel.create(
-                request.publicKey(),
                 request.publicKeyHash(),
-                request.encPrivKey()
+                request.userHandoverSecret()
         );
         credential.setUserLabel(request.deviceName());
 
@@ -110,9 +104,8 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
     public record CreateDeviceCredentialRequest(
             String keycloakUserId,
             String deviceName,
-            String publicKey,
             String publicKeyHash,
-            String encPrivKey
+            String userHandoverSecret
     ) {
     }
 }

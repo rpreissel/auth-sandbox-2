@@ -19,7 +19,7 @@ import type {
   JsonObject
 } from '@auth-sandbox-2/shared-types'
 
-import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
+import { createEncryptedChallenge, hashPublicKey } from './lib/crypto.js'
 import { createFlowToken, createServiceResultToken, createServiceToken, verifyServiceResultToken } from './flow-tokens.js'
 import { KeycloakAdminClient } from './keycloak.js'
 import type {
@@ -486,9 +486,9 @@ async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryab
   }
 
   const publicKeyHash = methodState.publicKeyHash ?? hashPublicKey(publicKey)
-  const duplicate = await db.query('select 1 from devices where user_id = $1 and device_name = $2', [userId, deviceName])
+  const duplicate = await db.query('select 1 from devices where device_name = $1', [deviceName])
   if (duplicate.rowCount) {
-    throw badRequest('Device name already exists for this user')
+    throw badRequest('Device name already exists')
   }
 
   return {
@@ -519,20 +519,24 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
 
   const displayName = `${person.first_name} ${person.last_name}`
   const keycloakUserId = await adminClient.ensureUser(userId, displayName)
-  const encryptionKeys = generateEncryptionKeyPair()
   const credentialId = await adminClient.createDeviceCredential({
     userId,
     deviceName,
-    publicKey,
-    publicKeyHash,
-    encPrivKey: encryptionKeys.privateKeyPem
+    publicKeyHash
   })
 
   const deviceResult = await db.query<DeviceRow>(
-    `insert into devices (user_id, device_name, public_key, public_key_hash, enc_pub_key, keycloak_user_id, keycloak_credential_id)
-     values ($1, $2, $3, $4, $5, $6, $7)
+    `insert into devices (device_name, public_key, public_key_hash)
+     values ($1, $2, $3)
      returning *`,
-    [userId, deviceName, publicKey, publicKeyHash, encryptionKeys.publicKeyPem, keycloakUserId, credentialId]
+    [deviceName, publicKey, publicKeyHash]
+  )
+  const deviceId = deviceResult.rows[0].id
+
+  await db.query(
+    `insert into device_bindings (device_id, user_id, keycloak_user_id, keycloak_credential_id)
+     values ($1, $2, $3, $4)`,
+    [deviceId, userId, keycloakUserId, credentialId]
   )
 
   if (verificationService === 'person_code') {
@@ -554,7 +558,7 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
     assurance: [verificationMethod === 'sms' ? 'phone_verified' : 'activation_code_verified', 'device_registered'],
     achievedAcr: 'level_2' as const,
     userId,
-    deviceId: deviceResult.rows[0].id,
+    deviceId,
     publicKeyHash,
     passwordSetupRequired
   }

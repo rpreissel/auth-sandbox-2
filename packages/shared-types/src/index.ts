@@ -29,7 +29,6 @@ export type RegistrationPersonSmsNumberRecord = {
 
 export type DeviceRecord = {
   id: string
-  userId: string
   deviceName: string
   publicKeyHash: string
   active: boolean

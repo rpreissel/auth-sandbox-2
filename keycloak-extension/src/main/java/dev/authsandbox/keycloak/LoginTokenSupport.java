@@ -5,6 +5,8 @@ import org.keycloak.models.DefaultActionTokenKey;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.SingleUseObjectProvider;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -70,8 +72,8 @@ final class LoginTokenSupport {
                 readRequiredString(token, "sub"),
                 readOptionalString(token, "acr"),
                 readRequiredString(token, "publicKeyHash"),
-                readRequiredString(token, "encryptedData"),
-                readRequiredString(token, "signature"),
+                readRequiredString(token, "nonce"),
+                readRequiredString(token, "handoverProof"),
                 exp,
                 parsedJti
         );
@@ -88,6 +90,29 @@ final class LoginTokenSupport {
         DefaultActionTokenKey key = new DefaultActionTokenKey(payload.sub(), LOGIN_TOKEN_ACTION, Math.toIntExact(payload.exp()), payload.jti());
         SingleUseObjectProvider singleUse = session.singleUseObjects();
         return singleUse.putIfAbsent(key.serializeKey(), payload.exp());
+    }
+
+    static String createHandoverProof(String userHandoverSecret, String userId, String publicKeyHash, String nonce, long exp, String jti, String acr) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(userHandoverSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            String material = String.join(".",
+                    encodePart("device"),
+                    encodePart(userId),
+                    encodePart(publicKeyHash),
+                    encodePart(nonce),
+                    encodePart(Long.toString(exp)),
+                    encodePart(jti),
+                    encodePart(acr == null ? "" : acr)
+            );
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(mac.doFinal(material.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception exception) {
+            throw new RuntimeException("Failed to create device handover proof", exception);
+        }
+    }
+
+    private static String encodePart(String value) {
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String readRequiredString(Map<String, Object> token, String fieldName) {
@@ -111,8 +136,8 @@ final class LoginTokenSupport {
             String sub,
             String acr,
             String publicKeyHash,
-            String encryptedData,
-            String signature,
+            String nonce,
+            String handoverProof,
             long exp,
             UUID jti
     ) {

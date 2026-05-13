@@ -24,10 +24,7 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.Base64;
 import java.util.Map;
 
@@ -104,7 +101,7 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             trace.recordArtifact("device_grant_validation", Map.of(
                     "userId", user.getUsername(),
                     "publicKeyHash", payload.publicKeyHash(),
-                    "hasEncryptedData", payload.encryptedData() != null && !payload.encryptedData().isBlank()
+                    "hasHandoverProof", payload.handoverProof() != null && !payload.handoverProof().isBlank()
             ), "Validated device grant login_token against stored device credential.");
 
             event.user(user);
@@ -124,7 +121,7 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("Device credential not found"));
 
-            validateSignature(matchedCredential, payload.encryptedData(), payload.signature());
+            validateHandoverProof(user.getUsername(), matchedCredential, payload);
 
             if (!TokenManager.verifyConsentStillAvailable(session, user, client, TokenManager.getRequestedClientScopes(session, scope, client, user))) {
                 String errorMessage = "Client no longer has requested consent from user";
@@ -191,26 +188,21 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
         return EventType.LOGIN;
     }
 
-    private void validateSignature(CredentialModel credential, String encryptedData, String signature) throws Exception {
+    private void validateHandoverProof(String userId, CredentialModel credential, LoginTokenSupport.DeviceLoginPayload payload) {
         DeviceCredentialModel deviceCredential = DeviceCredentialModel.createFromCredentialModel(credential);
-        PublicKey publicKey = readPublicKey(deviceCredential.getPublicKey());
-        Signature verifier = Signature.getInstance("SHA256withRSA");
-        verifier.initVerify(publicKey);
-        verifier.update(Base64.getDecoder().decode(encryptedData));
-        boolean valid = verifier.verify(Base64.getDecoder().decode(signature));
-
+        String expectedProof = LoginTokenSupport.createHandoverProof(
+                deviceCredential.getUserHandoverSecret(),
+                userId,
+                payload.publicKeyHash(),
+                payload.nonce(),
+                payload.exp(),
+                payload.jti().toString(),
+                payload.acr()
+        );
+        boolean valid = expectedProof.equals(payload.handoverProof());
         if (!valid) {
-            throw new IllegalArgumentException("Invalid device signature");
+            throw new IllegalArgumentException("Invalid device handover proof");
         }
-    }
-
-    private PublicKey readPublicKey(String pem) throws Exception {
-        String body = pem
-                .replace("-----BEGIN PUBLIC KEY-----", "")
-                .replace("-----END PUBLIC KEY-----", "")
-                .replaceAll("\\s+", "");
-        byte[] decoded = Base64.getDecoder().decode(body);
-        return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(decoded));
     }
 
     private static String firstNonBlank(String first, String second) {

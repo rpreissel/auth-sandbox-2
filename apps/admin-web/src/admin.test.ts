@@ -7,7 +7,6 @@ import { TRACE_VIEWER_ENTRY, TRACE_VIEWER_URL, createSuggestedTan, filterDevices
 const devices: DeviceRecord[] = [
   {
     id: 'device-1',
-    userId: 'demo-user',
     deviceName: 'Pixel 8',
     publicKeyHash: 'HASH-ABC',
     active: true,

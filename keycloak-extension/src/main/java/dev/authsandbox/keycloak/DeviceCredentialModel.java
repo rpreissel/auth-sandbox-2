@@ -11,17 +11,17 @@ public class DeviceCredentialModel extends CredentialModel {
     public static final String TYPE = "device-login";
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    public static DeviceCredentialModel create(String publicKey, String publicKeyHash, String encPrivKey) {
+    public static DeviceCredentialModel create(String publicKeyHash, String userHandoverSecret) {
         DeviceCredentialModel model = new DeviceCredentialModel();
         model.setType(TYPE);
         model.setCreatedDate(System.currentTimeMillis());
         try {
             model.setCredentialData(mapper.writeValueAsString(Map.of(
-                    "publicKey", publicKey,
+                    "version", "handover-v1",
                     "publicKeyHash", publicKeyHash
             )));
             model.setSecretData(mapper.writeValueAsString(Map.of(
-                    "encPrivKey", encPrivKey
+                    "userHandoverSecret", userHandoverSecret
             )));
         } catch (Exception e) {
             throw new RuntimeException("Failed to create device credential model", e);
@@ -40,16 +40,12 @@ public class DeviceCredentialModel extends CredentialModel {
         return credentialModel;
     }
 
-    public String getPublicKey() {
-        return getValue(getCredentialData(), "publicKey");
-    }
-
     public String getPublicKeyHash() {
         return getValue(getCredentialData(), "publicKeyHash");
     }
 
-    public String getEncPrivKey() {
-        return getValue(getSecretData(), "encPrivKey");
+    public String getUserHandoverSecret() {
+        return getValue(getSecretData(), "userHandoverSecret");
     }
 
     private String getValue(String json, String key) {

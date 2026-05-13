@@ -30,11 +30,13 @@ import {
   startPublicAssuranceFlowMethod
 } from './assurance-flows.js'
 import { verifyServiceToken } from './flow-tokens.js'
-import { createEncryptedChallenge, generateEncryptionKeyPair, hashPublicKey } from './lib/crypto.js'
+import { createDeviceHandoverProof, deriveUserDeviceHandoverSecret } from './device-handover.js'
+import { createEncryptedChallenge, hashPublicKey, verifyPayloadSignature } from './lib/crypto.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
 import { buildSsoBootstrapTargetUrl, createSsoBootstrapState, getSsoBootstrapTarget, verifySsoBootstrapState } from './sso-bootstrap.js'
 import type {
   ChallengeRow,
+  DeviceBindingRow,
   DeviceRow,
   RegistrationIdentityRow,
   RegistrationPersonCodeRow,
@@ -135,7 +137,6 @@ function mapRegistrationPersonSmsNumber(row: RegistrationPersonSmsNumberRow): Re
 function mapDevice(row: DeviceRow): DeviceRecord {
   return {
     id: row.id,
-    userId: row.user_id,
     deviceName: row.device_name,
     publicKeyHash: row.public_key_hash,
     active: row.active,
@@ -264,11 +265,18 @@ export async function deleteDevice(id: string) {
       notes: 'Delete device service operation.'
     },
     async () => {
-      const result = await pool.query<DeviceRow>('delete from devices where id = $1 returning *', [id])
-      const device = result.rows[0]
-      if (device?.keycloak_credential_id) {
-        await adminClient.deleteDeviceCredential(device.user_id, device.keycloak_credential_id)
+      const bindingResult = await pool.query<DeviceBindingRow>(
+        'select * from device_bindings where device_id = $1 and active = true',
+        [id]
+      )
+      const binding = bindingResult.rows[0]
+      if (binding) {
+        if (binding.keycloak_credential_id) {
+          await adminClient.deleteDeviceCredential(binding.user_id, binding.keycloak_credential_id)
+        }
+        await pool.query('delete from device_bindings where device_id = $1', [id])
       }
+      await pool.query('delete from devices where id = $1', [id])
     }
   )
 }
@@ -284,14 +292,21 @@ export async function deleteRegistrationIdentity(userId: string) {
       notes: 'Delete registration identity and associated sandbox state.'
     },
     async () => {
-      const devicesResult = await pool.query<DeviceRow>('select * from devices where user_id = $1', [userId])
+      const devicesResult = await pool.query<DeviceRow>('select * from devices', [])
       for (const device of devicesResult.rows) {
-        if (device.keycloak_credential_id) {
-          await adminClient.deleteDeviceCredential(device.user_id, device.keycloak_credential_id)
+        const bindingResult = await pool.query<DeviceBindingRow>(
+          'select * from device_bindings where device_id = $1 and user_id = $2 and active = true',
+          [device.id, userId]
+        )
+        const binding = bindingResult.rows[0]
+        if (binding && binding.keycloak_credential_id) {
+          await adminClient.deleteDeviceCredential(binding.user_id, binding.keycloak_credential_id)
+        }
+        if (binding) {
+          await pool.query('delete from device_bindings where device_id = $1 and user_id = $2', [device.id, userId])
         }
       }
 
-      await pool.query('delete from devices where user_id = $1', [userId])
       await pool.query('delete from tanmock_entries where source_user_id = $1', [userId])
       await pool.query('delete from tanmock_authorization_codes where source_user_id = $1', [userId])
       await pool.query('delete from tanmock_refresh_tokens where source_user_id = $1', [userId])
@@ -430,16 +445,24 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
       if (!device) {
         throw notFound('Unknown device')
       }
+      const bindingResult = await pool.query<DeviceBindingRow>(
+        'select * from device_bindings where device_id = $1 and active = true',
+        [device.id]
+      )
+      const binding = bindingResult.rows[0]
+      if (!binding) {
+        throw badRequest('Device not yet bound to a user')
+      }
 
       const nonce = randomUUID()
       const expiresAt = new Date(Date.now() + appConfig.challengeTtlSeconds * 1000)
       const challengePayload = {
-        userId: device.user_id,
+        userId: binding.user_id,
         nonce,
         exp: Math.floor(expiresAt.getTime() / 1000),
         deviceId: device.id
       }
-      const challenge = createEncryptedChallenge(challengePayload, device.enc_pub_key)
+      const challenge = createEncryptedChallenge(challengePayload, device.public_key)
 
       await recordArtifact({
         spanId,
@@ -465,7 +488,7 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
       await pool.query(
         `insert into login_challenges (nonce, user_id, device_id, public_key_hash, expires_at, used)
          values ($1, $2, $3, $4, $5, false)`,
-        [nonce, device.user_id, device.id, device.public_key_hash, expiresAt.toISOString()]
+        [nonce, binding.user_id, device.id, device.public_key_hash, expiresAt.toISOString()]
       )
 
       return {
@@ -511,22 +534,49 @@ export async function finishLogin(input: FinishLoginInput): Promise<FinishLoginR
 
 async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput & { acr?: string | null }) {
   const challenge = await getUsableLoginChallenge(input.nonce)
+  const deviceResult = await pool.query<DeviceRow>('select * from devices where id = $1', [challenge.device_id])
+  const device = deviceResult.rows[0]
+  if (!device) {
+    throw badRequest('Unknown device')
+  }
+  const bindingResult = await pool.query<DeviceBindingRow>(
+    'select * from device_bindings where device_id = $1 and active = true',
+    [challenge.device_id]
+  )
+  const binding = bindingResult.rows[0]
+  if (!binding) {
+    throw badRequest('Device binding is no longer valid')
+  }
+  if (device.public_key_hash !== challenge.public_key_hash) {
+    throw badRequest('Challenge no longer matches the stored device binding')
+  }
+  if (!verifyPayloadSignature(input.encryptedData, input.signature, device.public_key)) {
+    throw badRequest('Invalid device signature')
+  }
+
   const exp = Math.floor(new Date(challenge.expires_at).getTime() / 1000)
+  const jti = randomUUID()
+  const handoverProof = createDeviceHandoverProof({
+    userHandoverSecret: deriveUserDeviceHandoverSecret(binding.user_id),
+    userId: binding.user_id,
+    publicKeyHash: challenge.public_key_hash,
+    nonce: challenge.nonce,
+    exp,
+    jti,
+    acr: input.acr ?? null
+  })
 
   await pool.query('update login_challenges set used = true where id = $1', [challenge.id])
 
   const loginTokenPayload = {
     type: 'device',
-    jti: randomUUID(),
+    jti,
     exp,
-    sub: challenge.user_id,
+    sub: binding.user_id,
     ...(input.acr ? { acr: input.acr } : {}),
     publicKeyHash: challenge.public_key_hash,
     nonce: challenge.nonce,
-    encryptedKey: input.encryptedKey,
-    encryptedData: input.encryptedData,
-    iv: input.iv,
-    signature: input.signature
+    handoverProof
   }
 
   return {
