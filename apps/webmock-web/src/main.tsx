@@ -237,9 +237,9 @@ function WebMockApp() {
         authorizationEndpoint: `${KEYCLOAK_BASE}/auth`,
         clientId: CLIENT_ID,
         redirectUri: REDIRECT_URI,
-        acrValues: 'ekw',
         state: randomValue(),
         nonce: randomValue(),
+        ekwHandoff: true,
         prompt: 'none'
       })
       window.location.assign(ssoUrl)

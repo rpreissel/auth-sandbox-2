@@ -27,6 +27,8 @@ public class EkwSessionReuseGuardAuthenticator implements Authenticator {
                 requestedAcrValues = context.getHttpRequest().getUri().getQueryParameters().getFirst("acr_values");
             }
             boolean requestedEkw = requestedAcrValues != null && requestedAcrValues.contains("ekw");
+            boolean ekwHandoff = "1".equals(context.getHttpRequest().getUri().getQueryParameters().getFirst("ekw_handoff"));
+            boolean enforceEkw = requestedEkw || ekwHandoff;
             if (authResult == null) {
                 trace.success("No active cookie session found for EKW guard.");
                 context.success();
@@ -35,8 +37,8 @@ public class EkwSessionReuseGuardAuthenticator implements Authenticator {
 
             UserSessionModel userSession = authResult.getSession();
             if (!"true".equals(userSession.getNote(EkwSessionArmAuthenticator.EKW_MARKER_NOTE))) {
-                if (requestedEkw) {
-                    reject(context, trace, userSession, "none".equals(context.getAuthenticationSession().getClientNote("prompt")), "Requested acr=ekw but cookie session is not an EKW session.");
+                if (enforceEkw) {
+                    reject(context, trace, "none".equals(context.getAuthenticationSession().getClientNote("prompt")), "Requested acr=ekw but cookie session is not an EKW session.");
                     return;
                 }
                 trace.success("Current session is not an EKW session.");
@@ -59,15 +61,15 @@ public class EkwSessionReuseGuardAuthenticator implements Authenticator {
             ), "Validated whether an attached cookie session may still be reused as a single-use EKW session.");
 
             if (allowedTargetClientId == null || allowedTargetClientId.isBlank()) {
-                reject(context, trace, userSession, promptNone, "EKW session missing allowed target client.");
+                reject(context, trace, promptNone, "EKW session missing allowed target client.");
                 return;
             }
             if (!allowedTargetClientId.equals(currentClientId)) {
-                reject(context, trace, userSession, promptNone, "EKW session attempted on a different client.");
+                reject(context, trace, promptNone, "EKW session attempted on a different client.");
                 return;
             }
             if ("true".equals(consumed)) {
-                reject(context, trace, userSession, promptNone, "EKW session was already consumed.");
+                reject(context, trace, promptNone, "EKW session was already consumed.");
                 return;
             }
 
@@ -81,11 +83,7 @@ public class EkwSessionReuseGuardAuthenticator implements Authenticator {
         }
     }
 
-    private void reject(AuthenticationFlowContext context, AuthFlowTraceSupport.AuthenticatorTrace trace, UserSessionModel userSession, boolean promptNone, String reason) {
-        AuthenticationManager.expireUserSessionCookie(context.getSession(), userSession, context.getRealm(), context.getUriInfo());
-        AuthenticationManager.expireIdentityCookie(context.getSession());
-        AuthenticationManager.expireRememberMeCookie(context.getSession());
-        AuthenticationManager.expireAuthSessionCookie(context.getSession());
+    private void reject(AuthenticationFlowContext context, AuthFlowTraceSupport.AuthenticatorTrace trace, boolean promptNone, String reason) {
         if (promptNone) {
             trace.error(reason + " prompt=none request rejected after cookie authentication.");
             context.failure(AuthenticationFlowError.ACCESS_DENIED);

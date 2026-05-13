@@ -4,10 +4,11 @@ export function buildAuthorizationUrl(input: {
   authorizationEndpoint: string
   clientId: string
   redirectUri: string
-  acrValues: string
+  acrValues?: string | null
   state: string
   nonce: string
   scope?: string
+  ekwHandoff?: boolean
   traceHint?: string | null
   loginHint?: string | null
   idpHint?: string | null
@@ -18,7 +19,9 @@ export function buildAuthorizationUrl(input: {
   url.searchParams.set('redirect_uri', input.redirectUri)
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('scope', input.scope ?? 'openid profile email servicemock-api-access')
-  url.searchParams.set('acr_values', input.acrValues)
+  if (input.acrValues) {
+    url.searchParams.set('acr_values', input.acrValues)
+  }
   url.searchParams.set('state', input.state)
   url.searchParams.set('nonce', input.nonce)
   if (input.traceHint) {
@@ -32,6 +35,9 @@ export function buildAuthorizationUrl(input: {
   }
   if (input.prompt) {
     url.searchParams.set('prompt', input.prompt)
+  }
+  if (input.ekwHandoff) {
+    url.searchParams.set('ekw_handoff', '1')
   }
   return url.toString()
 }

@@ -34,6 +34,21 @@ describe('webmock helpers', () => {
     expect(url).not.toContain('servicemock-api-access')
   })
 
+  it('allows prompt=none EKW handoff without acr_values', () => {
+    const url = buildAuthorizationUrl({
+      authorizationEndpoint: 'https://keycloak.localhost:8443/realms/auth-sandbox-2/protocol/openid-connect/auth',
+      clientId: 'webmock-web',
+      redirectUri: 'https://webmock.localhost:8443/',
+      state: 'state-3',
+      nonce: 'nonce-3',
+      ekwHandoff: true,
+      prompt: 'none'
+    })
+
+    expect(url).toContain('ekw_handoff=1')
+    expect(url).not.toContain('acr_values=')
+  })
+
   it('treats 2se as satisfying 1se endpoints', () => {
     expect(satisfiesAssuranceLevel('2se', '1se')).toBe(true)
     expect(satisfiesAssuranceLevel('1se', '2se')).toBe(false)

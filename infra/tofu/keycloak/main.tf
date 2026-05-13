@@ -168,9 +168,19 @@ resource "keycloak_authentication_flow" "browser_step_up_flow" {
   provider_id = "basic-flow"
 }
 
-resource "keycloak_authentication_execution" "browser_cookie" {
+resource "keycloak_authentication_subflow" "browser_step_up_entry_flow" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
+  alias             = "browser-step-up-entry"
+  description       = "Cookie SSO or interactive browser auth before post-auth EKW checks"
+  provider_id       = "basic-flow"
+  requirement       = "REQUIRED"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution" "browser_cookie" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_step_up_entry_flow.alias
   authenticator     = "auth-cookie"
   requirement       = "ALTERNATIVE"
   priority          = 10
@@ -186,12 +196,12 @@ resource "keycloak_authentication_execution" "browser_ekw_session_reuse_guard" {
 
 resource "keycloak_authentication_subflow" "browser_auth_flow" {
   realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.browser_step_up_flow.alias
-  alias             = "browser-step-up-auth"
+  parent_flow_alias = keycloak_authentication_subflow.browser_step_up_entry_flow.alias
+  alias             = "browser-step-up-auth-v2"
   description       = "Interactive browser authentication with LoA-aware branches"
   provider_id       = "basic-flow"
   requirement       = "ALTERNATIVE"
-  priority          = 40
+  priority          = 20
 }
 
 resource "keycloak_authentication_flow" "tanmock_first_broker_login_flow" {
@@ -249,9 +259,19 @@ resource "keycloak_authentication_flow" "browser_ekw_login_flow" {
   provider_id = "basic-flow"
 }
 
-resource "keycloak_authentication_execution" "ekw_login_cookie" {
+resource "keycloak_authentication_subflow" "browser_ekw_login_auth_flow" {
   realm_id          = keycloak_realm.realm.id
   parent_flow_alias = keycloak_authentication_flow.browser_ekw_login_flow.alias
+  alias             = "browser-ekw-login-auth"
+  description       = "Cookie SSO or EKW broker redirect before arming the EKW session"
+  provider_id       = "basic-flow"
+  requirement       = "REQUIRED"
+  priority          = 10
+}
+
+resource "keycloak_authentication_execution" "ekw_login_cookie" {
+  realm_id          = keycloak_realm.realm.id
+  parent_flow_alias = keycloak_authentication_subflow.browser_ekw_login_auth_flow.alias
   authenticator     = "auth-cookie"
   requirement       = "ALTERNATIVE"
   priority          = 10
@@ -259,7 +279,7 @@ resource "keycloak_authentication_execution" "ekw_login_cookie" {
 
 resource "keycloak_authentication_execution" "ekw_login_idp_redirect" {
   realm_id          = keycloak_realm.realm.id
-  parent_flow_alias = keycloak_authentication_flow.browser_ekw_login_flow.alias
+  parent_flow_alias = keycloak_authentication_subflow.browser_ekw_login_auth_flow.alias
   authenticator     = "identity-provider-redirector"
   requirement       = "ALTERNATIVE"
   priority          = 20
@@ -280,7 +300,7 @@ resource "keycloak_authentication_execution" "ekw_session_arm" {
   parent_flow_alias = keycloak_authentication_flow.browser_ekw_login_flow.alias
   authenticator     = "ekw-session-arm"
   requirement       = "REQUIRED"
-  priority          = 30
+  priority          = 20
 }
 
 resource "keycloak_openid_client" "ekw_login_app" {
