@@ -2,8 +2,7 @@
 
 ## Summary
 
-AppMock Web first creates an unbound device, then attaches the user identity later in the same flow before the backend creates the Keycloak credential and optional password bootstrap.
-
+AppMock Web first creates an unbound device, then attaches the user identity later in the same flow before the backend creates the single Keycloak `device-login` credential (containing all of the user's bindings) and optional password bootstrap. The handover uses the persistent per-user secret stored in `user.handover_secret`.
 
 ## Diagram
 
@@ -21,7 +20,8 @@ sequenceDiagram
   App->>Auth: Submit deferred identity data
   App->>Auth: Complete code or SMS verification
   Auth->>DB: Consume verification and confirm deferred identity
-  Auth->>KC: Create device credential after binding
+  Auth->>DB: Read or create user.handover_secret
+  Auth->>KC: Upsert single device-login credential with all bindings
   Auth->>DB: Persist device binding and password status
   Auth->>KC: Check whether password credential exists
   Auth-->>App: Return registration result
@@ -41,13 +41,14 @@ AppMock Web, Auth API, Postgres, Keycloak
 4. **Submit deferred identity data** (AppMock Web → Auth API): AppMock Web sends userId, name, birth date, and optional phone number only after the device has already been created.
 5. **Complete code or SMS verification** (AppMock Web → Auth API): AppMock Web selects person code or SMS-TAN, starts the chosen method when needed, and submits the entered code or TAN.
 6. **Consume verification and confirm deferred identity** (Auth API → Postgres): The backend verifies the submitted code or TAN against the now-attached registration identity and marks the flow as finalizable.
-7. **Create device credential after binding** (Auth API → Keycloak): Only during finalization does auth-api ensure the user in Keycloak and create the custom device credential for the already persisted device.
-8. **Persist device binding and password status** (Auth API → Postgres): Auth-api writes the user linkage into device_bindings and returns whether password setup is still required for the bound user.
-9. **Check whether password credential exists** (Auth API → Keycloak): After storing the device binding, auth-api fetches the user credentials from the Keycloak Admin API and checks whether any credential of type password already exists for the same user.
-10. **Return registration result** (Auth API → AppMock Web): The app learns whether it can continue directly into device login or must complete backend-driven password setup first.
-11. **Submit initial password when required** (AppMock Web → Auth API): If no password exists yet, the app sends the chosen password through auth-api instead of using Keycloak required actions.
-12. **Set password via Admin API** (Auth API → Keycloak): Auth-api resolves the Keycloak user by username and calls the Admin API reset-password endpoint with temporary=false so the initial password becomes a normal stored password credential immediately.
-13. **Mark password bootstrap complete** (Auth API → Postgres): The device binding is now treated as fully activated, so the app can continue into encrypted login.
+7. **Read or create user.handover_secret** (Auth API → Postgres): On first registration for a user, auth-api generates a random 32-byte secret and stores it in `user.handover_secret`. On subsequent registrations, it reuses the existing secret.
+8. **Upsert single device-login credential with all bindings** (Auth API → Keycloak): Only during finalization does auth-api upsert exactly one `device-login` credential for the user. The credential holds `version: handover-v2`, all `bindings` (each with `publicKeyHash` and `deviceName`), and the per-user `handoverSecret` in `secretData`. Any previous credential for this user is replaced.
+9. **Persist device binding and password status** (Auth API → Postgres): Auth-api writes the device binding (with `device_name`) and returns whether password setup is still required.
+10. **Check whether password credential exists** (Auth API → Keycloak): After storing the device binding, auth-api fetches the user credentials from the Keycloak Admin API and checks whether any credential of type password already exists for the same user.
+11. **Return registration result** (Auth API → AppMock Web): The app learns whether it can continue directly into device login or must complete backend-driven password setup first.
+12. **Submit initial password when required** (AppMock Web → Auth API): If no password exists yet, the app sends the chosen password through auth-api instead of using Keycloak required actions.
+13. **Set password via Admin API** (Auth API → Keycloak): Auth-api resolves the Keycloak user by username and calls the Admin API reset-password endpoint with temporary=false so the initial password becomes a normal stored password credential immediately.
+14. **Mark password bootstrap complete** (Auth API → Postgres): The device binding is now treated as fully active, so the app can continue into encrypted login.
 
 ## Dateien
 

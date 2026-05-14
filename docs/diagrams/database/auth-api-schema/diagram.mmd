@@ -1,11 +1,20 @@
 erDiagram
   devices {
     uuid id PK
-    text device_name
     text public_key
     text public_key_hash
-    boolean active
     timestamptz created_at
+  }
+
+  user {
+    uuid id PK
+    text user_id UK
+    text handover_secret UK
+    text first_name
+    text last_name
+    date birth_date
+    timestamptz created_at
+    timestamptz updated_at
   }
 
   device_bindings {
@@ -14,7 +23,7 @@ erDiagram
     text user_id
     text keycloak_user_id
     text keycloak_credential_id
-    boolean active
+    text device_name
     timestamptz created_at
   }
 
@@ -65,16 +74,6 @@ erDiagram
     timestamptz created_at
   }
 
-  registration_people {
-    uuid id PK
-    text user_id
-    text first_name
-    text last_name
-    date birth_date
-    timestamptz created_at
-    timestamptz updated_at
-  }
-
   registration_person_codes {
     uuid id PK
     uuid person_id FK
@@ -92,9 +91,10 @@ erDiagram
     timestamptz updated_at
   }
 
+  user ||--o{ registration_person_codes : ""
+  user ||--o{ registration_person_sms_numbers : ""
   devices ||--o{ login_challenges : ""
   devices ||--o{ device_bindings : ""
   devices ||--o{ assurance_flows : ""
+  device_bindings ||--o{ assurance_flows : ""
   assurance_flows ||--o{ assurance_flow_events : ""
-  registration_people ||--o{ registration_person_codes : ""
-  registration_people ||--o{ registration_person_sms_numbers : ""

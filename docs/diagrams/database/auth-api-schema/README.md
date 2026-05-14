@@ -2,8 +2,7 @@
 
 ## Übersicht
 
-Dieses Diagramm zeigt die Tabellenstruktur des `auth_api`-Schemas in der PostgreSQL-Datenbank der Sandbox. Es basiert auf den Migrationen `001_init.sql`, `003_devices_unbound.sql` und `004_device_bindings.sql`.
-
+Dieses Diagramm zeigt die Tabellenstruktur des `auth_api`-Schemas in der PostgreSQL-Datenbank der Sandbox. Es basiert auf den Migrationen `001_init.sql` bis `006_device_binding_names.sql`.
 
 ## Diagram
 
@@ -11,11 +10,20 @@ Dieses Diagramm zeigt die Tabellenstruktur des `auth_api`-Schemas in der Postgre
 erDiagram
   devices {
     uuid id PK
-    text device_name
     text public_key
     text public_key_hash
-    boolean active
     timestamptz created_at
+  }
+
+  user {
+    uuid id PK
+    text user_id UK
+    text handover_secret UK
+    text first_name
+    text last_name
+    date birth_date
+    timestamptz created_at
+    timestamptz updated_at
   }
 
   device_bindings {
@@ -24,7 +32,7 @@ erDiagram
     text user_id
     text keycloak_user_id
     text keycloak_credential_id
-    boolean active
+    text device_name
     timestamptz created_at
   }
 
@@ -75,16 +83,6 @@ erDiagram
     timestamptz created_at
   }
 
-  registration_people {
-    uuid id PK
-    text user_id
-    text first_name
-    text last_name
-    date birth_date
-    timestamptz created_at
-    timestamptz updated_at
-  }
-
   registration_person_codes {
     uuid id PK
     uuid person_id FK
@@ -102,39 +100,40 @@ erDiagram
     timestamptz updated_at
   }
 
+  user ||--o{ registration_person_codes : ""
+  user ||--o{ registration_person_sms_numbers : ""
   devices ||--o{ login_challenges : ""
   devices ||--o{ device_bindings : ""
   devices ||--o{ assurance_flows : ""
+  device_bindings ||--o{ assurance_flows : ""
   assurance_flows ||--o{ assurance_flow_events : ""
-  registration_people ||--o{ registration_person_codes : ""
-  registration_people ||--o{ registration_person_sms_numbers : ""
 ```
+
 ## Beziehungen
 
-- `devices` ist die zentrale Tabelle. Sie enthält nur gerätebezogene Daten (Name, öffentlicher Schlüssel, Hash) — keine Nutzerbindung direkt.
-- `device_bindings` verknüpft ein `device` mit einem `user_id` und den Keycloak-Metadaten. Ein Gerät kann mehrere Bindungen haben (historisch), aber nur eine ist `active = true`.
+- `user` ist die zentrale Identitätstabelle. Sie enthält `handover_secret` — das persistente, zufällig erzeugte 32-Byte-Secret für den handover-v2-Workflow.
+- `devices` enthält nur gerätebezogene Daten (Schlüsselmaterial, Hash) — keine Benutzerbindung und keinen Namen.
+- `device_bindings` verknüpft ein `device` mit einem `user_id` und den Keycloak-Metadaten. Der `device_name` ist hier gespeichert und muss pro `(user_id, device_name)` eindeutig sein.
 - `login_challenges` referenziert ein `device` für den verschlüsselten Challenge-Login-Prozess.
 - `assurance_flows` referenziert ein `device` für Registrierungs-, Upgrade- und Step-up-Flows.
-- `assurance_flow_events` protokolliert Ereignisse pro Flow.
-- `registration_people` ist die Personentabelle mit Identitätsmerkmalen.
-- `registration_person_codes` und `registration_person_sms_numbers` gehören zu einer Person.
+- `registration_person_codes` und `registration_person_sms_numbers` gehören zu einem `user`.
 
 ## Tabellen
 
 | Tabelle | Zweck | Primärschlüssel | Fremdschlüssel |
 |---|---|---|---|
-| `devices` | Gerätebasisdaten (Name, Schlüssel, Hash) | `id` (uuid) | — |
+| `user` | Personenidentität (Name, Geburtsdatum) + handover_secret | `id` (uuid) | — |
+| `devices` | Gerätebasisdaten (Schlüssel, Hash) | `id` (uuid) | — |
 | `device_bindings` | Verknüpft Gerät mit Nutzer und Keycloak-Metadaten | `id` (uuid) | `device_id` → `devices` |
 | `login_challenges` | Verschlüsselte Login-Challenges mit Nonce | `id` (uuid) | `device_id` → `devices` |
 | `assurance_flows` | Registrierungs-, Upgrade- und Step-up-Flows | `id` (text) | `device_id` → `devices` |
 | `assurance_flow_events` | Flow-Ereignisprotokoll | `id` (uuid) | `flow_id` → `assurance_flows` |
-| `registration_people` | Personenidentität (Name, Geburtsdatum) | `id` (uuid) | — |
-| `registration_person_codes` | Einmalige oder wieder verwendbare Registrierungscodes | `id` (uuid) | `person_id` → `registration_people` |
-| `registration_person_sms_numbers` | SMS-basierte Verifizierung | `id` (uuid) | `person_id` → `registration_people` |
+| `registration_person_codes` | Einmalige oder wieder verwendbare Registrierungscodes | `id` (uuid) | `person_id` → `user` |
+| `registration_person_sms_numbers` | SMS-basierte Verifizierung | `id` (uuid) | `person_id` → `user` |
 
-## Hinweis
+## handover_secret
 
-Die einstige Nutzerbindung direkt auf `devices` (`user_id`, `keycloak_user_id`, `keycloak_credential_id`, `enc_pub_key`) wurde in Migration `004_device_bindings.sql` in die separate `device_bindings`-Tabelle verschoben. `devices` enthält nur noch gerätebezogene Daten.
+Das Feld `user.handover_secret` ist die Source of Truth für das kryptografische Handover-Secret. Es wird bei der ersten Geräteregistrierung erzeugt und in Keycloaals `secretData` des einen `device-login`-Credentials pro User gespiegelt.
 
 ## Dateien
 
