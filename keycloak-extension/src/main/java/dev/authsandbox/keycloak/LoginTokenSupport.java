@@ -84,8 +84,18 @@ final class LoginTokenSupport {
                 handoverIv,
                 handoverCiphertext,
                 exp,
-                parsedJti
+                parsedJti,
+                readSecondFactor(token)
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> readSecondFactor(Map<String, Object> token) {
+        Object sf = token.get("secondFactor");
+        if (sf instanceof Map) {
+            return (Map<String, Object>) sf;
+        }
+        return null;
     }
 
     static void validateExpiry(DeviceLoginPayload payload) {
@@ -175,7 +185,8 @@ final class LoginTokenSupport {
             String handoverIv,
             String handoverCiphertext,
             long exp,
-            UUID jti
+            UUID jti,
+            Map<String, Object> secondFactor
     ) {
     }
 

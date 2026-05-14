@@ -82,7 +82,7 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
         }
 
         allBindings.removeIf(b -> b.publicKeyHash().equals(request.publicKeyHash()));
-        allBindings.add(new DeviceCredentialModel.BindingEntry(request.publicKeyHash(), request.deviceName()));
+        allBindings.add(new DeviceCredentialModel.BindingEntry(request.publicKeyHash(), request.deviceName(), request.biometricPublicKey()));
 
         DeviceCredentialModel newCredential = DeviceCredentialModel.createWithBindings(allBindings, request.handoverSecret());
 
@@ -128,7 +128,8 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
             String keycloakUserId,
             String deviceName,
             String publicKeyHash,
-            String handoverSecret
+            String handoverSecret,
+            String biometricPublicKey
     ) {
     }
 }

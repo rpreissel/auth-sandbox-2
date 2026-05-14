@@ -22,9 +22,15 @@ public class DeviceCredentialModel extends CredentialModel {
         model.setType(TYPE);
         model.setCreatedDate(System.currentTimeMillis());
         try {
-            model.setCredentialData(mapper.writeValueAsString(Map.of(
-                    "version", "handover-v2",
-                    "bindings", bindings.stream().map(BindingEntry::toMap).toList()
+            String biometricPublicKey = bindings.stream()
+                    .filter(b -> b.biometricPublicKey() != null && !b.biometricPublicKey().isBlank())
+                    .map(BindingEntry::biometricPublicKey)
+                    .findFirst()
+                    .orElse(null);
+            model.setCredentialData(mapper.writeValueAsString(Map.ofEntries(
+                    Map.entry("version", "handover-v2"),
+                    Map.entry("bindings", bindings.stream().map(BindingEntry::toMap).toList()),
+                    biometricPublicKey != null ? Map.entry("biometricPublicKey", biometricPublicKey) : Map.entry("biometricPublicKey", "")
             )));
             model.setSecretData(mapper.writeValueAsString(Map.of(
                     "handoverSecret", handoverSecret
@@ -92,6 +98,11 @@ public class DeviceCredentialModel extends CredentialModel {
         return getValue(getSecretData(), "handoverSecret");
     }
 
+    public String getBiometricPublicKey() {
+        String value = getValue(getCredentialData(), "biometricPublicKey");
+        return (value != null && !value.isBlank()) ? value : null;
+    }
+
     private String getValue(String json, String key) {
         try {
             Map<String, Object> data = mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
@@ -102,12 +113,26 @@ public class DeviceCredentialModel extends CredentialModel {
         }
     }
 
-    public record BindingEntry(String publicKeyHash, String deviceName) {
+    public record BindingEntry(String publicKeyHash, String deviceName, String biometricPublicKey) {
+        public BindingEntry(String publicKeyHash, String deviceName) {
+            this(publicKeyHash, deviceName, null);
+        }
+
+        public BindingEntry(String publicKeyHash) {
+            this(publicKeyHash, null, null);
+        }
+
         public Map<String, String> toMap() {
+            var map = new java.util.HashMap<String, String>();
+            map.put("publicKeyHash", publicKeyHash);
             if (deviceName != null) {
-                return Map.of("publicKeyHash", publicKeyHash, "deviceName", deviceName);
+                map.put("deviceName", deviceName);
             }
-            return Map.of("publicKeyHash", publicKeyHash);
+            if (biometricPublicKey != null) {
+                map.put("biometricPublicKey", biometricPublicKey);
+            }
+            return map;
         }
     }
+}
 }
