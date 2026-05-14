@@ -50,16 +50,19 @@ Explicitly out of scope:
 ## Main flow
 
 1. Admin creates a registration code for a `userId`.
-2. Device app registers a device with `userId`, `deviceName`, `activationCode`, and a signing public key.
-3. Backend ensures the Keycloak user exists and stores a custom `device-login` credential in Keycloak.
-4. Backend checks whether the Keycloak user already has a password.
-5. If not, the app submits an initial password and the backend sets it via the Keycloak Admin API.
-6. Device app requests an encrypted challenge from `auth-api`.
-7. Device app signs the encrypted payload and sends it back.
-8. `auth-api` exchanges the signed challenge at the Keycloak token endpoint with a custom OAuth grant, and Keycloak validates the custom device credential before issuing OIDC tokens.
-9. App uses the access token to call `servicemock-api`, which verifies the token with Keycloak JWKS and the expected audience.
-10. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
-11. App can refresh tokens and log out.
+2. Device app starts registration with only `deviceName` and a signing public key.
+3. Backend creates the registration flow and persists an unbound device first.
+4. Device app submits the person identity later in the same flow and completes code or SMS verification.
+5. Only after successful identity verification does the backend ensure the Keycloak user exists and create the custom `device-login` credential.
+6. Backend checks whether the Keycloak user already has a password.
+7. If not, the app submits an initial password and the backend sets it via the Keycloak Admin API.
+8. Device app requests an encrypted challenge from `auth-api`.
+9. Device app signs the encrypted payload and sends it back.
+10. `auth-api` verifies the RSA signature itself, derives a per-user handover proof, and exchanges a custom login token at the Keycloak token endpoint.
+11. Keycloak validates only the API-issued handover proof plus `publicKeyHash`, not raw device key material.
+12. App uses the access token to call `servicemock-api`, which verifies the token with Keycloak JWKS and the expected audience.
+13. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
+14. App can refresh tokens and log out.
 
 ```mermaid
 sequenceDiagram
@@ -79,11 +82,14 @@ sequenceDiagram
   Auth->>DB: Store code
   Auth-->>Admin: Code issued
 
-  Device->>Auth: Register device
-  Auth->>DB: Create registration flow
-  Auth->>KC: Ensure user + create device credential
+  Device->>Auth: Start registration with deviceName + publicKey
+  Auth->>DB: Create registration flow + unbound device
+  Auth-->>Device: Flow created with available next steps
+
+  Device->>Auth: Submit identity + verification result later in flow
+  Auth->>KC: Ensure user + create device credential only after verification
   KC-->>Auth: OK
-  Auth-->>Device: Device registered\n(password setup may be required)
+  Auth-->>Device: Device bound\n(password setup may be required)
 
   Device->>Caddy: Set initial password
   Caddy->>Auth: Forward with app proxy token
@@ -151,7 +157,8 @@ sequenceDiagram
 
 - `POST /api/device/login/start`, `POST /api/device/login/finish`, `POST /api/device/token/refresh`, and `POST /api/device/logout` are reachable without a separate API bearer token.
 - `POST /api/device/login/start`, `POST /api/device/login/finish`, `POST /api/device/token/refresh`, and `POST /api/device/logout` are still proof-bound by device registration state, challenge validation, signatures, or refresh-token validity.
-- `POST /api/registration-flows` is the anonymous bootstrap endpoint for device registration and carries the concrete registration payload directly.
+- `POST /api/registration-flows` is the anonymous bootstrap endpoint for the device phase and carries only device material.
+- `POST /api/flows/:flowId/registration-identity` requires `Authorization: Bearer <flowToken>` and attaches deferred identity data to the existing registration flow.
 - `POST /api/step-up-flows` requires a valid Keycloak user bearer token from the allowed browser/app clients and binds the flow to that bearer user.
 - `GET /api/flows/:flowId`, `POST /api/flows/:flowId/select-service`, and `POST /api/flows/:flowId/finalize` require `Authorization: Bearer <flowToken>`.
 - Direct identification endpoints require `Authorization: Bearer <serviceToken>` and return a `serviceResultToken` for finalization.

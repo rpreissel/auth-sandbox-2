@@ -112,26 +112,32 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
   },
   {
     title: 'Device registration and password bootstrap',
-    summary: 'AppMock Web runs the registration flow, stores the custom device credential, and triggers backend password setup when the user still has none.',
+    summary: 'AppMock Web first creates an unbound device, then attaches the user identity later in the same flow before the backend creates the Keycloak credential and optional password bootstrap.',
     actors: ['AppMock Web', 'Auth API', 'Postgres', 'Keycloak'],
     steps: [
       {
         from: 'AppMock Web',
         to: 'Auth API',
-        label: 'Start registration flow with device material',
-        detail: 'AppMock Web creates fresh device key material and sends the identity input, device name, public key, and required assurance level to auth-api.'
+        label: 'Start registration flow with device material only',
+        detail: 'AppMock Web creates fresh device key material and sends only deviceName plus publicKey to auth-api. No userId, birthDate, or client-controlled requiredAcr is needed at this stage.'
       },
       {
         from: 'Auth API',
         to: 'Postgres',
-        label: 'Create flow and available services',
-        detail: 'Auth-api stores the registration flow and determines which prepared verification services are available for this identity.'
+        label: 'Create flow and unbound device',
+        detail: 'Auth-api stores the registration flow, persists the standalone device first, and links the flow to that device before any user binding exists.'
       },
       {
         from: 'Auth API',
         to: 'AppMock Web',
-        label: 'Return verification options and flow state',
-        detail: 'The client receives the flow state and the available verification options for the next step.'
+        label: 'Return flow state for deferred identity',
+        detail: 'The client receives the flow token together with the persisted device state and can now submit person identity data later in the same flow.'
+      },
+      {
+        from: 'AppMock Web',
+        to: 'Auth API',
+        label: 'Submit deferred identity data',
+        detail: 'AppMock Web sends userId, name, birth date, and optional phone number only after the device has already been created.'
       },
       {
         from: 'AppMock Web',
@@ -142,20 +148,20 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
       {
         from: 'Auth API',
         to: 'Postgres',
-        label: 'Consume verification and bind flow to user',
-        detail: 'The backend verifies the submitted code or TAN, enforces validity, and marks the registration flow as verified for the resolved user.'
+        label: 'Consume verification and confirm deferred identity',
+        detail: 'The backend verifies the submitted code or TAN against the now-attached registration identity and marks the flow as finalizable.'
       },
       {
         from: 'Auth API',
         to: 'Keycloak',
-        label: 'Create device credential',
-        detail: 'During finalization auth-api creates the custom device credential in Keycloak and binds it to the resolved user.'
+        label: 'Create device credential after binding',
+        detail: 'Only during finalization does auth-api ensure the user in Keycloak and create the custom device credential for the already persisted device.'
       },
       {
         from: 'Auth API',
         to: 'Postgres',
-        label: 'Persist device and password status',
-        detail: 'Auth-api stores the device binding and returns whether password setup is still required for the user.'
+        label: 'Persist device binding and password status',
+        detail: 'Auth-api writes the user linkage into device_bindings and returns whether password setup is still required for the bound user.'
       },
       {
         from: 'Auth API',
@@ -204,7 +210,7 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
         from: 'Auth API',
         to: 'Postgres',
         label: 'Load device and persist nonce',
-        detail: 'Auth-api looks up the device, creates a short-lived encrypted challenge, and stores the nonce for verification.'
+        detail: 'Auth-api looks up the standalone device plus its active device_binding, creates a short-lived encrypted challenge, and stores the nonce for verification.'
       },
       {
         from: 'Auth API',
@@ -228,13 +234,13 @@ const sequenceDiagrams: SequenceDiagramDefinition[] = [
         from: 'Auth API',
         to: 'Postgres',
         label: 'Verify nonce, binding, and replay window',
-        detail: 'Auth-api loads the login_challenges row by nonce, rejects unknown, used, or expired challenges, and confirms that the handoff still belongs to the originally stored userId, deviceId, and publicKeyHash binding.'
+        detail: 'Auth-api loads the login_challenges row by nonce, rejects unknown, used, or expired challenges, validates the RSA signature itself, and confirms that the active device_binding still matches userId, deviceId, and publicKeyHash.'
       },
       {
         from: 'Auth API',
         to: 'Keycloak',
         label: 'Exchange custom device-login grant',
-        detail: 'Auth-api marks the challenge as used and forwards a base64url login token into the custom device-login grant. In Keycloak, the extension finds the stored device credential for the user by matching publicKeyHash, reads the PEM public key from that credential, base64-decodes encryptedData, and verifies the submitted signature with SHA256withRSA against exactly that encryptedData payload before issuing access, ID, and refresh tokens.'
+        detail: 'Auth-api marks the challenge as used and forwards a base64url login token into the custom device-login grant. Keycloak matches the credential by publicKeyHash and validates only the API-issued handover proof derived from the per-user handover secret; raw device public keys are not used there anymore.'
       },
       {
         from: 'Auth API',

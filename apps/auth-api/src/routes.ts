@@ -14,6 +14,7 @@ import {
   finalizePublicAssuranceFlow,
   getPublicAssuranceFlow,
   createStepUpFlow,
+  submitRegistrationIdentity,
   redeemFlowArtifact
 } from './assurance-flows.js'
 import { verifyFlowToken, verifyServiceToken } from './flow-tokens.js'
@@ -41,14 +42,16 @@ import {
 } from './services.js'
 
 const createRegistrationFlowSchema = z.object({
-  requiredAcr: z.enum(['level_1', 'level_2']).optional(),
+  deviceName: z.string().min(1),
+  publicKey: z.string().min(1)
+})
+
+const submitRegistrationIdentitySchema = z.object({
   userId: z.string().min(1),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   birthDate: z.string().min(1),
-  phoneNumber: z.string().min(1).optional(),
-  deviceName: z.string().min(1),
-  publicKey: z.string().min(1)
+  phoneNumber: z.string().min(1).optional()
 })
 
 const createStepUpFlowSchema = z.object({
@@ -322,14 +325,29 @@ export async function registerRoutes(app: any) {
       request,
       reply,
       traceType: 'registration_flow_create',
-      title: `Create registration flow for ${body.userId}`,
+      title: `Create registration flow for ${body.deviceName}`,
       summary: 'A client created a new registration flow.',
-      userId: body.userId,
       body,
       run: () => createRegistrationFlow(body)
     })
     reply.code(201)
     return result
+  })
+
+  app.post('/api/flows/:flowId/registration-identity', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = getFlowParamsSchema.parse(request.params)
+    const body = submitRegistrationIdentitySchema.parse(request.body)
+    requireFlowToken(app, request, params.flowId)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'registration_identity_submit',
+      title: `Submit registration identity for ${params.flowId}`,
+      summary: 'A client attached deferred identity data to an existing registration flow.',
+      userId: body.userId,
+      body,
+      run: () => submitRegistrationIdentity(params.flowId, body)
+    })
   })
 
   app.post('/api/step-up-flows', async (request: FastifyRequest, reply: FastifyReply) => {

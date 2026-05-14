@@ -75,5 +75,5 @@ export function signPayload(payload: string, privateKeyPem: string) {
 }
 
 export function verifyPayloadSignature(payload: string, signature: string, publicKeyPem: string) {
-  return verify('RSA-SHA256', Buffer.from(payload, 'utf8'), publicKeyPem, Buffer.from(signature, 'base64'))
+  return verify('RSA-SHA256', Buffer.from(payload, 'base64'), publicKeyPem, Buffer.from(signature, 'base64'))
 }

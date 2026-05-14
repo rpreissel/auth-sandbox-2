@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { ServiceMockApiMessagesResponse, ServiceMockApiProfileResponse } from '@auth-sandbox-2/shared-types'
 
+import { getAndroidSecurityStatus } from './App'
+
 const mockProfile: ServiceMockApiProfileResponse = {
   traceId: 'trace-1',
   correlationId: 'trace-1',
@@ -30,9 +32,31 @@ const mockMessages: ServiceMockApiMessagesResponse = {
   ]
 }
 
-describe('app placeholder', () => {
-  it('keeps test runner happy', () => {
-    expect(true).toBe(true)
+describe('appmock-web status card', () => {
+  it('does not claim a binding exists when no device is stored', () => {
+    const status = getAndroidSecurityStatus({
+      restoringDevice: false,
+      hasDeviceBinding: false,
+      hasChallenge: false,
+      hasTokens: false,
+      tokenLifetimeLabel: null
+    })
+
+    expect(status.pills).toEqual(['Keystore bereit', 'Nicht gebunden'])
+    expect(status.detail).toBe('Noch keine Gerätebindung gespeichert.')
+  })
+
+  it('shows device binding only when a device is stored', () => {
+    const status = getAndroidSecurityStatus({
+      restoringDevice: false,
+      hasDeviceBinding: true,
+      hasChallenge: false,
+      hasTokens: false,
+      tokenLifetimeLabel: null
+    })
+
+    expect(status.pills).toContain('Gerät gebunden')
+    expect(status.detail).toBe('Die Gerätebindung ist gespeichert, aber es gibt noch keine aktive Keycloak-Sitzung.')
   })
 
   it('covers protected servicemock-api response shapes', () => {

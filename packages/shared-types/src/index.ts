@@ -123,14 +123,16 @@ export type AssuranceFlowFinalization =
 export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser' | 'keycloak'
 
 export type CreateRegistrationFlowInput = {
-  requiredAcr?: AcrLevel
+  deviceName: string
+  publicKey: string
+}
+
+export type SubmitRegistrationIdentityInput = {
   userId: string
   firstName: string
   lastName: string
   birthDate: string
   phoneNumber?: string
-  deviceName: string
-  publicKey: string
 }
 
 export type CreateStepUpFlowInput = {

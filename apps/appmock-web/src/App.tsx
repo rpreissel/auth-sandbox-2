@@ -100,6 +100,42 @@ type SecurePrompt = {
   confirmLabel: string
 }
 
+export function getAndroidSecurityStatus(args: {
+  restoringDevice: boolean
+  hasDeviceBinding: boolean
+  hasChallenge: boolean
+  hasTokens: boolean
+  tokenLifetimeLabel: string | null
+}) {
+  const pills = ['Keystore bereit']
+
+  if (args.restoringDevice) {
+    pills.push('Gerätebindung wird geprüft')
+  } else if (args.hasDeviceBinding) {
+    pills.push('Gerät gebunden')
+  } else {
+    pills.push('Nicht gebunden')
+  }
+
+  if (args.hasTokens) {
+    pills.push('Sitzung aktiv')
+  } else if (args.hasChallenge) {
+    pills.push('Challenge bereit')
+  }
+
+  const detail = args.restoringDevice
+    ? 'Lokale Daten werden geprüft, bevor der nächste Schritt angezeigt wird.'
+    : args.hasTokens
+      ? `Sitzung aktiv für ${args.tokenLifetimeLabel ?? 'begrenzte Zeit'}.`
+      : args.hasChallenge
+        ? 'Sichere Anmeldeanfrage ist bereit.'
+        : args.hasDeviceBinding
+          ? 'Die Gerätebindung ist gespeichert, aber es gibt noch keine aktive Keycloak-Sitzung.'
+          : 'Noch keine Gerätebindung gespeichert.'
+
+  return { pills, detail }
+}
+
 const DEVICE_BINDING_STORAGE_KEY = 'auth-sandbox-2.device-binding'
 const TIMESTAMP_CLAIM_KEYS = new Set(['auth_time', 'exp', 'iat', 'nbf'])
 const PRIORITY_CLAIM_KEYS = ['sub', 'preferred_username', 'userId', 'scope', 'azp', 'aud', 'iss', 'auth_time', 'iat', 'nbf', 'exp']
@@ -194,9 +230,17 @@ export function App() {
   const challengeExpiresAt = useMemo(() => (challenge ? formatDateTime(challenge.expiresAt) : null), [challenge])
   const tokenLifetimeLabel = useMemo(() => (tokens ? formatLifetime(tokens.expiresIn) : null), [tokens])
   const restoringDevice = !hydrated
+  const hasDeviceBinding = Boolean(device)
   const hideEmptySessionState = hydrated && !tokens && Boolean(device) && (step === 'login' || step === 'password')
   const promptActive = Boolean(securePrompt)
   const compactHero = restoringDevice || Boolean(device) || Boolean(tokens)
+  const androidSecurityStatus = getAndroidSecurityStatus({
+    restoringDevice,
+    hasDeviceBinding,
+    hasChallenge: Boolean(challenge),
+    hasTokens: Boolean(tokens),
+    tokenLifetimeLabel
+  })
   const currentSessionAcr = useMemo<SsoBootstrapRequestedAcr>(() => {
     const rawAcr = readString(accessClaims, 'acr') ?? readString(idClaims, 'acr')
     return rawAcr === '2se' ? '2se' : '1se'
@@ -216,7 +260,7 @@ export function App() {
       ? 'Deine Keycloak-Sitzung ist auf diesem Gerät aktiv.'
       : device
         ? 'Dieses Gerät ist bereits registriert. Starte jetzt die geschützte Geräteanmeldung.'
-        : 'Gib zuerst deine Identitätsdaten ein und identifiziere dich dann per Code oder SMS-TAN.'
+        : 'Lege zuerst das Gerät an und ordne die Identität danach im Registrierungsflow zu.'
 
   useEffect(() => {
     let cancelled = false
@@ -515,7 +559,10 @@ export function App() {
     try {
       result = await api.startLogin({ publicKeyHash: currentDevice.publicKeyHash }, flow)
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || (error.status === 400 && /Device (binding is no longer valid|not yet bound to a user)/i.test(error.message)))
+      ) {
         resetDeviceFlow('Gespeicherte Gerätebindung war ungültig und wurde entfernt', {
           userId: currentDevice.userId,
           deviceName: currentDevice.deviceName
@@ -590,33 +637,40 @@ export function App() {
     const signingKeys = await createSigningKeys()
     setStatus('Registrierungs-Flow wird angelegt...')
     const created = await api.createRegistrationFlow({
-      userId: form.userId,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      birthDate: form.birthDate,
-      phoneNumber: form.phoneNumber,
       deviceName: form.deviceName,
-      publicKey: signingKeys.publicKey,
-      requiredAcr: 'level_1'
+      publicKey: signingKeys.publicKey
     }, flow)
 
-    if (created.availableServices.length === 0) {
+    const withIdentity = await api.submitRegistrationIdentity(
+      created.flowId,
+      created.flowToken,
+      {
+        userId: form.userId,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        birthDate: form.birthDate,
+        phoneNumber: form.phoneNumber || undefined
+      },
+      flow
+    )
+
+    if (withIdentity.availableServices.length === 0) {
       throw new Error('Für diese Person sind aktuell keine Identifikationsservices vorbereitet')
     }
 
-    const selectedService = created.availableServices[0].id
+    const selectedService = withIdentity.availableServices[0].id
 
     setPendingRegistration({
-      flowId: created.flowId,
-      flowToken: created.flowToken,
+      flowId: withIdentity.flowId,
+      flowToken: withIdentity.flowToken,
       serviceToken: undefined,
       publicKey: signingKeys.publicKey,
       privateKey: signingKeys.privateKey,
-      availableServices: created.availableServices,
+      availableServices: withIdentity.availableServices,
       selectedService,
-      maskedTarget: created.method?.maskedTarget ?? null
+      maskedTarget: withIdentity.method?.maskedTarget ?? null
       ,
-      devCode: created.method?.devCode ?? null
+      devCode: withIdentity.method?.devCode ?? null
     })
     setForm((current) => ({
       ...current,
@@ -1042,19 +1096,15 @@ export function App() {
                 <p className="section-label">Status</p>
                 <strong>{restoringDevice ? 'Gespeicherte Gerätebindung wird geladen' : status}</strong>
                 <div className="status-strip" aria-label="Android security status">
-                  <span className="status-pill">Keystore bereit</span>
-                  <span className="status-pill">Gerät gebunden</span>
+                  {androidSecurityStatus.pills.map((pill) => (
+                    <span key={pill} className="status-pill">{pill}</span>
+                  ))}
                 </div>
                 <p className="muted-copy">
-                  {restoringDevice
-                    ? 'Lokale Daten werden geprüft, bevor der nächste Schritt angezeigt wird.'
-                    : tokens
-                    ? `Sitzung aktiv für ${tokenLifetimeLabel ?? 'begrenzte Zeit'}.`
-                    : challengeExpiresAt
-                       ? `Sichere Anmeldeanfrage bereit bis ${challengeExpiresAt}.`
-                       : device
-                          ? 'Die Gerätebindung ist gespeichert, aber es gibt noch keine aktive Keycloak-Sitzung.'
-                          : 'Noch keine Gerätebindung gespeichert.'}
+                  {androidSecurityStatus.detail}
+                  {!restoringDevice && !tokens && challengeExpiresAt
+                    ? ` Sichere Anmeldeanfrage bereit bis ${challengeExpiresAt}.`
+                    : ''}
                 </p>
               </section>
 

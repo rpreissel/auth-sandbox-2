@@ -13,6 +13,7 @@ import type {
   AssuranceFlowServiceOption,
   AssuranceFlowResultSummary,
   CreateRegistrationFlowInput,
+  SubmitRegistrationIdentityInput,
   CreateStepUpFlowInput,
   FinalizeFlowChannel,
   RedeemFlowArtifactResponse,
@@ -116,6 +117,14 @@ type FlowMethodState = {
   publicKey?: string
   publicKeyHash?: string
   deviceName?: string
+}
+
+type RegistrationIdentityPayload = {
+  userId?: string
+  firstName?: string
+  lastName?: string
+  birthDate?: string
+  phoneNumber?: string
 }
 
 const adminClient = new KeycloakAdminClient()
@@ -259,6 +268,10 @@ function readContext(row: AssuranceFlowRow) {
   return asJsonObject(row.context_json)
 }
 
+function readRegistrationIdentity(row: AssuranceFlowRow): RegistrationIdentityPayload {
+  return asJsonObject(readContext(row).identityInput) as RegistrationIdentityPayload
+}
+
 function readResult(row: AssuranceFlowRow) {
   return asJsonObject(row.result_json)
 }
@@ -379,11 +392,11 @@ function generateArtifactCode(prefix: 'ah' | 'rc') {
 }
 
 async function getRegistrationPersonForFlow(flow: AssuranceFlowRow, db: Queryable) {
-  const context = readContext(flow)
-  const userId = flow.prospective_user_id ?? flow.user_hint
-  const firstName = typeof context.firstName === 'string' ? context.firstName.trim() : ''
-  const lastName = typeof context.lastName === 'string' ? context.lastName.trim() : ''
-  const birthDate = typeof context.birthDate === 'string' ? context.birthDate : ''
+  const identity = readRegistrationIdentity(flow)
+  const userId = typeof identity.userId === 'string' ? identity.userId.trim() : (flow.prospective_user_id ?? flow.user_hint ?? '')
+  const firstName = typeof identity.firstName === 'string' ? identity.firstName.trim() : ''
+  const lastName = typeof identity.lastName === 'string' ? identity.lastName.trim() : ''
+  const birthDate = typeof identity.birthDate === 'string' ? identity.birthDate : ''
 
   if (!userId || !firstName || !lastName || !birthDate) {
     throw badRequest('Registration flow is missing person identity data')
@@ -477,18 +490,28 @@ async function getSmsNumberByUserId(userId: string, db: Queryable) {
 async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryable) {
   const methodState = readMethodState(flow)
   const context = readContext(flow)
-  const userId = flow.prospective_user_id ?? flow.user_hint
   const deviceName = typeof context.deviceName === 'string' ? context.deviceName : null
   const publicKey = typeof context.publicKey === 'string' ? context.publicKey : null
 
-  if (!userId || !deviceName || !publicKey) {
-    throw badRequest('Registration flow is missing user or device context')
+  if (!deviceName || !publicKey) {
+    throw badRequest('Registration flow is missing device context')
   }
 
   const publicKeyHash = methodState.publicKeyHash ?? hashPublicKey(publicKey)
-  const duplicate = await db.query('select 1 from devices where device_name = $1', [deviceName])
-  if (duplicate.rowCount) {
-    throw badRequest('Device name already exists')
+  if (!flow.device_id) {
+    const duplicate = await db.query('select id from devices where device_name = $1', [deviceName])
+    if (duplicate.rowCount) {
+      throw badRequest('Device name already exists')
+    }
+
+    const created = await db.query<DeviceRow>(
+      `insert into devices (device_name, public_key, public_key_hash)
+       values ($1, $2, $3)
+       returning *`,
+      [deviceName, publicKey, publicKeyHash]
+    )
+    const createdDevice = created.rows[0]
+    await updateAssuranceFlow(flow.id, { deviceId: createdDevice.id }, db)
   }
 
   return {
@@ -508,12 +531,14 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
   const person = await getRegistrationPersonForFlow(flow, db)
   const smsIdentity = verificationMethod === 'sms' ? await getRegistrationSmsNumberForFlow(flow, db) : null
   const methodState = await ensureRegistrationDeviceState(flow, db)
-  const userId = flow.prospective_user_id ?? flow.user_hint
+  const identity = readRegistrationIdentity(flow)
+  const userId = typeof identity.userId === 'string' ? identity.userId.trim() : (flow.prospective_user_id ?? flow.user_hint)
   const deviceName = methodState.deviceName
   const publicKey = methodState.publicKey
   const publicKeyHash = methodState.publicKeyHash
+  const deviceId = flow.device_id
 
-  if (!userId || !deviceName || !publicKey || !publicKeyHash) {
+  if (!userId || !deviceName || !publicKey || !publicKeyHash || !deviceId) {
     throw badRequest('Registration flow is missing device material')
   }
 
@@ -524,14 +549,6 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
     deviceName,
     publicKeyHash
   })
-
-  const deviceResult = await db.query<DeviceRow>(
-    `insert into devices (device_name, public_key, public_key_hash)
-     values ($1, $2, $3)
-     returning *`,
-    [deviceName, publicKey, publicKeyHash]
-  )
-  const deviceId = deviceResult.rows[0].id
 
   await db.query(
     `insert into device_bindings (device_id, user_id, keycloak_user_id, keycloak_credential_id)
@@ -886,26 +903,91 @@ export async function createRegistrationFlow(input: CreateRegistrationFlowInput,
       actorType: 'backend',
       actorName: 'auth-api',
       operation: 'create_registration_flow',
-      userId: input.userId,
       notes: 'Create registration flow.'
     },
     async () => {
       const flow = await createAssuranceFlow({
         purpose: 'registration',
-        requiredAcr: input.requiredAcr ?? 'level_1',
-        subjectId: input.userId,
+        requiredAcr: 'level_2',
         context: {
-          firstName: input.firstName,
-          lastName: input.lastName,
-          birthDate: input.birthDate,
-          phoneNumber: input.phoneNumber,
           deviceName: input.deviceName,
           publicKey: input.publicKey
         }
       }, db)
+      const ensuredDeviceState = await ensureRegistrationDeviceState(flow, db)
+      const refreshed = await getAssuranceFlow(flow.id, db)
+      if (!refreshed) {
+        throw notFound('Unknown flow')
+      }
+      const updated = await updateAssuranceFlow(flow.id, {
+        methodState: ensuredDeviceState,
+        result: {
+          ...readResult(refreshed),
+          deviceId: refreshed.device_id,
+          publicKeyHash: ensuredDeviceState.publicKeyHash
+        }
+      }, db)
+      if (!updated) {
+        throw notFound('Unknown flow')
+      }
       await appendAssuranceFlowEvent({ flowId: flow.id, eventType: 'flow_created', payload: { purpose: flow.purpose } }, db)
-      return mapPublicAssuranceFlowRecord(flow, db)
+      return mapPublicAssuranceFlowRecord(updated, db)
     }
+  )
+}
+
+export async function submitRegistrationIdentity(flowId: string, input: SubmitRegistrationIdentityInput, db: Queryable = pool) {
+  return runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'submit_registration_identity',
+      challengeId: flowId,
+      userId: input.userId,
+      notes: 'Attach deferred identity payload to an existing registration flow.'
+    },
+    async () => withTransaction(async (client) => {
+      const flow = await getAssuranceFlow(flowId, client)
+      if (!flow) {
+        throw notFound('Unknown flow')
+      }
+      if (flow.purpose !== 'registration') {
+        throw badRequest('Only registration flows accept deferred identity input')
+      }
+      if (flow.status !== 'started') {
+        throw badRequest('Flow is not ready for identity input')
+      }
+
+      const updated = await updateAssuranceFlow(flowId, {
+        subjectId: input.userId,
+        context: {
+          ...readContext(flow),
+          identityInput: {
+            userId: input.userId,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            birthDate: input.birthDate,
+            ...(input.phoneNumber ? { phoneNumber: input.phoneNumber } : {})
+          },
+          ...(input.phoneNumber ? { phoneNumber: input.phoneNumber } : {})
+        }
+      }, client)
+      if (!updated) {
+        throw notFound('Unknown flow')
+      }
+
+      await appendAssuranceFlowEvent({
+        flowId,
+        eventType: 'flow_identity_submitted',
+        payload: {
+          userId: input.userId,
+          hasPhoneNumber: Boolean(input.phoneNumber)
+        }
+      }, client)
+
+      return mapPublicAssuranceFlowRecord(updated, client)
+    })
   )
 }
 

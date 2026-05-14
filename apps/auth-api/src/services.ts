@@ -292,18 +292,24 @@ export async function deleteRegistrationIdentity(userId: string) {
       notes: 'Delete registration identity and associated sandbox state.'
     },
     async () => {
-      const devicesResult = await pool.query<DeviceRow>('select * from devices', [])
-      for (const device of devicesResult.rows) {
-        const bindingResult = await pool.query<DeviceBindingRow>(
-          'select * from device_bindings where device_id = $1 and user_id = $2 and active = true',
-          [device.id, userId]
-        )
-        const binding = bindingResult.rows[0]
+      const bindingResult = await pool.query<DeviceBindingRow>(
+        'select * from device_bindings where user_id = $1',
+        [userId]
+      )
+
+      for (const binding of bindingResult.rows) {
         if (binding && binding.keycloak_credential_id) {
           await adminClient.deleteDeviceCredential(binding.user_id, binding.keycloak_credential_id)
         }
-        if (binding) {
-          await pool.query('delete from device_bindings where device_id = $1 and user_id = $2', [device.id, userId])
+
+        await pool.query('delete from device_bindings where device_id = $1 and user_id = $2', [binding.device_id, userId])
+
+        const remainingBindings = await pool.query<{ id: string }>(
+          'select id from device_bindings where device_id = $1 limit 1',
+          [binding.device_id]
+        )
+        if (!remainingBindings.rowCount) {
+          await pool.query('delete from devices where id = $1', [binding.device_id])
         }
       }
 

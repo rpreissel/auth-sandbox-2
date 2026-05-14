@@ -449,9 +449,9 @@ test("homepage contains key links", async ({ page }) => {
       name: "EKW broker login into WebMock",
     }),
   });
-  await expect(passwordBootstrapCard).toContainText(/backend password setup/i);
+  await expect(passwordBootstrapCard).toContainText(/optional password bootstrap/i);
   await expect(passwordBootstrapCard).toContainText(
-    /return verification options and flow state/i,
+    /return flow state for deferred identity/i,
   );
   await expect(passwordBootstrapCard).toContainText(
     /check whether password credential exists/i,
@@ -507,8 +507,8 @@ test("homepage contains key links", async ({ page }) => {
     /verify nonce, binding, and replay window/i,
   );
   await expect(deviceLoginSteps).toContainText(/RSASSA-PKCS1-v1_5/i);
-  await expect(deviceLoginSteps).toContainText(/matching publicKeyHash/i);
-  await expect(deviceLoginSteps).toContainText(/SHA256withRSA/i);
+  await expect(deviceLoginSteps).toContainText(/publicKeyHash/i);
+  await expect(deviceLoginSteps).toContainText(/handover proof/i);
   await expect(
     page.getByLabel("Refresh and logout lifecycle step details"),
   ).toContainText(/renewed token bundle/i);
@@ -1381,6 +1381,7 @@ test("registration and step-up flow APIs support service selection, concrete ser
 }) => {
   const userId = trackCleanupUserId(`e2e-flow-${Date.now()}`);
   const registrationCode = `FLOW${Date.now().toString(36).toUpperCase()}`;
+  const deviceName = `Flow Device ${Date.now()}`;
   const signingKeys = createSigningKeys();
   const withBearer = (token: string) => ({
     authorization: `Bearer ${token}`,
@@ -1408,18 +1409,15 @@ test("registration and step-up flow APIs support service selection, concrete ser
     `${AUTH_API_URL}/api/registration-flows`,
     {
       data: {
-        requiredAcr: "level_1",
-        userId,
-        firstName: "Flow",
-        lastName: "User",
-        birthDate: "1990-01-01",
-        deviceName: "Flow Device",
+        deviceName,
         publicKey: signingKeys.publicKey,
       },
     },
   );
 
   expect(createRegistrationFlow.status()).toBe(201);
+  const registrationFlowTraceId = createRegistrationFlow.headers()["x-trace-id"];
+  expect(registrationFlowTraceId).toBeTruthy();
   const registrationFlow = (await createRegistrationFlow.json()) as {
     flowId: string;
     flowToken: string;
@@ -1431,6 +1429,27 @@ test("registration and step-up flow APIs support service selection, concrete ser
   expect(registrationFlow.nextAction).toBe("select_service");
   expect(
     registrationFlow.availableServices.map((service) => service.id).sort(),
+  ).toEqual([]);
+
+  const submitIdentity = await request.post(
+    `${AUTH_API_URL}/api/flows/${registrationFlow.flowId}/registration-identity`,
+    {
+      headers: withBearer(registrationFlow.flowToken),
+      data: {
+        userId,
+        firstName: "Flow",
+        lastName: "User",
+        birthDate: "1990-01-01",
+        phoneNumber: "+49123456789",
+      },
+    },
+  );
+  expect(submitIdentity.ok()).toBeTruthy();
+  const registrationWithIdentity = (await submitIdentity.json()) as {
+    availableServices: Array<{ id: string }>;
+  };
+  expect(
+    registrationWithIdentity.availableServices.map((service) => service.id).sort(),
   ).toEqual(["person_code", "sms_tan"]);
 
   const missingTokenGet = await request.get(
@@ -1649,14 +1668,7 @@ test("registration and step-up flow APIs support service selection, concrete ser
   expect(redeemedResult.userId).toBe(userId);
   expect(redeemedResult.achievedAcr).toBe("level_2");
 
-  const flowTrace = await waitForTrace(
-    request,
-    userId,
-    "registration_flow_create",
-    "auth-api",
-  );
-
-  await page.goto(`${TRACE_WEB_URL}#trace/${flowTrace.traceId}`);
+  await page.goto(`${TRACE_WEB_URL}#trace/${registrationFlowTraceId}`);
   await expect(
     page.getByRole("heading", { name: "Detailinspektion" }),
   ).toBeVisible();
@@ -1681,7 +1693,7 @@ test("registration and step-up flow APIs support service selection, concrete ser
   );
   await expect(flowArtifactViewer).toContainText('"kind": "flow"');
   await expect(flowArtifactViewer).toContainText(
-    `"flowId": "${registrationFlow.flowId}"`,
+      `"flowId": "${registrationFlow.flowId}"`,
   );
 });
 
@@ -1690,7 +1702,7 @@ test("missing saved device binding is cleared instead of failing with a server e
   request,
 }) => {
   const userId = trackCleanupUserId(`e2e-missing-device-${Date.now()}`);
-  const deviceName = "Missing Device Test";
+  const deviceName = `Missing Device Test ${Date.now()}`;
   const registrationCode = `MISS${Date.now().toString(36).toUpperCase()}`;
   const registrationResponse = await request.post(
     `${AUTH_API_URL}/api/admin/registration-identities`,
@@ -1776,12 +1788,9 @@ test("missing saved device binding is cleared instead of failing with a server e
   expect(devicesResponse.ok()).toBeTruthy();
   const devices = (await devicesResponse.json()) as Array<{
     id: string;
-    userId: string;
     deviceName: string;
   }>;
-  const device = devices.find(
-    (item) => item.userId === userId && item.deviceName === deviceName,
-  );
+  const device = devices.find((item) => item.deviceName === deviceName);
 
   expect(device).toBeTruthy();
 
@@ -1818,6 +1827,7 @@ test("registration verification shows inline error feedback for invalid code att
 }) => {
   const userId = trackCleanupUserId(`e2e-invalid-code-${Date.now()}`);
   const registrationCode = `CODE${Date.now().toString(36).toUpperCase()}`;
+  const deviceName = `Inline Error Device ${Date.now()}`;
 
   const registrationResponse = await request.post(
     `${AUTH_API_URL}/api/admin/registration-identities`,
@@ -1841,7 +1851,7 @@ test("registration verification shows inline error feedback for invalid code att
   await page.getByLabel("Vorname").fill("Invalid");
   await page.getByLabel("Nachname").fill("Code");
   await page.getByLabel("Geburtsdatum").fill("1990-01-01");
-  await page.getByLabel("Gerätename").fill("Inline Error Device");
+  await page.getByLabel("Gerätename").fill(deviceName);
   await page.getByRole("button", { name: "Weiter" }).click();
   await expect(page.getByLabel("Secure element prompt")).toBeVisible();
   await page.getByRole("button", { name: "Displaysperre verwenden" }).click();

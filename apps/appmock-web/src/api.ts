@@ -4,6 +4,7 @@ import type {
   CreateSsoLaunchInput,
   CreateSsoLaunchResponse,
   CreateRegistrationFlowInput,
+  SubmitRegistrationIdentityInput,
   CreateStepUpFlowInput,
   FinalizeFlowInput,
   FinishLoginInput,
@@ -119,6 +120,7 @@ async function mockRequest<T>(path: string, accessToken: string, init?: RequestI
 
 export const api = {
   createRegistrationFlow: (body: CreateRegistrationFlowInput, options?: TraceRequestOptions) => requestJson<PublicAssuranceFlowRecord>(API_BASE, '/api/registration-flows', { method: 'POST', body: JSON.stringify(body) }, options),
+  submitRegistrationIdentity: (flowId: string, flowToken: string, body: SubmitRegistrationIdentityInput, options?: TraceRequestOptions) => bearerRequest<PublicAssuranceFlowRecord>(`/api/flows/${flowId}/registration-identity`, flowToken, { method: 'POST', body: JSON.stringify(body) }, options),
   createStepUpFlow: (body: CreateStepUpFlowInput, accessToken: string, options?: TraceRequestOptions) => bearerRequest<PublicAssuranceFlowRecord>('/api/step-up-flows', accessToken, { method: 'POST', body: JSON.stringify(body) }, options),
   selectFlowService: (flowId: string, flowToken: string, body: SelectFlowServiceInput, options?: TraceRequestOptions) => bearerRequest<PublicAssuranceFlowRecord>(`/api/flows/${flowId}/select-service`, flowToken, { method: 'POST', body: JSON.stringify(body) }, options),
   completePersonCode: (serviceToken: string, code: string, options?: TraceRequestOptions) => bearerRequest<ServiceResultEnvelope>('/api/identification/person-code/complete', serviceToken, { method: 'POST', body: JSON.stringify({ code }) }, options),
