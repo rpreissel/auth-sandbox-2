@@ -15,7 +15,7 @@ import type {
 } from '@auth-sandbox-2/shared-types'
 
 import { ApiError, api } from './api'
-import { createSigningKeys, exportPrivateKey, importPrivateKey, signEncryptedData } from './crypto'
+import { createSigningKeys, createBiometricKeys, exportPrivateKey, importPrivateKey, importBiometricKey, signEncryptedData, signWithBiometric } from './crypto'
 
 type ClaimRecord = Record<string, unknown>
 
@@ -25,11 +25,13 @@ type DeviceState = {
   publicKey: string
   publicKeyHash: string
   privateKey: CryptoKey
+  biometricPrivateKey?: CryptoKey
+  biometricPublicKey?: string
 }
 
 type Step = 'register' | 'register_verify' | 'password' | 'login' | 'authenticated'
 
-type AuthenticatedTab = 'tokens' | 'servicemock-api'
+type AuthenticatedTab = 'tokens' | 'servicemock-api' | 'biometric-management'
 
 type StoredDeviceBinding = {
   userId: string
@@ -38,6 +40,8 @@ type StoredDeviceBinding = {
   publicKeyHash: string
   privateKey: string
   passwordRequired: boolean
+  biometricPrivateKey?: string
+  biometricPublicKey?: string
 }
 
 type AutoLoginState = {
@@ -64,11 +68,14 @@ type PendingRegistration = {
   serviceToken?: string
   publicKey: string
   privateKey: CryptoKey
+  biometricPublicKey?: string
+  biometricPrivateKey?: CryptoKey
   availableServices: AssuranceFlowServiceOption[]
   selectedService: AssuranceFlowService
   // Redacted SMS destination shown back to the user, e.g. ***1234.
   maskedTarget?: string | null
   devCode?: string | null
+  enableBiometric: boolean
 }
 
 type VerificationFeedback = {
@@ -151,7 +158,8 @@ function createInitialForm() {
     selectedService: 'person_code' as AssuranceFlowService,
     code: '',
     tan: '',
-    password: 'ChangeMe123!'
+    password: 'ChangeMe123!',
+    enableBiometric: false
   }
 }
 
@@ -182,13 +190,16 @@ function readStoredDeviceBinding() {
 
 async function persistDeviceBinding(device: DeviceState, passwordRequired: boolean) {
   const serializedPrivateKey = await exportPrivateKey(device.privateKey)
+  const serializedBiometricPrivateKey = device.biometricPrivateKey ? await exportPrivateKey(device.biometricPrivateKey) : undefined
   const stored: StoredDeviceBinding = {
     userId: device.userId,
     deviceName: device.deviceName,
     publicKey: device.publicKey,
     publicKeyHash: device.publicKeyHash,
     privateKey: serializedPrivateKey,
-    passwordRequired
+    passwordRequired,
+    biometricPrivateKey: serializedBiometricPrivateKey,
+    biometricPublicKey: device.biometricPublicKey
   }
 
   window.localStorage.setItem(DEVICE_BINDING_STORAGE_KEY, JSON.stringify(stored))
@@ -276,6 +287,7 @@ export function App() {
 
       try {
         const privateKey = await importPrivateKey(stored.privateKey)
+        const biometricPrivateKey = stored.biometricPrivateKey ? await importBiometricKey(stored.biometricPrivateKey) : undefined
         if (cancelled) {
           return
         }
@@ -285,7 +297,9 @@ export function App() {
           deviceName: stored.deviceName,
           publicKey: stored.publicKey,
           publicKeyHash: stored.publicKeyHash,
-          privateKey
+          privateKey,
+          biometricPrivateKey,
+          biometricPublicKey: stored.biometricPublicKey
         })
         setForm((current) => ({
           ...current,
@@ -592,7 +606,7 @@ export function App() {
     setStatus(nextStatus)
   }
 
-  async function finalizeRegistration(result: PublicAssuranceFlowRecord, signingKeys: { publicKey: string; privateKey: CryptoKey }) {
+  async function finalizeRegistration(result: PublicAssuranceFlowRecord, signingKeys: { publicKey: string; privateKey: CryptoKey; biometricPublicKey?: string; biometricPrivateKey?: CryptoKey }) {
     if (!result.finalization || result.finalization.kind !== 'registration_result') {
       throw new Error('Registration flow did not return a registration result')
     }
@@ -604,7 +618,9 @@ export function App() {
       deviceName: form.deviceName,
       publicKey: signingKeys.publicKey,
       publicKeyHash: result.finalization.publicKeyHash,
-      privateKey: signingKeys.privateKey
+      privateKey: signingKeys.privateKey,
+      biometricPublicKey: signingKeys.biometricPublicKey,
+      biometricPrivateKey: signingKeys.biometricPrivateKey
     }
 
     setDevice(nextDevice)
@@ -635,10 +651,16 @@ export function App() {
     }])
     setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
     const signingKeys = await createSigningKeys()
+    let biometricKeys: { publicKey: string; privateKey: CryptoKey } | undefined
+    if (form.enableBiometric) {
+      setStatus('Biometrischer Schlüssel wird vorbereitet...')
+      biometricKeys = await createBiometricKeys()
+    }
     setStatus('Registrierungs-Flow wird angelegt...')
     const created = await api.createRegistrationFlow({
       deviceName: form.deviceName,
-      publicKey: signingKeys.publicKey
+      publicKey: signingKeys.publicKey,
+      biometricPublicKey: biometricKeys?.publicKey
     }, flow)
 
     const withIdentity = await api.submitRegistrationIdentity(
@@ -666,11 +688,14 @@ export function App() {
       serviceToken: undefined,
       publicKey: signingKeys.publicKey,
       privateKey: signingKeys.privateKey,
+      biometricPublicKey: biometricKeys?.publicKey,
+      biometricPrivateKey: biometricKeys?.privateKey,
       availableServices: withIdentity.availableServices,
       selectedService,
       maskedTarget: withIdentity.method?.maskedTarget ?? null
       ,
-      devCode: withIdentity.method?.devCode ?? null
+      devCode: withIdentity.method?.devCode ?? null,
+      enableBiometric: form.enableBiometric
     })
     setForm((current) => ({
       ...current,
@@ -783,7 +808,9 @@ export function App() {
       )
       await finalizeRegistration(finalized, {
         publicKey: pendingRegistration.publicKey,
-        privateKey: pendingRegistration.privateKey
+        privateKey: pendingRegistration.privateKey,
+        biometricPublicKey: pendingRegistration.biometricPublicKey,
+        biometricPrivateKey: pendingRegistration.biometricPrivateKey
       })
     } catch (error) {
       const message = readErrorMessage(error)
@@ -1188,8 +1215,18 @@ export function App() {
                         <span className="field-label">Gerätename</span>
                         <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                       </label>
+                      <label className="toggle-label">
+                        <span className="field-label">Biometrie aktivieren</span>
+                        <span className="toggle-description">Erstellt einen zweiten Schlüssel im sicheren Speicher dieses Geräts für eine optionale Login-Alternative.</span>
+                        <input
+                          name="enableBiometric"
+                          type="checkbox"
+                          checked={form.enableBiometric}
+                          onChange={(event) => setForm({ ...form, enableBiometric: event.target.checked })}
+                          disabled={busy}
+                        />
+                      </label>
                       <label>
-                        <span className="field-label">Nächster Schritt</span>
                         <input value="Service wird nach dem Erstellen des Flows gewählt" disabled aria-label="Nächster Schritt" />
                       </label>
                       <button type="submit" disabled={busy}>Weiter</button>

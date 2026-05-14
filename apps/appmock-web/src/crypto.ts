@@ -54,3 +54,15 @@ export async function signEncryptedData(encryptedData: string, privateKey: Crypt
   const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, payload)
   return btoa(String.fromCharCode(...new Uint8Array(signature)))
 }
+
+export async function createBiometricKeys() {
+  return createSigningKeys()
+}
+
+export async function importBiometricKey(serializedKey: string) {
+  return importPrivateKey(serializedKey)
+}
+
+export async function signWithBiometric(encryptedData: string, privateKey: CryptoKey) {
+  return signEncryptedData(encryptedData, privateKey)
+}

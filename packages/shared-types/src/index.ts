@@ -122,9 +122,41 @@ export type AssuranceFlowFinalization =
 
 export type FinalizeFlowChannel = 'registration' | 'mobile' | 'browser' | 'keycloak'
 
+export type SecondFactorType = 'password' | 'biometric'
+
+export type BiometricEvidence = {
+  biometricPublicKey: string
+  signedChallenge: string
+}
+
+export type PasswordEvidence = {
+  password: string
+}
+
+export type SecondFactorEvidence = BiometricEvidence | PasswordEvidence
+
 export type CreateRegistrationFlowInput = {
   deviceName: string
   publicKey: string
+  biometricPublicKey?: string
+}
+
+export type StartLoginResponse = {
+  nonce: string
+  encryptedKey: string
+  encryptedData: string
+  iv: string
+  expiresAt: IsoDateTime
+  allowedSecondFactors: SecondFactorType[]
+}
+
+export type FinishLoginInput = {
+  nonce: string
+  encryptedKey: string
+  encryptedData: string
+  iv: string
+  signature: string
+  secondFactor?: SecondFactorEvidence
 }
 
 export type SubmitRegistrationIdentityInput = {
@@ -233,22 +265,6 @@ export type StartLoginInput = {
   publicKeyHash: string
 }
 
-export type StartLoginResponse = {
-  nonce: string
-  encryptedKey: string
-  encryptedData: string
-  iv: string
-  expiresAt: IsoDateTime
-}
-
-export type FinishLoginInput = {
-  nonce: string
-  encryptedKey: string
-  encryptedData: string
-  iv: string
-  signature: string
-}
-
 export type SsoBootstrapTargetId = 'webmock'
 
 export type SsoBootstrapRequestedAcr = '1se' | '2se'
@@ -300,8 +316,24 @@ export type TokenDisplayBundle = {
 // session fields, while appmock-web also reads the display bundle for token panels.
 export type TokenBundle = SessionTokenBundle & TokenDisplayBundle
 
+export type BiometricCredentialManagementAction = 'add' | 'rotate' | 'remove'
+
+export type BiometricCredentialManagementInput = {
+  action: BiometricCredentialManagementAction
+  biometricPublicKey?: string
+}
+
+export type BiometricCredentialManagementResponse = {
+  success: boolean
+  hasBiometricKey: boolean
+  message: string
+}
+
 // Demo login response: session-critical fields plus token-display data.
-export type FinishLoginResponse = TokenBundle
+export type FinishLoginResponse = TokenBundle & {
+  acr?: string
+  amr?: string[]
+}
 
 // Demo refresh response: session-critical fields plus token-display data.
 export type RefreshTokensResponse = TokenBundle
