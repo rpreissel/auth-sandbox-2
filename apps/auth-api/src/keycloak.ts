@@ -3,7 +3,7 @@ import { Buffer } from 'node:buffer'
 import { appConfig, buildTraceHeaders, getTraceContext, keycloakConfig, recordArtifact, recordHttpExchange, runWithSpan } from '@auth-sandbox-2/backend-core'
 import type { JsonObject, RefreshTokensResponse, TokenBundle } from '@auth-sandbox-2/shared-types'
 
-import { deriveUserDeviceHandoverSecret } from './device-handover.js'
+import { pool } from '@auth-sandbox-2/backend-core'
 import { decodeTokenClaims } from './lib/jwt.js'
 
 type KeycloakTokenResponse = {
@@ -331,7 +331,11 @@ export class KeycloakAdminClient {
     if (!user) {
       throw new Error(`Unknown Keycloak user ${args.userId}`)
     }
-    const userHandoverSecret = deriveUserDeviceHandoverSecret(args.userId)
+    const secretResult = await pool.query<{ handover_secret: string }>(
+      'select handover_secret from user where user_id = $1',
+      [args.userId]
+    )
+    const handoverSecret = secretResult.rows[0]?.handover_secret
     const token = await this.getAdminToken()
     const created = await fetchJson<CreateDeviceCredentialResponse>(
       `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/device-credentials`,
@@ -345,7 +349,7 @@ export class KeycloakAdminClient {
           keycloakUserId: user.id,
           deviceName: args.deviceName,
           publicKeyHash: args.publicKeyHash,
-          userHandoverSecret
+          handoverSecret
         })
       }
     )

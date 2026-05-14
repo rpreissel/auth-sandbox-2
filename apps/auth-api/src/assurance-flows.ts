@@ -31,7 +31,7 @@ import type {
   AssuranceFlowStatus,
   DeviceRow,
   RegistrationPersonCodeRow,
-  RegistrationPersonRow,
+  UserRow,
   RegistrationPersonSmsNumberRow
 } from './types.js'
 
@@ -190,7 +190,7 @@ async function hasStepUpSmsNumber(flow: AssuranceFlowRow, db: Queryable) {
   const result = await db.query<{ id: string }>(
     `select s.id
      from registration_person_sms_numbers s
-     join registration_people p on p.id = s.person_id
+     join user p on p.id = s.person_id
      where p.user_id = $1
      limit 1`,
     [userId]
@@ -402,8 +402,8 @@ async function getRegistrationPersonForFlow(flow: AssuranceFlowRow, db: Queryabl
     throw badRequest('Registration flow is missing person identity data')
   }
 
-  const result = await db.query<RegistrationPersonRow>(
-    `select * from registration_people
+  const result = await db.query<UserRow>(
+    `select * from user
      where user_id = $1 and first_name = $2 and last_name = $3 and birth_date = $4`,
     [userId, firstName, lastName, birthDate]
   )
@@ -479,7 +479,7 @@ async function getSmsNumberByUserId(userId: string, db: Queryable) {
   const result = await db.query<RegistrationPersonSmsNumberRow>(
     `select s.*
      from registration_person_sms_numbers s
-     join registration_people p on p.id = s.person_id
+     join user p on p.id = s.person_id
      where p.user_id = $1
      limit 1`,
     [userId]
@@ -499,16 +499,19 @@ async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryab
 
   const publicKeyHash = methodState.publicKeyHash ?? hashPublicKey(publicKey)
   if (!flow.device_id) {
-    const duplicate = await db.query('select id from devices where device_name = $1', [deviceName])
+    const duplicate = await db.query(
+      'select id from device_bindings where user_id = $1 and device_name = $2',
+      [flow.user_hint ?? flow.prospective_user_id ?? '', deviceName]
+    )
     if (duplicate.rowCount) {
-      throw badRequest('Device name already exists')
+      throw badRequest('Device name already exists for this user')
     }
 
     const created = await db.query<DeviceRow>(
-      `insert into devices (device_name, public_key, public_key_hash)
-       values ($1, $2, $3)
+      `insert into devices (public_key, public_key_hash)
+       values ($1, $2)
        returning *`,
-      [deviceName, publicKey, publicKeyHash]
+      [publicKey, publicKeyHash]
     )
     const createdDevice = created.rows[0]
     await updateAssuranceFlow(flow.id, { deviceId: createdDevice.id }, db)
@@ -551,9 +554,9 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
   })
 
   await db.query(
-    `insert into device_bindings (device_id, user_id, keycloak_user_id, keycloak_credential_id)
-     values ($1, $2, $3, $4)`,
-    [deviceId, userId, keycloakUserId, credentialId]
+    `insert into device_bindings (device_id, user_id, keycloak_user_id, keycloak_credential_id, device_name)
+     values ($1, $2, $3, $4, $5)`,
+    [deviceId, userId, keycloakUserId, credentialId, deviceName]
   )
 
   if (verificationService === 'person_code') {

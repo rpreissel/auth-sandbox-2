@@ -16,7 +16,10 @@ import org.keycloak.representations.AccessToken;
 import org.keycloak.services.managers.AppAuthManager;
 import org.keycloak.services.resource.RealmResourceProvider;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class DeviceCredentialResourceProvider implements RealmResourceProvider {
 
@@ -41,19 +44,14 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
                     .entity(Map.of("error", "keycloak_user_id_required"))
                     .build();
         }
-        if (request.deviceName() == null || request.deviceName().isBlank()) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "device_name_required"))
-                    .build();
-        }
         if (request.publicKeyHash() == null || request.publicKeyHash().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(Map.of("error", "public_key_hash_required"))
                     .build();
         }
-        if (request.userHandoverSecret() == null || request.userHandoverSecret().isBlank()) {
+        if (request.handoverSecret() == null || request.handoverSecret().isBlank()) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "user_handover_secret_required"))
+                    .entity(Map.of("error", "handover_secret_required"))
                     .build();
         }
 
@@ -67,15 +65,40 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
                     .build();
         }
 
-        DeviceCredentialModel credential = DeviceCredentialModel.create(
-                request.publicKeyHash(),
-                request.userHandoverSecret()
-        );
-        credential.setUserLabel(request.deviceName());
+        List<DeviceCredentialModel.BindingEntry> allBindings = new ArrayList<>();
+        String existingCredentialId = null;
 
-        CredentialModel created = user.credentialManager().createStoredCredential(credential);
+        List<CredentialModel> existing = user.credentialManager()
+                .getStoredCredentialsByTypeStream(DeviceCredentialModel.TYPE)
+                .toList();
+        for (CredentialModel cred : existing) {
+            DeviceCredentialModel existingModel = DeviceCredentialModel.createFromCredentialModel(cred);
+            if ("handover-v2".equals(existingModel.getVersion())) {
+                existingCredentialId = cred.getId();
+                allBindings.addAll(existingModel.getBindings());
+            } else {
+                existingCredentialId = cred.getId();
+            }
+        }
+
+        allBindings.removeIf(b -> b.publicKeyHash().equals(request.publicKeyHash()));
+        allBindings.add(new DeviceCredentialModel.BindingEntry(request.publicKeyHash(), request.deviceName()));
+
+        DeviceCredentialModel newCredential = DeviceCredentialModel.createWithBindings(allBindings, request.handoverSecret());
+
+        String label = allBindings.size() == 1 && request.deviceName() != null
+                ? request.deviceName()
+                : "device-login";
+        newCredential.setUserLabel(label);
+
+        String createdId;
+        if (existingCredentialId != null) {
+            user.credentialManager().removeStoredCredentialById(existingCredentialId);
+        }
+        createdId = user.credentialManager().createStoredCredential(newCredential).getId();
+
         return Response.status(Response.Status.CREATED)
-                .entity(Map.of("credentialId", created.getId()))
+                .entity(Map.of("credentialId", createdId))
                 .build();
     }
 
@@ -105,7 +128,7 @@ public class DeviceCredentialResourceProvider implements RealmResourceProvider {
             String keycloakUserId,
             String deviceName,
             String publicKeyHash,
-            String userHandoverSecret
+            String handoverSecret
     ) {
     }
 }

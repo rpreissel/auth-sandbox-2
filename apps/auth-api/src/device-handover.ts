@@ -1,26 +1,78 @@
-import { createHmac } from 'node:crypto'
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
-import { appConfig } from '@auth-sandbox-2/backend-core'
+import { pool } from '@auth-sandbox-2/backend-core'
 
-function getDeviceHandoverDerivationSecret() {
-  if (typeof (appConfig as { deviceHandoverDerivationSecret?: unknown }).deviceHandoverDerivationSecret === 'string') {
-    return (appConfig as { deviceHandoverDerivationSecret: string }).deviceHandoverDerivationSecret
+export function generateHandoverSecret() {
+  return randomBytes(32).toString('base64url')
+}
+
+export async function getUserHandoverSecret(userId: string): Promise<string> {
+  const result = await pool.query<{ handover_secret: string }>(
+    'select handover_secret from user where user_id = $1',
+    [userId]
+  )
+  const row = result.rows[0]
+  if (!row || !row.handover_secret) {
+    const secret = generateHandoverSecret()
+    await pool.query(
+      'update user set handover_secret = $1 where user_id = $2',
+      [secret, userId]
+    )
+    return secret
   }
-  return process.env.AUTH_API_DEVICE_HANDOVER_DERIVATION_SECRET ?? 'change-me-device-handover-derivation-secret'
+  return row.handover_secret
 }
 
-function encode(value: string) {
-  return Buffer.from(value, 'utf8').toString('base64url')
+export async function ensureUserHandoverSecret(userId: string): Promise<string> {
+  const result = await pool.query<{ handover_secret: string }>(
+    'select handover_secret from user where user_id = $1',
+    [userId]
+  )
+  const row = result.rows[0]
+  if (row?.handover_secret) {
+    return row.handover_secret
+  }
+  const secret = generateHandoverSecret()
+  await pool.query(
+    'update user set handover_secret = $1 where user_id = $2',
+    [secret, userId]
+  )
+  return secret
 }
 
-function buildMaterial(parts: string[]) {
-  return parts.map((part) => encode(part)).join('.')
-}
+export function createHandoverEnvelope(input: {
+  userHandoverSecret: string
+  userId: string
+  publicKeyHash: string
+  nonce: string
+  exp: number
+  jti: string
+  acr?: string | null
+}) {
+  const secretBytes = Buffer.from(input.userHandoverSecret, 'base64url')
+  const iv = randomBytes(12)
 
-export function deriveUserDeviceHandoverSecret(userId: string) {
-  return createHmac('sha256', getDeviceHandoverDerivationSecret())
-    .update(`device-handover:${userId}`, 'utf8')
-    .digest('base64url')
+  const innerPayload = JSON.stringify({
+    type: 'device',
+    sub: input.userId,
+    publicKeyHash: input.publicKeyHash,
+    exp: input.exp,
+    jti: input.jti,
+    nonce: input.nonce,
+    acr: input.acr ?? null
+  })
+
+  const cipher = createCipheriv('aes-256-gcm', secretBytes, iv)
+  const encrypted = Buffer.concat([
+    cipher.update(innerPayload, 'utf8'),
+    cipher.final(),
+    cipher.getAuthTag()
+  ])
+
+  return {
+    handoverIv: iv.toString('base64url'),
+    handoverCiphertext: encrypted.toString('base64url')
+  }
 }
 
 export function createDeviceHandoverProof(input: {
@@ -32,17 +84,14 @@ export function createDeviceHandoverProof(input: {
   jti: string
   acr?: string | null
 }) {
-  const material = buildMaterial([
-    'device',
-    input.userId,
-    input.publicKeyHash,
-    input.nonce,
-    String(input.exp),
-    input.jti,
-    input.acr ?? ''
-  ])
-
-  return createHmac('sha256', input.userHandoverSecret)
-    .update(material, 'utf8')
-    .digest('base64url')
+  const innerPayload = JSON.stringify({
+    type: 'device',
+    sub: input.userId,
+    publicKeyHash: input.publicKeyHash,
+    exp: input.exp,
+    jti: input.jti,
+    nonce: input.nonce,
+    acr: input.acr ?? null
+  })
+  return innerPayload
 }

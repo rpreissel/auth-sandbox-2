@@ -1,3 +1,14 @@
+export type UserRow = {
+  id: string
+  user_id: string
+  handover_secret: string | null
+  first_name: string
+  last_name: string
+  birth_date: string
+  created_at: string
+  updated_at: string
+}
+
 export type RegistrationPersonRow = {
   id: string
   user_id: string
@@ -41,10 +52,8 @@ export type RegistrationIdentityRow = {
 
 export type DeviceRow = {
   id: string
-  device_name: string
   public_key: string
   public_key_hash: string
-  active: boolean
   created_at: string
 }
 
@@ -54,7 +63,7 @@ export type DeviceBindingRow = {
   user_id: string
   keycloak_user_id: string | null
   keycloak_credential_id: string | null
-  active: boolean
+  device_name: string
   created_at: string
 }
 

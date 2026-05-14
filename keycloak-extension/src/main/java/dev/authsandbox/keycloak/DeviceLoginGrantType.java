@@ -101,7 +101,7 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             trace.recordArtifact("device_grant_validation", Map.of(
                     "userId", user.getUsername(),
                     "publicKeyHash", payload.publicKeyHash(),
-                    "hasHandoverProof", payload.handoverProof() != null && !payload.handoverProof().isBlank()
+                    "hasHandoverEnvelope", payload.handoverIv() != null && !payload.handoverIv().isBlank()
             ), "Validated device grant login_token against stored device credential.");
 
             event.user(user);
@@ -115,13 +115,20 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                 throw new IllegalArgumentException("Account is not fully set up");
             }
 
-            CredentialModel matchedCredential = user.credentialManager()
+            DeviceCredentialModel matchedModel = user.credentialManager()
                     .getStoredCredentialsByTypeStream(DeviceCredentialModel.TYPE)
-                    .filter((credential) -> payload.publicKeyHash().equals(DeviceCredentialModel.createFromCredentialModel(credential).getPublicKeyHash()))
+                    .map(DeviceCredentialModel::createFromCredentialModel)
+                    .filter(cred -> cred.findBinding(payload.publicKeyHash()) != null)
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("Device credential not found"));
 
-            validateHandoverProof(user.getUsername(), matchedCredential, payload);
+            String handoverSecret = matchedModel.getHandoverSecret();
+            if (handoverSecret == null || handoverSecret.isBlank()) {
+                throw new IllegalArgumentException("No handover secret in matched credential");
+            }
+
+            LoginTokenSupport.EncryptedHandoverPayload inner = LoginTokenSupport.decryptHandover(payload, handoverSecret);
+            LoginTokenSupport.validateHandoverCrossCheck(payload, inner);
 
             if (!TokenManager.verifyConsentStillAvailable(session, user, client, TokenManager.getRequestedClientScopes(session, scope, client, user))) {
                 String errorMessage = "Client no longer has requested consent from user";
@@ -186,23 +193,6 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
     @Override
     public EventType getEventType() {
         return EventType.LOGIN;
-    }
-
-    private void validateHandoverProof(String userId, CredentialModel credential, LoginTokenSupport.DeviceLoginPayload payload) {
-        DeviceCredentialModel deviceCredential = DeviceCredentialModel.createFromCredentialModel(credential);
-        String expectedProof = LoginTokenSupport.createHandoverProof(
-                deviceCredential.getUserHandoverSecret(),
-                userId,
-                payload.publicKeyHash(),
-                payload.nonce(),
-                payload.exp(),
-                payload.jti().toString(),
-                payload.acr()
-        );
-        boolean valid = expectedProof.equals(payload.handoverProof());
-        if (!valid) {
-            throw new IllegalArgumentException("Invalid device handover proof");
-        }
     }
 
     private static String firstNonBlank(String first, String second) {

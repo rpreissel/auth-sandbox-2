@@ -58,8 +58,7 @@ Explicitly out of scope:
 7. If not, the app submits an initial password and the backend sets it via the Keycloak Admin API.
 8. Device app requests an encrypted challenge from `auth-api`.
 9. Device app signs the encrypted payload and sends it back.
-10. `auth-api` verifies the RSA signature itself, derives a per-user handover proof, and exchanges a custom login token at the Keycloak token endpoint.
-11. Keycloak validates only the API-issued handover proof plus `publicKeyHash`, not raw device key material.
+10. `auth-api` verifies the RSA signature itself, then creates a **handover-v2** encrypted envelope using the per-user Handover Secret from Postgres and exchanges it via the custom login token at the Keycloak token endpoint. 11. Keycloak decrypts the handover-v2 payload, validates the auth tag, and cross-checks inner vs outer fields — raw device key material is never sent to Keycloak. 12. App uses the access token to call `servicemock-api`, which verifies the token with Keycloak JWKS and the expected audience.
 12. App uses the access token to call `servicemock-api`, which verifies the token with Keycloak JWKS and the expected audience.
 13. App shows access token, ID token, refresh token, decoded claims, and mock API responses.
 14. App can refresh tokens and log out.

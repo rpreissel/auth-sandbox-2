@@ -30,7 +30,7 @@ import {
   startPublicAssuranceFlowMethod
 } from './assurance-flows.js'
 import { verifyServiceToken } from './flow-tokens.js'
-import { createDeviceHandoverProof, deriveUserDeviceHandoverSecret } from './device-handover.js'
+import { createHandoverEnvelope, getUserHandoverSecret } from './device-handover.js'
 import { createEncryptedChallenge, hashPublicKey, verifyPayloadSignature } from './lib/crypto.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
 import { buildSsoBootstrapTargetUrl, createSsoBootstrapState, getSsoBootstrapTarget, verifySsoBootstrapState } from './sso-bootstrap.js'
@@ -40,7 +40,7 @@ import type {
   DeviceRow,
   RegistrationIdentityRow,
   RegistrationPersonCodeRow,
-  RegistrationPersonRow,
+  UserRow,
   RegistrationPersonSmsNumberRow
 } from './types.js'
 
@@ -101,7 +101,7 @@ function getFlowServiceHandler(service: AssuranceFlowService) {
   return handler
 }
 
-function mapRegistrationPerson(row: RegistrationPersonRow): RegistrationPersonRecord {
+function mapRegistrationPerson(row: UserRow): RegistrationPersonRecord {
   return {
     id: row.id,
     userId: row.user_id,
@@ -137,9 +137,9 @@ function mapRegistrationPersonSmsNumber(row: RegistrationPersonSmsNumberRow): Re
 function mapDevice(row: DeviceRow): DeviceRecord {
   return {
     id: row.id,
-    deviceName: row.device_name,
+    deviceName: null,
     publicKeyHash: row.public_key_hash,
-    active: row.active,
+    active: null,
     createdAt: row.created_at
   }
 }
@@ -173,8 +173,8 @@ export async function createRegistrationIdentity(input: CreateRegistrationIdenti
     async () => withTransaction(async (client) => {
       await adminClient.ensureUser(input.userId, `${input.firstName} ${input.lastName}`)
 
-      const personResult = await client.query<RegistrationPersonRow>(
-        `insert into registration_people (user_id, first_name, last_name, birth_date)
+      const personResult = await client.query<UserRow>(
+        `insert into user (user_id, first_name, last_name, birth_date)
          values ($1, $2, $3, $4)
          on conflict (user_id) do update
          set first_name = excluded.first_name,
@@ -240,7 +240,7 @@ export async function listRegistrationIdentities() {
        sms.phone_number,
        people.created_at,
        people.updated_at
-     from registration_people people
+      from user people
      left join lateral (
        select code, expires_at, use_count
        from registration_person_codes
@@ -266,7 +266,7 @@ export async function deleteDevice(id: string) {
     },
     async () => {
       const bindingResult = await pool.query<DeviceBindingRow>(
-        'select * from device_bindings where device_id = $1 and active = true',
+        'select * from device_bindings where device_id = $1',
         [id]
       )
       const binding = bindingResult.rows[0]
@@ -302,21 +302,13 @@ export async function deleteRegistrationIdentity(userId: string) {
           await adminClient.deleteDeviceCredential(binding.user_id, binding.keycloak_credential_id)
         }
 
-        await pool.query('delete from device_bindings where device_id = $1 and user_id = $2', [binding.device_id, userId])
-
-        const remainingBindings = await pool.query<{ id: string }>(
-          'select id from device_bindings where device_id = $1 limit 1',
-          [binding.device_id]
-        )
-        if (!remainingBindings.rowCount) {
-          await pool.query('delete from devices where id = $1', [binding.device_id])
-        }
+        await pool.query('delete from device_bindings where id = $1', [binding.id])
       }
 
       await pool.query('delete from tanmock_entries where source_user_id = $1', [userId])
       await pool.query('delete from tanmock_authorization_codes where source_user_id = $1', [userId])
       await pool.query('delete from tanmock_refresh_tokens where source_user_id = $1', [userId])
-      await pool.query('delete from registration_people where user_id = $1', [userId])
+      await pool.query('delete from user where user_id = $1', [userId])
       await adminClient.deleteUser(userId)
     }
   )
@@ -446,13 +438,13 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
       notes: 'Start device login service operation.'
     },
     async (spanId) => {
-      const result = await pool.query<DeviceRow>('select * from devices where public_key_hash = $1 and active = true', [input.publicKeyHash])
+      const result = await pool.query<DeviceRow>('select * from devices where public_key_hash = $1', [input.publicKeyHash])
       const device = result.rows[0]
       if (!device) {
         throw notFound('Unknown device')
       }
       const bindingResult = await pool.query<DeviceBindingRow>(
-        'select * from device_bindings where device_id = $1 and active = true',
+        'select * from device_bindings where device_id = $1',
         [device.id]
       )
       const binding = bindingResult.rows[0]
@@ -546,7 +538,7 @@ async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput 
     throw badRequest('Unknown device')
   }
   const bindingResult = await pool.query<DeviceBindingRow>(
-    'select * from device_bindings where device_id = $1 and active = true',
+    'select * from device_bindings where device_id = $1',
     [challenge.device_id]
   )
   const binding = bindingResult.rows[0]
@@ -562,8 +554,9 @@ async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput 
 
   const exp = Math.floor(new Date(challenge.expires_at).getTime() / 1000)
   const jti = randomUUID()
-  const handoverProof = createDeviceHandoverProof({
-    userHandoverSecret: deriveUserDeviceHandoverSecret(binding.user_id),
+  const userHandoverSecret = await getUserHandoverSecret(binding.user_id)
+  const { handoverIv, handoverCiphertext } = createHandoverEnvelope({
+    userHandoverSecret,
     userId: binding.user_id,
     publicKeyHash: challenge.public_key_hash,
     nonce: challenge.nonce,
@@ -582,7 +575,8 @@ async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput 
     ...(input.acr ? { acr: input.acr } : {}),
     publicKeyHash: challenge.public_key_hash,
     nonce: challenge.nonce,
-    handoverProof
+    handoverIv,
+    handoverCiphertext
   }
 
   return {

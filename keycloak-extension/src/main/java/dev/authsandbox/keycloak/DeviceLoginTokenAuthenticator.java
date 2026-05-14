@@ -1,6 +1,5 @@
 package dev.authsandbox.keycloak;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.AuthenticationFlowError;
@@ -9,11 +8,8 @@ import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.credential.CredentialModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
-import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Map;
 
 public class DeviceLoginTokenAuthenticator implements Authenticator {
@@ -54,7 +50,6 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
 
             String userId = token.sub();
             String publicKeyHash = token.publicKeyHash();
-            String handoverProof = token.handoverProof();
 
             LOG.infof("Device login token received for user '%s' and publicKeyHash '%s'", userId, publicKeyHash);
 
@@ -67,10 +62,11 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
             }
 
             var credentials = user.credentialManager().getStoredCredentialsByTypeStream(DeviceCredentialModel.TYPE).toList();
-            CredentialModel matched = credentials.stream().filter(credential -> {
-                DeviceCredentialModel model = DeviceCredentialModel.createFromCredentialModel(credential);
-                return publicKeyHash.equals(model.getPublicKeyHash());
-            }).findFirst().orElse(null);
+            DeviceCredentialModel matched = credentials.stream()
+                    .map(DeviceCredentialModel::createFromCredentialModel)
+                    .filter(cred -> cred.findBinding(publicKeyHash) != null)
+                    .findFirst()
+                    .orElse(null);
 
             if (matched == null) {
                 LOG.warnf("No device credential matched publicKeyHash '%s' for user '%s'", publicKeyHash, userId);
@@ -79,33 +75,24 @@ public class DeviceLoginTokenAuthenticator implements Authenticator {
                 return;
             }
 
-            DeviceCredentialModel deviceCredential = DeviceCredentialModel.createFromCredentialModel(matched);
-            String expectedProof = LoginTokenSupport.createHandoverProof(
-                    deviceCredential.getUserHandoverSecret(),
-                    userId,
-                    publicKeyHash,
-                    token.nonce(),
-                    token.exp(),
-                    token.jti().toString(),
-                    token.acr()
-            );
-            boolean valid = expectedProof.equals(handoverProof);
-
-            if (!valid) {
-                LOG.warnf("Invalid handover proof for device login user '%s' and credential '%s'", userId, matched.getId());
-                trace.error("Device login handover proof validation failed.");
+            String handoverSecret = matched.getHandoverSecret();
+            if (handoverSecret == null || handoverSecret.isBlank()) {
+                LOG.warnf("No handover secret found in credential for user '%s'", userId);
+                trace.error("No handover secret in matched credential.");
                 context.failure(AuthenticationFlowError.INVALID_CREDENTIALS);
                 return;
             }
+
+            LoginTokenSupport.EncryptedHandoverPayload inner = LoginTokenSupport.decryptHandover(token, handoverSecret);
+            LoginTokenSupport.validateHandoverCrossCheck(token, inner);
 
             LOG.infof("Device login token validated for user '%s' with credential '%s'", userId, matched.getId());
             trace.recordArtifact("device_login_validation", Map.of(
                     "userId", userId,
                     "requestedAcr", token.acr() == null ? "" : token.acr(),
                     "credentialId", matched.getId(),
-                    "publicKeyHash", publicKeyHash,
-                    "hasHandoverProof", handoverProof != null && !handoverProof.isBlank()
-            ), "Validated device login token against the stored per-user handover secret.");
+                    "publicKeyHash", publicKeyHash
+            ), "Validated device login token against the stored per-user handover secret using AES-256-GCM.");
             long authTime = System.currentTimeMillis() / 1000;
             String achievedAcr = STRONG_DEVICE_LOGIN_ACR.equals(token.acr()) ? STRONG_DEVICE_LOGIN_ACR : DEVICE_LOGIN_ACR;
             int achievedLoa = STRONG_DEVICE_LOGIN_ACR.equals(achievedAcr) ? STRONG_DEVICE_LOGIN_LOA : DEVICE_LOGIN_LOA;
