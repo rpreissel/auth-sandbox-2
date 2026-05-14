@@ -1,0 +1,100 @@
+erDiagram
+  devices {
+    uuid id PK
+    text device_name
+    text public_key
+    text public_key_hash
+    boolean active
+    timestamptz created_at
+  }
+
+  device_bindings {
+    uuid id PK
+    uuid device_id FK
+    text user_id
+    text keycloak_user_id
+    text keycloak_credential_id
+    boolean active
+    timestamptz created_at
+  }
+
+  login_challenges {
+    uuid id PK
+    text nonce
+    text user_id
+    uuid device_id FK
+    text public_key_hash
+    timestamptz expires_at
+    boolean used
+    timestamptz created_at
+  }
+
+  assurance_flows {
+    text id PK
+    text purpose
+    text status
+    text current_method
+    text requested_acr
+    text target_assurance
+    uuid device_id FK
+    text user_hint
+    text prospective_user_id
+    text resolved_user_id
+    jsonb challenge_binding_json
+    jsonb context_json
+    jsonb method_state_json
+    jsonb result_json
+    text idempotency_key
+    integer finalize_lock_version
+    timestamptz finalize_locked_at
+    text final_artifact_kind
+    text final_artifact_code
+    timestamptz final_artifact_expires_at
+    timestamptz final_artifact_consumed_at
+    timestamptz expires_at
+    timestamptz finalized_at
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  assurance_flow_events {
+    uuid id PK
+    text flow_id FK
+    text event_type
+    jsonb payload_json
+    timestamptz created_at
+  }
+
+  registration_people {
+    uuid id PK
+    text user_id
+    text first_name
+    text last_name
+    date birth_date
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  registration_person_codes {
+    uuid id PK
+    uuid person_id FK
+    text code
+    timestamptz expires_at
+    integer use_count
+    timestamptz created_at
+  }
+
+  registration_person_sms_numbers {
+    uuid id PK
+    uuid person_id FK
+    text phone_number
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  devices ||--o{ login_challenges : ""
+  devices ||--o{ device_bindings : ""
+  devices ||--o{ assurance_flows : ""
+  assurance_flows ||--o{ assurance_flow_events : ""
+  registration_people ||--o{ registration_person_codes : ""
+  registration_people ||--o{ registration_person_sms_numbers : ""

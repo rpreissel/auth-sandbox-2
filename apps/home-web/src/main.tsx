@@ -571,6 +571,28 @@ function HomeApp() {
       </section>
 
       <section className="panel">
+        <h2>Database structure</h2>
+        <p className="panel-copy">
+          The auth-api schema stores devices independently from user bindings, with separate tables for assurance flows, login challenges, and registration people. See the full diagram and description on GitHub.
+        </p>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <img
+            src="/diagrams/database/auth-api-schema/diagram.svg"
+            alt="auth_api database schema"
+            style={{ maxWidth: '100%', height: 'auto', maxHeight: '320px', border: '1px solid var(--border)', borderRadius: '4px' }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <a href="https://github.com/etosquare/auth-sandbox-2/blob/main/docs/diagrams/database/auth-api-schema/README.md" target="_blank" rel="noopener noreferrer">
+              DB schema documentation
+            </a>
+            <a href="https://github.com/etosquare/auth-sandbox-2/blob/main/docs/diagrams/README.md" target="_blank" rel="noopener noreferrer">
+              All diagrams and descriptions
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
         <h2>Sequence diagrams</h2>
         <p className="panel-copy">
           The homepage now maps the full sandbox journey: admin provisioning, device enrollment, TAN-based broker login,

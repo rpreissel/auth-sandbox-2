@@ -1,0 +1,15 @@
+sequenceDiagram
+  autonumber
+  participant WM as WebMock Web
+  participant KC_E as Keycloak (ekw client)
+  participant TM as TanMock Web
+  participant TMA as TanMock API
+  participant KC_W as Keycloak (webmock client)
+
+  WM->>KC_E: Start EKW bootstrap login
+  KC_E->>TM: Redirect to EKW Mock authorize page
+  TM->>TMA: Submit userId and one-time EKW
+  TMA->>KC_E: Return signed broker tokens and claims
+  KC_E->>KC_E: Create brokered user and establish KC session
+  WM->>KC_W: Silent SSO with prompt=none
+  KC_W-->>WM: Return ekw handoff session and tokens

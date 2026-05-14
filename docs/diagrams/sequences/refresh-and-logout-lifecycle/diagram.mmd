@@ -1,0 +1,14 @@
+sequenceDiagram
+  autonumber
+  participant App as AppMock Web
+  participant Auth as Auth API
+  participant KC as Keycloak
+
+  App->>Auth: Refresh token bundle
+  Auth->>KC: Redeem refresh token
+  Auth->>KC: Rotate refresh-token session state
+  Auth-->>App: Return rotated tokens
+  App->>Auth: Request logout
+  Auth->>KC: Revoke session at logout endpoint
+  Auth->>KC: Reject future refresh redemption
+  Auth-->>App: Confirm local session clear

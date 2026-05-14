@@ -1,0 +1,13 @@
+sequenceDiagram
+  autonumber
+  participant AdminWeb as Admin Web
+  participant Auth as Auth API
+  participant KC as Keycloak
+  participant DB as Postgres
+
+  AdminWeb->>Auth: Create registration identity
+  Auth->>KC: Ensure Keycloak user exists
+  Auth->>DB: Persist prepared registration channels
+  Auth->>DB: Upsert person, code, and SMS records
+  Auth-->>AdminWeb: Return masked registration preview
+  Auth-->>AdminWeb: Return prepared identity
