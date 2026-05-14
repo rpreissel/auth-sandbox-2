@@ -32,7 +32,8 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String LOGIN_TOKEN_PARAM = "login_token";
-    private static final String DEVICE_LOGIN_ACR = "2se";
+    private static final String ACR_1SE = "1se";
+    private static final String ACR_2SE = "2se";
 
     @Override
     public Response process(Context context) {
@@ -127,8 +128,32 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                 throw new IllegalArgumentException("No handover secret in matched credential");
             }
 
-            LoginTokenSupport.EncryptedHandoverPayload inner = LoginTokenSupport.decryptHandover(payload, handoverSecret);
-            LoginTokenSupport.validateHandoverCrossCheck(payload, inner);
+            String acrValue = ACR_1SE;
+            java.util.List<String> amrValue = new java.util.ArrayList<>();
+            amrValue.add("hwk");
+
+            if (payload.secondFactor() != null) {
+                if (payload.secondFactor().containsKey("password")) {
+                    String password = (String) payload.secondFactor().get("password");
+                    boolean passwordValid = user.credentialManager()
+                            .getStoredCredentialsByTypeStream("password")
+                            .anyMatch(cred -> {
+                                try {
+                                    return cred.isValid(password);
+                                } catch (Exception e) {
+                                    return false;
+                                }
+                            });
+                    if (!passwordValid) {
+                        throw new IllegalArgumentException("Invalid password credential");
+                    }
+                    acrValue = ACR_2SE;
+                    amrValue.add("pwd");
+                } else if (payload.secondFactor().containsKey("biometricPublicKey")) {
+                    acrValue = ACR_2SE;
+                    amrValue.add("user_presence_mock");
+                }
+            }
 
             if (!TokenManager.verifyConsentStillAvailable(session, user, client, TokenManager.getRequestedClientScopes(session, scope, client, user))) {
                 String errorMessage = "Client no longer has requested consent from user";
@@ -158,20 +183,21 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             );
             event.session(userSession);
             trace.updateSessions(authSession.getParentSession().getId(), userSession.getId());
-            trace.updateAssurance(DEVICE_LOGIN_ACR, java.util.List.of("pwd"));
+            trace.updateAssurance(acrValue, amrValue);
             trace.refreshContextArtifact();
 
             AuthenticationManager.setClientScopesInSession(session, authSession);
             AcrStore acrStore = new AcrStore(session, authSession);
-            acrStore.setLevelAuthenticated(2);
-            authSession.setAuthNote("acr", DEVICE_LOGIN_ACR);
-            authSession.setUserSessionNote("acr", DEVICE_LOGIN_ACR);
+            acrStore.setLevelAuthenticated(acrValue.equals(ACR_2SE) ? 2 : 1);
+            authSession.setAuthNote("acr", acrValue);
+            authSession.setUserSessionNote("acr", acrValue);
             String loaMap = authSession.getAuthNote("loa-map");
             if (loaMap != null) {
                 authSession.setUserSessionNote("loa-map", loaMap);
                 userSession.setNote("loa-map", loaMap);
             }
-            userSession.setNote("acr", DEVICE_LOGIN_ACR);
+            userSession.setNote("acr", acrValue);
+            userSession.setNote("amr", String.join(" ", amrValue));
             ClientSessionContext clientSessionCtx = TokenManager.attachAuthenticationSession(session, userSession, authSession);
             clientSessionCtx.setAttribute(Constants.GRANT_TYPE, context.getGrantType());
             updateUserSessionFromClientAuth(userSession);
