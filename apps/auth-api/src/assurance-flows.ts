@@ -117,6 +117,7 @@ type FlowMethodState = {
   publicKey?: string
   publicKeyHash?: string
   deviceName?: string
+  biometricPublicKey?: string
 }
 
 type RegistrationIdentityPayload = {
@@ -492,6 +493,7 @@ async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryab
   const context = readContext(flow)
   const deviceName = typeof context.deviceName === 'string' ? context.deviceName : null
   const publicKey = typeof context.publicKey === 'string' ? context.publicKey : null
+  const biometricPublicKey = typeof context.biometricPublicKey === 'string' ? context.biometricPublicKey : undefined
 
   if (!deviceName || !publicKey) {
     throw badRequest('Registration flow is missing device context')
@@ -523,7 +525,8 @@ async function ensureRegistrationDeviceState(flow: AssuranceFlowRow, db: Queryab
     state: 'device_verified',
     publicKey,
     publicKeyHash,
-    deviceName
+    deviceName,
+    biometricPublicKey
   } satisfies FlowMethodState
 }
 
@@ -540,6 +543,7 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
   const publicKey = methodState.publicKey
   const publicKeyHash = methodState.publicKeyHash
   const deviceId = flow.device_id
+  const biometricPublicKey = methodState.biometricPublicKey
 
   if (!userId || !deviceName || !publicKey || !publicKeyHash || !deviceId) {
     throw badRequest('Registration flow is missing device material')
@@ -550,7 +554,8 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
   const credentialId = await adminClient.createDeviceCredential({
     userId,
     deviceName,
-    publicKeyHash
+    publicKeyHash,
+    biometricPublicKey
   })
 
   await db.query(
@@ -914,7 +919,8 @@ export async function createRegistrationFlow(input: CreateRegistrationFlowInput,
         requiredAcr: 'level_2',
         context: {
           deviceName: input.deviceName,
-          publicKey: input.publicKey
+          publicKey: input.publicKey,
+          ...(input.biometricPublicKey ? { biometricPublicKey: input.biometricPublicKey } : {})
         }
       }, db)
       const ensuredDeviceState = await ensureRegistrationDeviceState(flow, db)

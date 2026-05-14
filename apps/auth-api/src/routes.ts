@@ -43,7 +43,8 @@ import {
 
 const createRegistrationFlowSchema = z.object({
   deviceName: z.string().min(1),
-  publicKey: z.string().min(1)
+  publicKey: z.string().min(1),
+  biometricPublicKey: z.string().optional()
 })
 
 const submitRegistrationIdentitySchema = z.object({

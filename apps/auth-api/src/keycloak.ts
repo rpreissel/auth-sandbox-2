@@ -326,6 +326,7 @@ export class KeycloakAdminClient {
     userId: string
     deviceName: string
     publicKeyHash: string
+    biometricPublicKey?: string
   }) {
     const user = await this.getUserByUsername(args.userId)
     if (!user) {
@@ -349,6 +350,7 @@ export class KeycloakAdminClient {
           keycloakUserId: user.id,
           deviceName: args.deviceName,
           publicKeyHash: args.publicKeyHash,
+          biometricPublicKey: args.biometricPublicKey,
           handoverSecret
         })
       }
