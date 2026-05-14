@@ -592,8 +592,7 @@ export function App() {
     setChallenge(result)
     setStep('login')
     if (result.allowedSecondFactors && result.allowedSecondFactors.length > 0) {
-      const firstSecondFactor = result.allowedSecondFactors[0]
-      setPendingSecondFactor(firstSecondFactor)
+      setPendingSecondFactor(result.allowedSecondFactors[0])
     } else {
       setPendingSecondFactor(null)
     }
@@ -603,14 +602,6 @@ export function App() {
       setStatus(nextStatus)
       return
     }
-
-    setSecurePrompt({
-      kind: 'login',
-      title: 'Bestätige deine Identität',
-      body: 'Nutze deine Displaysperre, um diese Geräteanmeldung fortzusetzen.',
-      caption: `Challenge bereit bis ${formatDateTime(result.expiresAt)}`,
-      confirmLabel: 'Displaysperre verwenden'
-    })
     setStatus(nextStatus)
   }
 
@@ -970,6 +961,20 @@ export function App() {
     })
   }
 
+  function handleStartBiometricLogin() {
+    if (!challenge) {
+      return
+    }
+
+    setSecurePrompt({
+      kind: 'login',
+      title: 'Bestätige deine Identität',
+      body: 'Nutze deine Displaysperre, um diese biometrische Geräteanmeldung fortzusetzen.',
+      caption: `Challenge bereit bis ${formatDateTime(challenge.expiresAt)}`,
+      confirmLabel: 'Displaysperre verwenden'
+    })
+  }
+
   async function handleManageBiometric(action: 'add' | 'rotate' | 'remove') {
     if (!device || !tokens) return
 
@@ -1151,14 +1156,13 @@ export function App() {
       return
     }
 
-    await handleFinishLogin()
+    await handleFinishLoginWithBiometric()
   }
 
   function handleCancelSecurePrompt() {
     if (securePrompt?.kind === 'login') {
       setAutoLogin(null)
-      setChallenge(null)
-      setStatus('Biometrischer Dialog geschlossen. Starte die Geräteanmeldung erneut, wenn du fortfahren möchtest.')
+      setStatus('Biometrischer Dialog geschlossen. Du kannst einen anderen zweiten Faktor wählen.')
       setSecurePrompt(null)
       return
     }
@@ -1425,9 +1429,31 @@ export function App() {
                           ? 'Bestätige dich mit der Displaysperre, um die Anmeldung abzuschließen.'
                           : 'Erst nach der Challenge und der Android-Bestätigung wird eine neue Keycloak-Sitzung erstellt.'}
                       </p>
-                      {challenge && pendingSecondFactor && (
+                      {challenge && (
                         <div className="second-factor-options">
                           <p className="section-label">Zweiter Faktor</p>
+                          <div className="actions stacked-actions">
+                            {challenge.allowedSecondFactors?.includes('password') && (
+                              <button
+                                type="button"
+                                className={pendingSecondFactor === 'password' ? 'button-secondary' : undefined}
+                                onClick={() => setPendingSecondFactor('password')}
+                                disabled={busy}
+                              >
+                                Passwort wählen
+                              </button>
+                            )}
+                            {challenge.allowedSecondFactors?.includes('biometric') && device.biometricPrivateKey && device.biometricPublicKey && (
+                              <button
+                                type="button"
+                                className={pendingSecondFactor === 'biometric' ? 'button-secondary' : undefined}
+                                onClick={() => setPendingSecondFactor('biometric')}
+                                disabled={busy}
+                              >
+                                Biometrie wählen
+                              </button>
+                            )}
+                          </div>
                           {pendingSecondFactor === 'password' && (
                             <div className="password-second-factor">
                               <label>
@@ -1456,9 +1482,7 @@ export function App() {
                           {pendingSecondFactor === 'biometric' && device.biometricPrivateKey && (
                             <button
                               type="button"
-                              onClick={() => {
-                                void handleFinishLoginWithBiometric()
-                              }}
+                              onClick={handleStartBiometricLogin}
                               disabled={busy}
                             >
                               Biometrie verwenden
