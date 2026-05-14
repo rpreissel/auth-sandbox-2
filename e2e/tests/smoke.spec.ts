@@ -423,9 +423,12 @@ test("homepage contains key links", async ({ page }) => {
   await expect(page.getByText("auth_api, keycloak")).toBeVisible();
   await expect(page.getByText(/manage TAN broker entries/i)).toBeVisible();
   const githubDiagramsLink = page.getByRole("link", {
-    name: /github\.com\/rpreissel\/auth-sandbox-2\/blob\/main\/docs\/diagrams\/README\.md/i,
+    name: /github-diagramme/i,
   });
   await expect(githubDiagramsLink).toBeVisible();
+  await expect(githubDiagramsLink).toContainText(/alle architektur-, ablauf- und datenbankdiagramme/i);
+  await expect(githubDiagramsLink).toContainText(/diagramm-dokumentation auf github oeffnen/i);
+  await expect(githubDiagramsLink).toContainText(/github\.com\/rpreissel\/auth-sandbox-2\/blob\/main\/docs\/diagrams\/README\.md/i);
   await expect(githubDiagramsLink).toHaveAttribute("target", "_blank");
   await expect(githubDiagramsLink).toHaveAttribute(
     "href",

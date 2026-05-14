@@ -45,7 +45,10 @@ function HomeApp() {
       </section>
 
       <section className="panel">
-        <a className="link-card" href={diagramsGithubUrl} target="_blank" rel="noreferrer">
+        <a className="link-card diagram-link-card" href={diagramsGithubUrl} target="_blank" rel="noreferrer">
+          <strong>GitHub-Diagramme</strong>
+          <span>Alle Architektur-, Ablauf- und Datenbankdiagramme direkt auf GitHub ansehen.</span>
+          <span className="diagram-link-cta">Diagramm-Dokumentation auf GitHub oeffnen</span>
           <code>{diagramsGithubUrl}</code>
         </a>
       </section>

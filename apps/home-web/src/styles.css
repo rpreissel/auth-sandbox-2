@@ -94,6 +94,22 @@ p { margin: 0; }
   word-break: break-all;
 }
 
+.diagram-link-card {
+  gap: 0.5rem;
+}
+
+.diagram-link-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+  background: #111827;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
 /* ── Login / credentials ── */
 .login-panel { display: flex; flex-direction: column; gap: 0.875rem; }
 
