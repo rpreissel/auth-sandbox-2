@@ -11,10 +11,10 @@ WebMock bootstraps a Keycloak session through the dedicated webmock-ekw-login cl
 sequenceDiagram
   autonumber
   participant WM as WebMock Web
-  participant KC_E as Keycloak (ekw client)
+  participant KC_E as Keycloak EKW Client
   participant TM as TanMock Web
   participant TMA as TanMock API
-  participant KC_W as Keycloak (webmock client)
+  participant KC_W as Keycloak WebMock Client
 
   WM->>KC_E: Start EKW bootstrap login
   KC_E->>TM: Redirect to EKW Mock authorize page
