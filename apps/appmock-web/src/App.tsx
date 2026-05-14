@@ -223,6 +223,7 @@ export function App() {
   const [verificationFeedback, setVerificationFeedback] = useState<VerificationFeedback | null>(null)
   const [traceState, setTraceState] = useState<TraceState | null>(null)
   const [autoLogin, setAutoLogin] = useState<AutoLoginState | null>(null)
+  const [pendingSecondFactor, setPendingSecondFactor] = useState<'password' | 'biometric' | null>(null)
   const [activeAuthenticatedTab, setActiveAuthenticatedTab] = useState<AuthenticatedTab>('tokens')
   const [serviceMockApi, setServiceMockApi] = useState<ServiceMockApiState>({
     profile: null,
@@ -232,6 +233,7 @@ export function App() {
   })
   const [ssoLaunch, setSsoLaunch] = useState<CreateSsoLaunchResponse | null>(null)
   const [ssoCopyStatus, setSsoCopyStatus] = useState<string | null>(null)
+  const [loginPassword, setLoginPassword] = useState('')
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -589,6 +591,12 @@ export function App() {
 
     setChallenge(result)
     setStep('login')
+    if (result.allowedSecondFactors && result.allowedSecondFactors.length > 0) {
+      const firstSecondFactor = result.allowedSecondFactors[0]
+      setPendingSecondFactor(firstSecondFactor)
+    } else {
+      setPendingSecondFactor(null)
+    }
     if (options?.autoFinish) {
       setSecurePrompt(null)
       setAutoLogin({ active: true })
@@ -897,7 +905,7 @@ export function App() {
     })
   }
 
-  async function handleFinishLogin(options?: { preserveStatus?: boolean; clearAutoLogin?: boolean }) {
+  async function handleFinishLogin(options?: { preserveStatus?: boolean; clearAutoLogin?: boolean; secondFactor?: { password: string } | { biometricPublicKey: string; signedChallenge: string } }) {
     if (!device || !challenge) return
     setSecurePrompt(null)
     await runAction(async () => {
@@ -912,7 +920,8 @@ export function App() {
         encryptedKey: challenge.encryptedKey,
         encryptedData: challenge.encryptedData,
         iv: challenge.iv,
-        signature
+        signature,
+        secondFactor: options?.secondFactor
       }, flow)
       await sendFlowEvent(flow, 'device_login_finished', [{
         name: 'token_bundle',
@@ -930,6 +939,33 @@ export function App() {
       }
       setActiveAuthenticatedTab('tokens')
       setStatus(options?.preserveStatus ? 'Automatisch angemeldet' : 'Angemeldet')
+      setStep('authenticated')
+    })
+  }
+
+  async function handleFinishLoginWithBiometric() {
+    if (!device || !device.biometricPrivateKey || !device.biometricPublicKey || !challenge) return
+    const currentDevice = device
+    await runAction(async () => {
+      setStatus('Biometrische Signatur wird erstellt...')
+      const signature = await signEncryptedData(challenge.encryptedData, currentDevice.biometricPrivateKey!)
+      const result = await api.finishLogin({
+        nonce: challenge.nonce,
+        encryptedKey: challenge.encryptedKey,
+        encryptedData: challenge.encryptedData,
+        iv: challenge.iv,
+        signature: await signEncryptedData(challenge.encryptedData, currentDevice.privateKey),
+        secondFactor: {
+          biometricPublicKey: currentDevice.biometricPublicKey!,
+          signedChallenge: signature
+        }
+      })
+      setTraceState(null)
+      setTokens(result)
+      setChallenge(null)
+      setAutoLogin(null)
+      setActiveAuthenticatedTab('tokens')
+      setStatus('Angemeldet (Biometrie)')
       setStep('authenticated')
     })
   }
@@ -1352,6 +1388,50 @@ export function App() {
                           ? 'Bestätige dich mit der Displaysperre, um die Anmeldung abzuschließen.'
                           : 'Erst nach der Challenge und der Android-Bestätigung wird eine neue Keycloak-Sitzung erstellt.'}
                       </p>
+                      {challenge && pendingSecondFactor && (
+                        <div className="second-factor-options">
+                          <p className="section-label">Zweiter Faktor</p>
+                          {pendingSecondFactor === 'password' && (
+                            <div className="password-second-factor">
+                              <label>
+                                <span className="field-label">Passwort</span>
+                                <input
+                                  name="loginPassword"
+                                  type="password"
+                                  value={loginPassword}
+                                  onChange={(event) => setLoginPassword(event.target.value)}
+                                  disabled={busy}
+                                  placeholder="Keycloak-Passwort"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (!loginPassword) return
+                                  void handleFinishLogin({ secondFactor: { password: loginPassword } })
+                                }}
+                                disabled={busy || !loginPassword}
+                              >
+                                Mit Passwort anmelden
+                              </button>
+                            </div>
+                          )}
+                          {pendingSecondFactor === 'biometric' && device.biometricPrivateKey && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void handleFinishLoginWithBiometric()
+                              }}
+                              disabled={busy}
+                            >
+                              Biometrie verwenden
+                            </button>
+                          )}
+                          {!pendingSecondFactor && (
+                            <p className="muted-copy">Kein zweiter Faktor verfügbar</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="binding-stack">
                       <div className="device-summary" aria-label="Saved device summary">
