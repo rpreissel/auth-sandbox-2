@@ -147,7 +147,7 @@ export type StartLoginResponse = {
   encryptedData: string
   iv: string
   expiresAt: IsoDateTime
-  allowedSecondFactors: SecondFactorType[]
+  allowedSecondFactors?: SecondFactorType[]
 }
 
 export type FinishLoginInput = {
