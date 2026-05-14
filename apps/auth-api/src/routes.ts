@@ -30,6 +30,7 @@ import {
   finishLogin,
   listRegistrationIdentities,
   listDevices,
+  manageBiometricCredential,
   logout,
   refreshTokens,
   resendFlowService,
@@ -112,6 +113,12 @@ const finishLoginSchema = z.object({
     biometricPublicKey: z.string().min(1),
     signedChallenge: z.string().min(1)
   })).optional()
+})
+
+const manageBiometricCredentialSchema = z.object({
+  publicKeyHash: z.string().min(1),
+  action: z.enum(['add', 'rotate', 'remove']),
+  biometricPublicKey: z.string().min(1).optional()
 })
 
 const createSsoLaunchSchema = finishLoginSchema.extend({
@@ -630,6 +637,25 @@ export async function registerRoutes(app: any) {
       summary: 'AppMock Web returned the signed challenge response and auth-api exchanged it with Keycloak.',
       body,
       run: () => finishLogin(body)
+    })
+  })
+
+  app.post('/api/device/biometric-credential', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = manageBiometricCredentialSchema.parse(request.body)
+    const authenticatedUser = await requireUserAccessToken(app, request)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'device_biometric_credential_manage',
+      title: `Manage biometric credential for ${authenticatedUser.userId}`,
+      summary: 'auth-api updated the optional biometric key for an existing device.',
+      userId: authenticatedUser.userId,
+      body,
+      run: () => manageBiometricCredential({
+        ...body,
+        authenticatedUserId: authenticatedUser.userId,
+        acr: typeof authenticatedUser.claims.acr === 'string' ? authenticatedUser.claims.acr : null
+      })
     })
   })
   app.post('/api/sso-launches', async (request: FastifyRequest, reply: FastifyReply) => {

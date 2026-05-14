@@ -970,6 +970,43 @@ export function App() {
     })
   }
 
+  async function handleManageBiometric(action: 'add' | 'rotate' | 'remove') {
+    if (!device || !tokens) return
+
+    await runAction(async () => {
+      if (action === 'remove') {
+        const result = await api.manageBiometricCredential({
+          publicKeyHash: device.publicKeyHash,
+          action
+        }, tokens.accessToken, traceState ?? undefined)
+        const nextDevice = {
+          ...device,
+          biometricPrivateKey: undefined,
+          biometricPublicKey: undefined
+        }
+        setDevice(nextDevice)
+        await persistDeviceBinding(nextDevice, false)
+        setStatus(result.message)
+        return
+      }
+
+      const biometricKeys = await createBiometricKeys()
+      const result = await api.manageBiometricCredential({
+        publicKeyHash: device.publicKeyHash,
+        action,
+        biometricPublicKey: biometricKeys.publicKey
+      }, tokens.accessToken, traceState ?? undefined)
+      const nextDevice = {
+        ...device,
+        biometricPrivateKey: biometricKeys.privateKey,
+        biometricPublicKey: biometricKeys.publicKey
+      }
+      setDevice(nextDevice)
+      await persistDeviceBinding(nextDevice, false)
+      setStatus(result.message)
+    })
+  }
+
   async function handleRefresh() {
     if (!tokens) return
     await runAction(async () => {
@@ -1547,13 +1584,23 @@ export function App() {
                           />
                         </div>
                       </section>
-                    ) : (
+                    ) : activeAuthenticatedTab === 'servicemock-api' ? (
                       <ServiceMockApiPanel
                         serviceMockApi={serviceMockApi}
                         busy={busy}
                         onReload={() => void runAction(async () => { await syncServiceMockApi('Geschützte Mock-API synchronisiert') })}
                         onSubmit={handleCreateMockMessage}
                         onDraftChange={(draft) => setServiceMockApi((current) => ({ ...current, draft }))}
+                      />
+                    ) : (
+                      <BiometricManagementPanel
+                        idTokenClaims={idClaims}
+                        accessTokenClaims={accessClaims}
+                        hasLocalBiometric={Boolean(device?.biometricPrivateKey && device?.biometricPublicKey)}
+                        busy={busy}
+                        onAdd={() => void handleManageBiometric('add')}
+                        onRotate={() => void handleManageBiometric('rotate')}
+                        onRemove={() => void handleManageBiometric('remove')}
                       />
                     )}
                   </>
@@ -1638,6 +1685,70 @@ function AuthenticatedTabs(props: {
           <span className="android-tab-label">ServiceMock API</span>
           <strong>Demo API</strong>
         </button>
+        <button
+          type="button"
+          role="tab"
+          id="authenticated-tab-biometric-management"
+          className={props.activeTab === 'biometric-management' ? 'android-tab android-tab-active' : 'android-tab'}
+          aria-selected={props.activeTab === 'biometric-management'}
+          aria-controls="authenticated-panel-biometric-management"
+          onClick={() => props.onChange('biometric-management')}
+        >
+          <span className="android-tab-track" aria-hidden="true">
+            <span className="android-tab-indicator" />
+          </span>
+          <span className="android-tab-icon" aria-hidden="true">◌</span>
+          <span className="android-tab-label">Biometrie</span>
+          <strong>Verwaltung</strong>
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function BiometricManagementPanel(props: {
+  accessTokenClaims: ClaimRecord | null
+  idTokenClaims: ClaimRecord | null
+  hasLocalBiometric: boolean
+  busy: boolean
+  onAdd: () => void
+  onRotate: () => void
+  onRemove: () => void
+}) {
+  const assuranceLevel = readString(props.accessTokenClaims, 'acr') ?? readString(props.idTokenClaims, 'acr') ?? 'Nicht verfügbar'
+  const strongSession = assuranceLevel === '2se'
+
+  return (
+    <section className="card token-card" id="authenticated-panel-biometric-management">
+      <div className="section-heading simple-heading">
+        <div>
+          <p className="section-label">Biometrie-Verwaltung</p>
+          <h2>Optionalen Zweitfaktor pflegen</h2>
+        </div>
+      </div>
+      <div className="challenge-card authenticated-card">
+        <p className="section-label">Sitzungsstärke</p>
+        <strong>{strongSession ? 'Starke Sitzung aktiv' : 'Starke Sitzung erforderlich'}</strong>
+        <p className="muted-copy">
+          {strongSession
+            ? 'Diese Sitzung hat bereits 2se erreicht. Du kannst den optionalen biometrischen Schlüssel hinzufügen, rotieren oder entfernen.'
+            : 'Biometrie-Verwaltung ist nur nach erfolgreichem 2FA-Login verfügbar. Ein Device+Passwort-Login reicht dafür aus.'}
+        </p>
+      </div>
+      <div className="device-summary">
+        <div>
+          <span className="field-label">Aktuelle Assurance</span>
+          <strong>{assuranceLevel}</strong>
+        </div>
+        <div>
+          <span className="field-label">Lokaler Biometrie-Key</span>
+          <strong>{props.hasLocalBiometric ? 'Vorhanden' : 'Nicht vorhanden'}</strong>
+        </div>
+      </div>
+      <div className="actions stacked-actions">
+        <button type="button" onClick={props.onAdd} disabled={props.busy || !strongSession || props.hasLocalBiometric}>Biometrie hinzufügen</button>
+        <button type="button" onClick={props.onRotate} disabled={props.busy || !strongSession || !props.hasLocalBiometric}>Biometrie rotieren</button>
+        <button type="button" className="button-secondary" onClick={props.onRemove} disabled={props.busy || !strongSession || !props.hasLocalBiometric}>Biometrie entfernen</button>
       </div>
     </section>
   )

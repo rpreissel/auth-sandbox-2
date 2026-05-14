@@ -380,6 +380,15 @@ export class KeycloakAdminClient {
     return created.credentialId
   }
 
+  async upsertDeviceCredentialBiometric(args: {
+    userId: string
+    deviceName: string
+    publicKeyHash: string
+    biometricPublicKey?: string
+  }) {
+    return this.createDeviceCredential(args)
+  }
+
   async deleteDeviceCredential(userId: string, credentialId: string) {
     const user = await this.getUserByUsername(userId)
     if (!user) {

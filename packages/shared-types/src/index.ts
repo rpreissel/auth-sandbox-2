@@ -319,6 +319,7 @@ export type TokenBundle = SessionTokenBundle & TokenDisplayBundle
 export type BiometricCredentialManagementAction = 'add' | 'rotate' | 'remove'
 
 export type BiometricCredentialManagementInput = {
+  publicKeyHash: string
   action: BiometricCredentialManagementAction
   biometricPublicKey?: string
 }

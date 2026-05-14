@@ -68,8 +68,9 @@ public class DeviceCredentialModel extends CredentialModel {
                 if (item instanceof Map<?, ?> entry) {
                     String pkHash = entry.get("publicKeyHash") != null ? String.valueOf(entry.get("publicKeyHash")) : null;
                     String deviceName = entry.get("deviceName") != null ? String.valueOf(entry.get("deviceName")) : null;
+                    String biometricPublicKey = entry.get("biometricPublicKey") != null ? String.valueOf(entry.get("biometricPublicKey")) : null;
                     if (pkHash != null) {
-                        result.add(new BindingEntry(pkHash, deviceName));
+                        result.add(new BindingEntry(pkHash, deviceName, biometricPublicKey));
                     }
                 }
             }
@@ -134,5 +135,4 @@ public class DeviceCredentialModel extends CredentialModel {
             return map;
         }
     }
-}
 }

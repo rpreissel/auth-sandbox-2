@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { appConfig, logger, pool, recordArtifact, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
   AssuranceFlowService,
+  BiometricCredentialManagementInput,
+  BiometricCredentialManagementResponse,
   CreateSsoLaunchInput,
   CreateSsoLaunchResponse,
   CreateRegistrationIdentityInput,
@@ -62,6 +64,12 @@ function notFound(message: string) {
 function badRequest(message: string) {
   const error = new Error(message) as Error & { statusCode: number }
   error.statusCode = 400
+  return error
+}
+
+function forbidden(message: string) {
+  const error = new Error(message) as Error & { statusCode: number }
+  error.statusCode = 403
   return error
 }
 
@@ -310,6 +318,59 @@ export async function deleteRegistrationIdentity(userId: string) {
       await pool.query('delete from tanmock_refresh_tokens where source_user_id = $1', [userId])
       await pool.query('delete from user where user_id = $1', [userId])
       await adminClient.deleteUser(userId)
+    }
+  )
+}
+
+export async function manageBiometricCredential(input: BiometricCredentialManagementInput & { authenticatedUserId: string; acr?: string | null }): Promise<BiometricCredentialManagementResponse> {
+  return runWithSpan(
+    {
+      kind: 'process',
+      actorType: 'backend',
+      actorName: 'auth-api',
+      operation: 'manage_biometric_credential',
+      userId: input.authenticatedUserId,
+      notes: `Manage biometric credential: ${input.action}`
+    },
+    async () => {
+      if (input.acr !== '2se') {
+        throw forbidden('Biometric credential management requires a strong 2se session')
+      }
+
+      const deviceResult = await pool.query<DeviceRow>('select * from devices where public_key_hash = $1', [input.publicKeyHash])
+      const device = deviceResult.rows[0]
+      if (!device) {
+        throw notFound('Unknown device')
+      }
+
+      const bindingResult = await pool.query<DeviceBindingRow>('select * from device_bindings where device_id = $1 and user_id = $2', [device.id, input.authenticatedUserId])
+      const binding = bindingResult.rows[0]
+      if (!binding) {
+        throw forbidden('Device does not belong to the authenticated user')
+      }
+
+      if ((input.action === 'add' || input.action === 'rotate') && !input.biometricPublicKey) {
+        throw badRequest('biometricPublicKey is required for add/rotate')
+      }
+
+      const credentialId = await adminClient.upsertDeviceCredentialBiometric({
+        userId: binding.user_id,
+        deviceName: binding.device_name,
+        publicKeyHash: input.publicKeyHash,
+        biometricPublicKey: input.action === 'remove' ? undefined : input.biometricPublicKey
+      })
+
+      await pool.query('update device_bindings set keycloak_credential_id = $1 where id = $2', [credentialId, binding.id])
+
+      return {
+        success: true,
+        hasBiometricKey: input.action !== 'remove',
+        message: input.action === 'add'
+          ? 'Biometrischer Schlüssel hinzugefügt'
+          : input.action === 'rotate'
+            ? 'Biometrischer Schlüssel rotiert'
+            : 'Biometrischer Schlüssel entfernt'
+      }
     }
   )
 }
