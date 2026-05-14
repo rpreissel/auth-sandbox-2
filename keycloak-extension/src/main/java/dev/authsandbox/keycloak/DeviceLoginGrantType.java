@@ -24,7 +24,9 @@ import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.sessions.RootAuthenticationSessionModel;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.security.KeyFactory;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Map;
 
@@ -149,7 +151,34 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                     }
                     acrValue = ACR_2SE;
                     amrValue.add("pwd");
-                } else if (payload.secondFactor().containsKey("biometricPublicKey")) {
+                } else if (payload.secondFactor().containsKey("biometricPublicKey") && payload.secondFactor().containsKey("signedChallenge")) {
+                    String storedBiometricKey = matchedModel.getBiometricPublicKey();
+                    if (storedBiometricKey == null || storedBiometricKey.isBlank()) {
+                        throw new IllegalArgumentException("No biometric key registered for this device");
+                    }
+                    String presentedBiometricKey = (String) payload.secondFactor().get("biometricPublicKey");
+                    String signedChallenge = (String) payload.secondFactor().get("signedChallenge");
+                    if (!presentedBiometricKey.equals(storedBiometricKey)) {
+                        throw new IllegalArgumentException("Biometric key mismatch");
+                    }
+                    try {
+                        byte[] keyBytes = Base64.getUrlDecoder().decode(storedBiometricKey);
+                        X509EncodedKeySpec keySpec = new X509EncodedKeySpec(keyBytes);
+                        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+                        java.security.PublicKey publicKey = keyFactory.generatePublic(keySpec);
+                        byte[] challengeBytes = Base64.getUrlDecoder().decode(payload.nonce());
+                        byte[] signatureBytes = Base64.getUrlDecoder().decode(signedChallenge);
+                        Signature verifier = Signature.getInstance("SHA256withRSA");
+                        verifier.initVerify(publicKey);
+                        verifier.update(challengeBytes);
+                        if (!verifier.verify(signatureBytes)) {
+                            throw new IllegalArgumentException("Biometric signature verification failed");
+                        }
+                    } catch (IllegalArgumentException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        throw new IllegalArgumentException("Biometric signature verification error: " + e.getMessage());
+                    }
                     acrValue = ACR_2SE;
                     amrValue.add("user_presence_mock");
                 }
