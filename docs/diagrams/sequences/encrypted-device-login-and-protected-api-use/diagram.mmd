@@ -6,15 +6,24 @@ sequenceDiagram
   participant KC as Keycloak
   participant Mock as ServiceMock API
 
-  App->>Auth: Request encrypted challenge
-  Auth->>DB: Load device and persist nonce
-  Auth-->>App: Return challenge metadata and expiry
-  Auth-->>App: Return encrypted payload
-  App->>Auth: Submit signature over challenge
-  Auth->>DB: Verify nonce, binding, and replay window
-  Auth->>KC: Exchange custom device-login grant
-  Auth->>DB: Record login outcome and last-used device
-  Auth-->>App: Return token bundle
+  App->>Auth: startLogin(publicKeyHash)
+  Auth->>DB: Load device and binding, check KC credential
+  Auth-->>App: challenge + allowedSecondFactors[password?, biometric?]
+  App->>App: User selects second factor (password or biometric)
+  par Password selected
+    App->>App: Sign challenge with device privateKey
+    App->>Auth: finishLogin(signature + {password})
+  or Biometric selected
+    App->>App: Sign challenge with biometric privateKey
+    App->>Auth: finishLogin(signature + {biometricPublicKey, signedChallenge})
+  end
+  Auth->>DB: Verify nonce, binding, device signature
+  Auth->>KC: login_token {handover-v2 envelope, secondFactor}
+  KC->>KC: Decrypt handover, cross-check
+  KC->>KC: Validate secondFactor: password via credentialManager.isValid() OR biometric signature vs stored biometricPublicKey
+  KC-->>Auth: OIDC token bundle (acr/amr set per factor)
+  Auth->>DB: Record login outcome
+  Auth-->>App: Token bundle with acr/amr
   App->>Mock: Call protected endpoint
   Mock->>KC: Validate JWT through JWKS
   Mock-->>App: Return protected business response
