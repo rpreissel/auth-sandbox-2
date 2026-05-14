@@ -105,7 +105,13 @@ const finishLoginSchema = z.object({
   encryptedKey: z.string().min(1),
   encryptedData: z.string().min(1),
   iv: z.string().min(1),
-  signature: z.string().min(1)
+  signature: z.string().min(1),
+  secondFactor: z.object({
+    password: z.string().min(1)
+  }).or(z.object({
+    biometricPublicKey: z.string().min(1),
+    signedChallenge: z.string().min(1)
+  })).optional()
 })
 
 const createSsoLaunchSchema = finishLoginSchema.extend({

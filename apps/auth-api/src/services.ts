@@ -580,7 +580,7 @@ async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput 
 
   await pool.query('update login_challenges set used = true where id = $1', [challenge.id])
 
-  const loginTokenPayload = {
+  const loginTokenPayload: Record<string, unknown> = {
     type: 'device',
     jti,
     exp,
@@ -590,6 +590,10 @@ async function consumeLoginChallengeAndCreateLoginToken(input: FinishLoginInput 
     nonce: challenge.nonce,
     handoverIv,
     handoverCiphertext
+  }
+
+  if (input.secondFactor) {
+    loginTokenPayload.secondFactor = input.secondFactor
   }
 
   return {
