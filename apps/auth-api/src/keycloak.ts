@@ -299,6 +299,27 @@ export class KeycloakAdminClient {
     return credentials.some((credential) => credential.type === 'password')
   }
 
+  async getDeviceCredentialBiometricKey(keycloakUserId: string, credentialId: string): Promise<string | undefined> {
+    const token = await this.getAdminToken()
+    const credential = await fetchJson<CredentialRepresentation>(
+      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${keycloakUserId}/credentials/${credentialId}`,
+      {
+        headers: {
+          authorization: `Bearer ${token}`
+        }
+      }
+    )
+    if (!credential.credentialData) {
+      return undefined
+    }
+    try {
+      const data = JSON.parse(credential.credentialData)
+      return data.biometricPublicKey
+    } catch {
+      return undefined
+    }
+  }
+
   async setPassword(userId: string, password: string) {
     const user = await this.getUserByUsername(userId)
     if (!user) {

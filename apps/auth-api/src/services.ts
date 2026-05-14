@@ -452,6 +452,18 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
         throw badRequest('Device not yet bound to a user')
       }
 
+      const allowedSecondFactors: ('password' | 'biometric')[] = ['password']
+      if (binding.keycloak_credential_id && binding.keycloak_user_id) {
+        try {
+          const biometricPublicKey = await adminClient.getDeviceCredentialBiometricKey(binding.keycloak_user_id, binding.keycloak_credential_id)
+          if (biometricPublicKey) {
+            allowedSecondFactors.push('biometric')
+          }
+        } catch {
+          // ignore errors; password fallback remains available
+        }
+      }
+
       const nonce = randomUUID()
       const expiresAt = new Date(Date.now() + appConfig.challengeTtlSeconds * 1000)
       const challengePayload = {
@@ -494,7 +506,8 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
         encryptedKey: challenge.encryptedKey,
         encryptedData: challenge.encryptedData,
         iv: challenge.iv,
-        expiresAt: expiresAt.toISOString()
+        expiresAt: expiresAt.toISOString(),
+        allowedSecondFactors
       }
     }
   )
