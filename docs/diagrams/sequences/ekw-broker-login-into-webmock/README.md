@@ -4,6 +4,26 @@
 
 WebMock bootstraps a Keycloak session through the dedicated webmock-ekw-login client and browser-ekw-login-flow, then silently promotes that session to a single target-client handoff via prompt=none.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant WM as WebMock Web
+  participant KC_E as Keycloak (ekw client)
+  participant TM as TanMock Web
+  participant TMA as TanMock API
+  participant KC_W as Keycloak (webmock client)
+
+  WM->>KC_E: Start EKW bootstrap login
+  KC_E->>TM: Redirect to EKW Mock authorize page
+  TM->>TMA: Submit userId and one-time EKW
+  TMA->>KC_E: Return signed broker tokens and claims
+  KC_E->>KC_E: Create brokered user and establish KC session
+  WM->>KC_W: Silent SSO with prompt=none
+  KC_W-->>WM: Return ekw handoff session and tokens
+```
 ## Actors
 
 WebMock Web, Keycloak (ekw client), TanMock Web, TanMock API, Keycloak (webmock client)
@@ -20,6 +40,5 @@ WebMock Web, Keycloak (ekw client), TanMock Web, TanMock API, Keycloak (webmock 
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

@@ -4,6 +4,26 @@
 
 AppMock Web can prepare an allowlisted browser bootstrap into WebMock through auth-api and Keycloak PAR state.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as AppMock Web
+  participant Auth as Auth API
+  participant KC as Keycloak
+  participant WM as WebMock Web
+
+  App->>Auth: Create SSO bootstrap launch
+  Auth->>KC: Create PAR-based auth launch
+  Auth->>Auth: Persist signed bootstrap state and allowlisted target
+  Auth-->>App: Return launch URL and target
+  App->>KC: Open bootstrap login tab
+  KC->>Auth: Redeem callback and resolve target
+  Auth->>WM: Attach browser session bootstrap context
+  Auth->>WM: Redirect into WebMock
+```
 ## Actors
 
 AppMock Web, Auth API, Keycloak, WebMock Web
@@ -21,6 +41,5 @@ AppMock Web, Auth API, Keycloak, WebMock Web
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

@@ -4,6 +4,25 @@
 
 The device session stays renewable through Keycloak refresh tokens and can be revoked again through the logout endpoint.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as AppMock Web
+  participant Auth as Auth API
+  participant KC as Keycloak
+
+  App->>Auth: Refresh token bundle
+  Auth->>KC: Redeem refresh token
+  Auth->>KC: Rotate refresh-token session state
+  Auth-->>App: Return rotated tokens
+  App->>Auth: Request logout
+  Auth->>KC: Revoke session at logout endpoint
+  Auth->>KC: Reject future refresh redemption
+  Auth-->>App: Confirm local session clear
+```
 ## Actors
 
 AppMock Web, Auth API, Keycloak
@@ -21,6 +40,5 @@ AppMock Web, Auth API, Keycloak
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

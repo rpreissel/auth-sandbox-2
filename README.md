@@ -145,32 +145,11 @@ sequenceDiagram
 
 ## Diagrams
 
-All diagrams are versioned in `docs/diagrams/` and visible directly in the GitHub browser — no local runtime needed.
+All detailed diagrams live under `docs/diagrams/`.
 
-### Database structure
-
-The full `auth_api` schema as rendered from the current migrations:
-
-![auth_api schema diagram](docs/diagrams/database/auth-api-schema/diagram.svg)
-
-Source: `docs/diagrams/database/auth-api-schema/` — contains `diagram.mmd`, `diagram.svg`, and `README.md` with the full table documentation.
-
-### Sequence diagrams
-
-All sequence diagrams are collected in `docs/diagrams/README.md` and available as static SVG files:
-
-| Diagram | Description |
-|---|---|
-| Admin provisioning and registration identity | Admin Web prepares reusable person, code, and phone records before device enrollment |
-| EKW broker login into WebMock | WebMock bootstraps a Keycloak session through webmock-ekw-login, then silently promotes to target-client handoff via prompt=none |
-| Device registration and password bootstrap | AppMock first creates an unbound device, then attaches user identity, creates Keycloak credential, and optionally sets a password |
-| Encrypted device login and protected API use | A saved device turns an encrypted challenge into OIDC tokens and calls the protected mock API |
-| Refresh and logout lifecycle | Device session stays renewable through Keycloak refresh tokens and can be revoked through the logout endpoint |
-| SSO bootstrap from device app into WebMock | AppMock prepares an allowlisted browser bootstrap into WebMock through auth-api and Keycloak PAR state |
-| Browser login and inline 2se step-up | WebMock reaches 1se through password or EKW handoff, then Keycloak upgrades the session to 2se via inline SMS-TAN |
-| Trace capture and inspection | Browser clients, backend services, Keycloak calls, and proxy hops are stitched together through trace IDs and Caddy logs |
-
-See [docs/diagrams/README.md](docs/diagrams/README.md) for the full index.
+- Overview: [docs/diagrams/README.md](docs/diagrams/README.md)
+- Database schema: [docs/diagrams/database/auth-api-schema/README.md](docs/diagrams/database/auth-api-schema/README.md)
+- Sequence diagrams: each `docs/diagrams/sequences/<slug>/README.md` now embeds its Mermaid diagram directly so GitHub renders it inline.
 
 ## Architecture notes
 

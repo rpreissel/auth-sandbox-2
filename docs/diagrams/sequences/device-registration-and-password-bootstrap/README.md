@@ -4,6 +4,31 @@
 
 AppMock Web first creates an unbound device, then attaches the user identity later in the same flow before the backend creates the Keycloak credential and optional password bootstrap.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as AppMock Web
+  participant Auth as Auth API
+  participant DB as Postgres
+  participant KC as Keycloak
+
+  App->>Auth: Start registration flow with device material only
+  Auth->>DB: Create flow and unbound device
+  Auth-->>App: Return flow state for deferred identity
+  App->>Auth: Submit deferred identity data
+  App->>Auth: Complete code or SMS verification
+  Auth->>DB: Consume verification and confirm deferred identity
+  Auth->>KC: Create device credential after binding
+  Auth->>DB: Persist device binding and password status
+  Auth->>KC: Check whether password credential exists
+  Auth-->>App: Return registration result
+  App->>Auth: Submit initial password when required
+  Auth->>KC: Set password via Admin API
+  Auth->>DB: Mark password bootstrap complete
+```
 ## Actors
 
 AppMock Web, Auth API, Postgres, Keycloak
@@ -26,6 +51,5 @@ AppMock Web, Auth API, Postgres, Keycloak
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

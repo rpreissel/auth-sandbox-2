@@ -4,6 +4,31 @@
 
 A saved device turns the encrypted challenge into OIDC tokens and immediately uses them against the protected mock API.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as AppMock Web
+  participant Auth as Auth API
+  participant DB as Postgres
+  participant KC as Keycloak
+  participant Mock as ServiceMock API
+
+  App->>Auth: Request encrypted challenge
+  Auth->>DB: Load device and persist nonce
+  Auth-->>App: Return challenge metadata and expiry
+  Auth-->>App: Return encrypted payload
+  App->>Auth: Submit signature over challenge
+  Auth->>DB: Verify nonce, binding, and replay window
+  Auth->>KC: Exchange custom device-login grant
+  Auth->>DB: Record login outcome and last-used device
+  Auth-->>App: Return token bundle
+  App->>Mock: Call protected endpoint
+  Mock->>KC: Validate JWT through JWKS
+  Mock-->>App: Return protected business response
+```
 ## Actors
 
 AppMock Web, Auth API, Postgres, Keycloak, ServiceMock API
@@ -25,6 +50,5 @@ AppMock Web, Auth API, Postgres, Keycloak, ServiceMock API
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

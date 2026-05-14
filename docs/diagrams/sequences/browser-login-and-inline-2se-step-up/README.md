@@ -4,6 +4,32 @@
 
 WebMock reaches 1se through password login, or receives a one-time EKW handoff that stays at acr=ekw, then Keycloak can upgrade the browser session to 2se through the inline SMS-TAN backchannel flow.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant WM as WebMock Web
+  participant KC as Keycloak
+  participant Ext as KC Extension
+  participant Auth as Auth API
+  participant DB as Postgres
+
+  WM->>KC: Reach login session via password or EKW handoff
+  KC-->>WM: Return 1se session and tokens
+  WM->>WM: Detect stronger endpoint requirement
+  WM->>KC: Start fresh auth with acr_values=2se
+  KC->>Ext: Enter inline browser step-up branch
+  Ext->>Auth: Start internal browser step-up
+  Auth->>DB: Create flow, challenge, and result code
+  Auth-->>Ext: Return masked target and demo TAN
+  Ext->>KC: Render inline challenge page
+  WM->>KC: Submit SMS-TAN in Keycloak form
+  Ext->>Auth: Complete and redeem step-up result
+  Ext->>KC: Promote browser session to 2se
+  KC-->>WM: Return upgraded 2se session
+```
 ## Actors
 
 WebMock Web, Keycloak, KC Extension, Auth API, Postgres
@@ -26,6 +52,5 @@ WebMock Web, Keycloak, KC Extension, Auth API, Postgres
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

@@ -4,6 +4,24 @@
 
 Admin Web prepares the reusable person, code, and phone records before a device starts enrollment.
 
+
+## Diagram
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant AdminWeb as Admin Web
+  participant Auth as Auth API
+  participant KC as Keycloak
+  participant DB as Postgres
+
+  AdminWeb->>Auth: Create registration identity
+  Auth->>KC: Ensure Keycloak user exists
+  Auth->>DB: Persist prepared registration channels
+  Auth->>DB: Upsert person, code, and SMS records
+  Auth-->>AdminWeb: Return masked registration preview
+  Auth-->>AdminWeb: Return prepared identity
+```
 ## Actors
 
 Admin Web, Auth API, Keycloak, Postgres
@@ -19,6 +37,5 @@ Admin Web, Auth API, Keycloak, Postgres
 
 ## Dateien
 
-- `diagram.mmd` — Mermaid-Quelltext (versioniert)
-- `diagram.svg` — gerendertes Diagramm (GitHub-nativ sichtbar)
-- `README.md` — diese Datei
+- `README.md` — diese Datei mit eingebettetem Mermaid-Diagramm
+- `diagram.mmd` — Mermaid-Quelltext (Source-of-Truth)

@@ -422,105 +422,15 @@ test("homepage contains key links", async ({ page }) => {
   await expect(page.getByText("auth_sandbox_2")).toBeVisible();
   await expect(page.getByText("auth_api, keycloak")).toBeVisible();
   await expect(page.getByText(/manage TAN broker entries/i)).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /sequence diagrams/i }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Admin provisioning and registration identity"),
-  ).toBeVisible();
-  await expect(page.getByText("EKW broker login into WebMock")).toBeVisible();
-  await expect(
-    page.getByText("Device registration and password bootstrap"),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Encrypted device login and protected API use"),
-  ).toBeVisible();
-  await expect(page.getByText("Refresh and logout lifecycle")).toBeVisible();
-  await expect(
-    page.getByText("Browser login and inline 2se step-up"),
-  ).toBeVisible();
-  const passwordBootstrapCard = page.locator("article").filter({
-    has: page.getByRole("heading", {
-      name: "Device registration and password bootstrap",
-    }),
+  const githubDiagramsLink = page.getByRole("link", {
+    name: /github\.com\/rpreissel\/auth-sandbox-2\/blob\/main\/docs\/diagrams\/README\.md/i,
   });
-  const tanMockBrokerCard = page.locator("article").filter({
-    has: page.getByRole("heading", {
-      name: "EKW broker login into WebMock",
-    }),
-  });
-  await expect(passwordBootstrapCard).toContainText(/optional password bootstrap/i);
-  await expect(passwordBootstrapCard).toContainText(
-    /return flow state for deferred identity/i,
+  await expect(githubDiagramsLink).toBeVisible();
+  await expect(githubDiagramsLink).toHaveAttribute("target", "_blank");
+  await expect(githubDiagramsLink).toHaveAttribute(
+    "href",
+    /github\.com\/rpreissel\/auth-sandbox-2\/blob\/main\/docs\/diagrams\/README\.md/,
   );
-  await expect(passwordBootstrapCard).toContainText(
-    /check whether password credential exists/i,
-  );
-  await expect(tanMockBrokerCard).toContainText(/acr_values=ekw/i);
-  await expect(tanMockBrokerCard).toContainText(/unique broker email/i);
-  await expect(
-    page.getByLabel("Browser login and inline 2se step-up actors"),
-  ).toContainText("KC Extension");
-  const browserStepUpCard = page.locator("article").filter({
-    has: page.getByRole("heading", {
-      name: "Browser login and inline 2se step-up",
-    }),
-  });
-  await expect(browserStepUpCard).toContainText(
-    /detect stronger endpoint requirement/i,
-  );
-  await expect(browserStepUpCard).toContainText(
-    /promote browser session to 2se/i,
-  );
-  await expect(
-    page.getByLabel(
-      "Device registration and password bootstrap mermaid sequence diagram",
-    ),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel("EKW broker login into WebMock mermaid sequence diagram"),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel("Refresh and logout lifecycle mermaid sequence diagram"),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel("EKW broker login into WebMock step details"),
-  ).toContainText(/prompt=none/i);
-  await expect(
-    page.getByLabel("EKW broker login into WebMock step details"),
-  ).toContainText(/ekw_\*/i);
-  await expect(
-    page.getByLabel("Device registration and password bootstrap step details"),
-  ).toContainText(/mark password bootstrap complete/i);
-  await expect(
-    page.getByLabel(
-      "Admin provisioning and registration identity step details",
-    ),
-  ).toContainText(/reusable registration identity/i);
-  await expect(
-    page.getByLabel("Device registration and password bootstrap step details"),
-  ).toContainText(/backend-driven password setup/i);
-  const deviceLoginSteps = page.getByLabel(
-    "Encrypted device login and protected API use step details",
-  );
-  await expect(deviceLoginSteps).toContainText(
-    /verify nonce, binding, and replay window/i,
-  );
-  await expect(deviceLoginSteps).toContainText(/RSASSA-PKCS1-v1_5/i);
-  await expect(deviceLoginSteps).toContainText(/publicKeyHash/i);
-  await expect(deviceLoginSteps).toContainText(/handover proof/i);
-  await expect(
-    page.getByLabel("Refresh and logout lifecycle step details"),
-  ).toContainText(/renewed token bundle/i);
-  await expect(
-    page.getByLabel("SSO bootstrap from device app into WebMock step details"),
-  ).toContainText(/prepared Keycloak launch URL/i);
-  await expect(
-    page.getByLabel("Browser login and inline 2se step-up step details"),
-  ).toContainText(/upgraded browser session and tokens that satisfy 2se/i);
-  await expect(
-    page.getByLabel("Trace capture and inspection step details"),
-  ).toContainText(/one request journey across the sandbox/i);
 });
 
 test("webmock web homepage serves the browser step-up app shell", async ({
