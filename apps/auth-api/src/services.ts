@@ -182,7 +182,7 @@ export async function createRegistrationIdentity(input: CreateRegistrationIdenti
       await adminClient.ensureUser(input.userId, `${input.firstName} ${input.lastName}`)
 
       const personResult = await client.query<UserRow>(
-        `insert into user (user_id, first_name, last_name, birth_date)
+        `insert into account_user (user_id, first_name, last_name, birth_date)
          values ($1, $2, $3, $4)
          on conflict (user_id) do update
          set first_name = excluded.first_name,
@@ -248,7 +248,7 @@ export async function listRegistrationIdentities() {
        sms.phone_number,
        people.created_at,
        people.updated_at
-      from user people
+      from account_user people
      left join lateral (
        select code, expires_at, use_count
        from registration_person_codes
@@ -316,7 +316,7 @@ export async function deleteRegistrationIdentity(userId: string) {
       await pool.query('delete from tanmock_entries where source_user_id = $1', [userId])
       await pool.query('delete from tanmock_authorization_codes where source_user_id = $1', [userId])
       await pool.query('delete from tanmock_refresh_tokens where source_user_id = $1', [userId])
-      await pool.query('delete from user where user_id = $1', [userId])
+      await pool.query('delete from account_user where user_id = $1', [userId])
       await adminClient.deleteUser(userId)
     }
   )
@@ -514,9 +514,9 @@ export async function startLogin(input: StartLoginInput): Promise<StartLoginResp
       }
 
       const allowedSecondFactors: ('password' | 'biometric')[] = ['password']
-      if (binding.keycloak_credential_id && binding.keycloak_user_id) {
+      if (binding.keycloak_user_id) {
         try {
-          const biometricPublicKey = await adminClient.getDeviceCredentialBiometricKey(binding.keycloak_user_id, binding.keycloak_credential_id)
+          const biometricPublicKey = await adminClient.getDeviceCredentialBiometricKey(binding.keycloak_user_id, device.public_key_hash)
           if (biometricPublicKey) {
             allowedSecondFactors.push('biometric')
           }

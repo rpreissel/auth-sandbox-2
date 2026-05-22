@@ -22,7 +22,7 @@ export async function fetchSourceIdentity(sourceUserId: string): Promise<SourceI
       people.last_name,
       people.birth_date::text,
       sms.phone_number
-    from registration_people people
+    from account_user people
     left join registration_person_sms_numbers sms on sms.person_id = people.id
     where people.user_id = $1
     limit 1

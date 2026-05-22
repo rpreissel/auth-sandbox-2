@@ -8,7 +8,7 @@
 
 | Diagramm | Beschreibung | Link |
 |---|---|---|
-| auth_api Schema | Vollständige Tabellenstruktur des auth-api-Schemas: devices, device_bindings, login_challenges, assurance_flows, assurance_flow_events, registration_people, registration_person_codes, registration_person_sms_numbers | [README](./database/auth-api-schema/README.md) |
+| auth_api Schema | Vollständige Tabellenstruktur des auth-api-Schemas: devices, account_user, device_bindings, login_challenges, assurance_flows, assurance_flow_events, registration_person_codes, registration_person_sms_numbers | [README](./database/auth-api-schema/README.md) |
 
 ---
 

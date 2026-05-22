@@ -11,6 +11,7 @@ import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.models.ClientSessionContext;
 import org.keycloak.models.Constants;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.protocol.oidc.TokenManager;
@@ -124,6 +125,7 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                     .filter(cred -> cred.findBinding(payload.publicKeyHash()) != null)
                     .findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("Device credential not found"));
+            DeviceCredentialModel.BindingEntry matchedBinding = matchedModel.findBinding(payload.publicKeyHash());
 
             String handoverSecret = matchedModel.getHandoverSecret();
             if (handoverSecret == null || handoverSecret.isBlank()) {
@@ -137,22 +139,14 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
             if (payload.secondFactor() != null) {
                 if (payload.secondFactor().containsKey("password")) {
                     String password = (String) payload.secondFactor().get("password");
-                    boolean passwordValid = user.credentialManager()
-                            .getStoredCredentialsByTypeStream("password")
-                            .anyMatch(cred -> {
-                                try {
-                                    return cred.isValid(password);
-                                } catch (Exception e) {
-                                    return false;
-                                }
-                            });
+                    boolean passwordValid = user.credentialManager().isValid(UserCredentialModel.password(password));
                     if (!passwordValid) {
                         throw new IllegalArgumentException("Invalid password credential");
                     }
                     acrValue = ACR_2SE;
                     amrValue.add("pwd");
                 } else if (payload.secondFactor().containsKey("biometricPublicKey") && payload.secondFactor().containsKey("signedChallenge")) {
-                    String storedBiometricKey = matchedModel.getBiometricPublicKey();
+                    String storedBiometricKey = matchedBinding != null ? matchedBinding.biometricPublicKey() : null;
                     if (storedBiometricKey == null || storedBiometricKey.isBlank()) {
                         throw new IllegalArgumentException("No biometric key registered for this device");
                     }
@@ -166,7 +160,7 @@ public class DeviceLoginGrantType extends OAuth2GrantTypeBase {
                         X509EncodedKeySpec keySpec = new X509EncodedKeySpec(keyBytes);
                         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
                         java.security.PublicKey publicKey = keyFactory.generatePublic(keySpec);
-                        byte[] challengeBytes = Base64.getUrlDecoder().decode(payload.nonce());
+                        byte[] challengeBytes = payload.nonce().getBytes(StandardCharsets.UTF_8);
                         byte[] signatureBytes = Base64.getUrlDecoder().decode(signedChallenge);
                         Signature verifier = Signature.getInstance("SHA256withRSA");
                         verifier.initVerify(publicKey);

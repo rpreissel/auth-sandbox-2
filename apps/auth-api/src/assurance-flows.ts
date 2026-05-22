@@ -21,6 +21,7 @@ import type {
 } from '@auth-sandbox-2/shared-types'
 
 import { createEncryptedChallenge, hashPublicKey } from './lib/crypto.js'
+import { ensureUserHandoverSecret } from './device-handover.js'
 import { createFlowToken, createServiceResultToken, createServiceToken, verifyServiceResultToken } from './flow-tokens.js'
 import { KeycloakAdminClient } from './keycloak.js'
 import type {
@@ -191,7 +192,7 @@ async function hasStepUpSmsNumber(flow: AssuranceFlowRow, db: Queryable) {
   const result = await db.query<{ id: string }>(
     `select s.id
      from registration_person_sms_numbers s
-     join user p on p.id = s.person_id
+     join account_user p on p.id = s.person_id
      where p.user_id = $1
      limit 1`,
     [userId]
@@ -404,7 +405,7 @@ async function getRegistrationPersonForFlow(flow: AssuranceFlowRow, db: Queryabl
   }
 
   const result = await db.query<UserRow>(
-    `select * from user
+    `select * from account_user
      where user_id = $1 and first_name = $2 and last_name = $3 and birth_date = $4`,
     [userId, firstName, lastName, birthDate]
   )
@@ -480,7 +481,7 @@ async function getSmsNumberByUserId(userId: string, db: Queryable) {
   const result = await db.query<RegistrationPersonSmsNumberRow>(
     `select s.*
      from registration_person_sms_numbers s
-     join user p on p.id = s.person_id
+     join account_user p on p.id = s.person_id
      where p.user_id = $1
      limit 1`,
     [userId]
@@ -551,6 +552,7 @@ async function finalizeRegistration(flow: AssuranceFlowRow, db: Queryable): Prom
 
   const displayName = `${person.first_name} ${person.last_name}`
   const keycloakUserId = await adminClient.ensureUser(userId, displayName)
+  await ensureUserHandoverSecret(userId)
   const credentialId = await adminClient.createDeviceCredential({
     userId,
     deviceName,

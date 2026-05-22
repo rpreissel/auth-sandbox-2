@@ -6,7 +6,7 @@ Normative — this document is the authoritative source for the handover secret 
 
 ## Goals
 
-1. **One persistent secret per user** — stored in Postgres `user.handover_secret`
+1. **One persistent secret per user** — stored in Postgres `account_user.handover_secret`
 2. **One Keycloak `device-login` credential per user** (not per device) — credentialData holds all binding publicKeyHash values for that user; secretData holds the per-user Handover Secret
 3. **No global derivation** — the master secret from env is removed for device handover
 4. **No per-device credentials** — the old one-credential-per-device model is deprecated
@@ -15,9 +15,9 @@ Normative — this document is the authoritative source for the handover secret 
 
 ## Postgres Model
 
-### Table: `user`
+### Table: `account_user`
 
-Renamed from `registration_people`. One row per userId.
+Canonical user table for auth-api. One row per userId.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -43,7 +43,7 @@ Holds the device-to-user bindings. The `active` column is removed; hard delete o
 |--------|------|-------------|-------------|
 | `id` | `uuid` | PK | |
 | `device_id` | `uuid` | FK → `devices(id)` | The registered device |
-| `user_id` | `text` | not null | References `user.user_id` |
+| `user_id` | `text` | not null | References `account_user.user_id` |
 | `keycloak_user_id` | `text` | nullable | Keycloak user ID |
 | `keycloak_credential_id` | `text` | nullable | **Unused in handover-v2** — retained for migration only |
 | `device_name` | `text` | not null | Moved here from `devices.device_name`; unique per `(user_id, device_name)` |
@@ -92,12 +92,12 @@ After migration: stores the device's cryptographic material. `device_name` is re
 }
 ```
 
-- Contains the **same** value stored in `user.handover_secret` in Postgres
+- Contains the **same** value stored in `account_user.handover_secret` in Postgres
 - Keycloak reads this during login validation to decrypt the handover-v2 envelope
 
 ### Why redundant storage in Keycloak?
 
-Keycloak cannot call back to auth-api's Postgres during token validation. Therefore the per-user secret must be mirrored into Keycloak's `secretData`. This is the only acceptable redundancy — the Postgres `user` table remains the **source of truth** for credential creation and rotation. auth-api syncs the secret to Keycloak whenever:
+Keycloak cannot call back to auth-api's Postgres during token validation. Therefore the per-user secret must be mirrored into Keycloak's `secretData`. This is the only acceptable redundancy — the Postgres `account_user` table remains the **source of truth** for credential creation and rotation. auth-api syncs the secret to Keycloak whenever:
 - A user is first registered (handover secret created in Postgres)
 - A new device is added to an existing user
 - A future secret rotation flow is triggered
@@ -106,9 +106,9 @@ Keycloak cannot call back to auth-api's Postgres during token validation. Theref
 
 ## auth-api Responsibilities
 
-1. **On user registration**: generate a cryptographically random 32-byte secret, store in `user.handover_secret`, and create/update the single Keycloak `device-login` credential for that user with all current bindings.
-2. **On new device binding**: fetch the existing `user.handover_secret`, add the new binding to the `bindings` array, and upsert the Keycloak credential.
-3. **On login token creation**: use the `user.handover_secret` from Postgres (not derived) to build the AES-256-GCM envelope.
+1. **On user registration**: generate a cryptographically random 32-byte secret, store in `account_user.handover_secret`, and create/update the single Keycloak `device-login` credential for that user with all current bindings.
+2. **On new device binding**: fetch the existing `account_user.handover_secret`, add the new binding to the `bindings` array, and upsert the Keycloak credential.
+3. **On login token creation**: use the `account_user.handover_secret` from Postgres (not derived) to build the AES-256-GCM envelope.
 4. **On credential deletion**: remove the binding from the `bindings` array; if no bindings remain, delete the Keycloak credential entirely.
 
 ---
@@ -117,7 +117,7 @@ Keycloak cannot call back to auth-api's Postgres during token validation. Theref
 
 The old model had one `device-login` credential per device, each with its own `userHandoverSecret` in `secretData`. The migration path:
 
-1. Create `user.handover_secret` for each existing user (derive from old per-device secrets or generate fresh; decision is out of scope here).
+1. Create `account_user.handover_secret` for each existing user (derive from old per-device secrets or generate fresh; decision is out of scope here).
 2. Collect all `publicKeyHash` values from all existing device credentials for that user.
 3. Create one new-style credential with all those `publicKeyHash` entries in `bindings` and the per-user secret in `secretData`.
 4. Delete the old per-device credentials.

@@ -5,6 +5,12 @@ async function exportPublicKey(publicKey: CryptoKey) {
   return `-----BEGIN PUBLIC KEY-----\n${wrapped}\n-----END PUBLIC KEY-----`
 }
 
+async function exportPublicKeyBase64Url(publicKey: CryptoKey) {
+  const exported = await crypto.subtle.exportKey('spki', publicKey)
+  const body = btoa(String.fromCharCode(...new Uint8Array(exported)))
+  return body.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
 async function exportPrivateKey(privateKey: CryptoKey) {
   const exported = await crypto.subtle.exportKey('pkcs8', privateKey)
   return btoa(String.fromCharCode(...new Uint8Array(exported)))
@@ -56,7 +62,21 @@ export async function signEncryptedData(encryptedData: string, privateKey: Crypt
 }
 
 export async function createBiometricKeys() {
-  return createSigningKeys()
+  const pair = await crypto.subtle.generateKey(
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256'
+    },
+    true,
+    ['sign', 'verify']
+  )
+
+  return {
+    publicKey: await exportPublicKeyBase64Url(pair.publicKey),
+    privateKey: pair.privateKey
+  }
 }
 
 export async function importBiometricKey(serializedKey: string) {
@@ -65,4 +85,10 @@ export async function importBiometricKey(serializedKey: string) {
 
 export async function signWithBiometric(encryptedData: string, privateKey: CryptoKey) {
   return signEncryptedData(encryptedData, privateKey)
+}
+
+export async function signNonce(nonce: string, privateKey: CryptoKey) {
+  const payload = new TextEncoder().encode(nonce)
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, payload)
+  return btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }

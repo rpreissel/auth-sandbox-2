@@ -4,6 +4,7 @@ import { appConfig, buildTraceHeaders, getTraceContext, keycloakConfig, recordAr
 import type { JsonObject, RefreshTokensResponse, TokenBundle } from '@auth-sandbox-2/shared-types'
 
 import { pool } from '@auth-sandbox-2/backend-core'
+import { ensureUserHandoverSecret } from './device-handover.js'
 import { decodeTokenClaims } from './lib/jwt.js'
 
 type KeycloakTokenResponse = {
@@ -24,6 +25,15 @@ type CredentialRepresentation = {
   userLabel?: string
   credentialData?: string
   secretData?: string
+}
+
+type DeviceCredentialBindingRepresentation = {
+  publicKeyHash?: string
+  biometricPublicKey?: string
+}
+
+type DeviceCredentialDataRepresentation = {
+  bindings?: DeviceCredentialBindingRepresentation[]
 }
 
 type CreateDeviceCredentialResponse = {
@@ -197,6 +207,22 @@ function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function getDeviceCredentialBiometricKeyForPublicKeyHash(
+  credential: CredentialRepresentation,
+  publicKeyHash: string
+): string | undefined {
+  if (!credential.credentialData) {
+    return undefined
+  }
+
+  try {
+    const data = JSON.parse(credential.credentialData) as DeviceCredentialDataRepresentation
+    return data.bindings?.find((binding) => binding.publicKeyHash === publicKeyHash)?.biometricPublicKey
+  } catch {
+    return undefined
+  }
+}
+
 export class KeycloakAdminClient {
   async getAdminToken() {
     const body = createFormBody({
@@ -299,25 +325,29 @@ export class KeycloakAdminClient {
     return credentials.some((credential) => credential.type === 'password')
   }
 
-  async getDeviceCredentialBiometricKey(keycloakUserId: string, credentialId: string): Promise<string | undefined> {
+  async getDeviceCredentialBiometricKey(keycloakUserId: string, publicKeyHash: string): Promise<string | undefined> {
     const token = await this.getAdminToken()
-    const credential = await fetchJson<CredentialRepresentation>(
-      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${keycloakUserId}/credentials/${credentialId}`,
+    const credentials = await fetchJson<CredentialRepresentation[]>(
+      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${keycloakUserId}/credentials`,
       {
         headers: {
           authorization: `Bearer ${token}`
         }
       }
     )
-    if (!credential.credentialData) {
-      return undefined
+
+    for (const credential of credentials) {
+      if (credential.type !== 'device-login') {
+        continue
+      }
+
+      const biometricPublicKey = getDeviceCredentialBiometricKeyForPublicKeyHash(credential, publicKeyHash)
+      if (biometricPublicKey) {
+        return biometricPublicKey
+      }
     }
-    try {
-      const data = JSON.parse(credential.credentialData)
-      return data.biometricPublicKey
-    } catch {
-      return undefined
-    }
+
+    return undefined
   }
 
   async setPassword(userId: string, password: string) {
@@ -353,11 +383,7 @@ export class KeycloakAdminClient {
     if (!user) {
       throw new Error(`Unknown Keycloak user ${args.userId}`)
     }
-    const secretResult = await pool.query<{ handover_secret: string }>(
-      'select handover_secret from user where user_id = $1',
-      [args.userId]
-    )
-    const handoverSecret = secretResult.rows[0]?.handover_secret
+    const handoverSecret = await ensureUserHandoverSecret(args.userId)
     const token = await this.getAdminToken()
     const created = await fetchJson<CreateDeviceCredentialResponse>(
       `${keycloakConfig.baseUrl}/realms/${keycloakConfig.realm}/device-credentials`,

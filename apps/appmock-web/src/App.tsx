@@ -15,7 +15,7 @@ import type {
 } from '@auth-sandbox-2/shared-types'
 
 import { ApiError, api } from './api'
-import { createSigningKeys, createBiometricKeys, exportPrivateKey, importPrivateKey, importBiometricKey, signEncryptedData, signWithBiometric } from './crypto'
+import { createSigningKeys, createBiometricKeys, exportPrivateKey, importPrivateKey, importBiometricKey, signEncryptedData, signNonce } from './crypto'
 
 type ClaimRecord = Record<string, unknown>
 
@@ -939,7 +939,7 @@ export function App() {
     const currentDevice = device
     await runAction(async () => {
       setStatus('Biometrische Signatur wird erstellt...')
-      const signature = await signEncryptedData(challenge.encryptedData, currentDevice.biometricPrivateKey!)
+      const signature = await signNonce(challenge.nonce, currentDevice.biometricPrivateKey!)
       const result = await api.finishLogin({
         nonce: challenge.nonce,
         encryptedKey: challenge.encryptedKey,

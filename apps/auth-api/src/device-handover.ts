@@ -8,14 +8,14 @@ export function generateHandoverSecret() {
 
 export async function getUserHandoverSecret(userId: string): Promise<string> {
   const result = await pool.query<{ handover_secret: string }>(
-    'select handover_secret from user where user_id = $1',
+    'select handover_secret from account_user where user_id = $1',
     [userId]
   )
   const row = result.rows[0]
   if (!row || !row.handover_secret) {
     const secret = generateHandoverSecret()
     await pool.query(
-      'update user set handover_secret = $1 where user_id = $2',
+      'update account_user set handover_secret = $1 where user_id = $2',
       [secret, userId]
     )
     return secret
@@ -25,7 +25,7 @@ export async function getUserHandoverSecret(userId: string): Promise<string> {
 
 export async function ensureUserHandoverSecret(userId: string): Promise<string> {
   const result = await pool.query<{ handover_secret: string }>(
-    'select handover_secret from user where user_id = $1',
+    'select handover_secret from account_user where user_id = $1',
     [userId]
   )
   const row = result.rows[0]
@@ -34,7 +34,7 @@ export async function ensureUserHandoverSecret(userId: string): Promise<string> 
   }
   const secret = generateHandoverSecret()
   await pool.query(
-    'update user set handover_secret = $1 where user_id = $2',
+    'update account_user set handover_secret = $1 where user_id = $2',
     [secret, userId]
   )
   return secret
