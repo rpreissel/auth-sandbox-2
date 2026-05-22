@@ -272,3 +272,5 @@
 {"id":"int-1bb89d62","kind":"field_change","created_at":"2026-05-22T05:01:09.896598Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-8bk5","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Completed"}}
 {"id":"int-83348dc8","kind":"field_change","created_at":"2026-05-22T05:01:09.908179Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-2etp","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Completed"}}
 {"id":"int-d0d70947","kind":"field_change","created_at":"2026-05-22T05:01:09.916706Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-1oao","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Completed"}}
+{"id":"int-9a4b5616","kind":"field_change","created_at":"2026-05-22T05:09:08.142924Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-4zrx","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-e75100b0","kind":"field_change","created_at":"2026-05-22T05:17:10.9065Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-4zrx","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Completed"}}

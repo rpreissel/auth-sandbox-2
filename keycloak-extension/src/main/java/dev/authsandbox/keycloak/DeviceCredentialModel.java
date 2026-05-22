@@ -22,15 +22,9 @@ public class DeviceCredentialModel extends CredentialModel {
         model.setType(TYPE);
         model.setCreatedDate(System.currentTimeMillis());
         try {
-            String biometricPublicKey = bindings.stream()
-                    .filter(b -> b.biometricPublicKey() != null && !b.biometricPublicKey().isBlank())
-                    .map(BindingEntry::biometricPublicKey)
-                    .findFirst()
-                    .orElse(null);
             model.setCredentialData(mapper.writeValueAsString(Map.ofEntries(
                     Map.entry("version", "handover-v2"),
-                    Map.entry("bindings", bindings.stream().map(BindingEntry::toMap).toList()),
-                    biometricPublicKey != null ? Map.entry("biometricPublicKey", biometricPublicKey) : Map.entry("biometricPublicKey", "")
+                    Map.entry("bindings", bindings.stream().map(BindingEntry::toMap).toList())
             )));
             model.setSecretData(mapper.writeValueAsString(Map.of(
                     "handoverSecret", handoverSecret
@@ -98,12 +92,6 @@ public class DeviceCredentialModel extends CredentialModel {
     public String getHandoverSecret() {
         return getValue(getSecretData(), "handoverSecret");
     }
-
-    public String getBiometricPublicKey() {
-        String value = getValue(getCredentialData(), "biometricPublicKey");
-        return (value != null && !value.isBlank()) ? value : null;
-    }
-
     private String getValue(String json, String key) {
         try {
             Map<String, Object> data = mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
