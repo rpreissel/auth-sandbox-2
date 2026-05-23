@@ -230,8 +230,22 @@ export async function createRegistrationIdentity(input: CreateRegistrationIdenti
 }
 
 export async function listDevices() {
-  const result = await pool.query<DeviceRow>('select * from devices order by created_at desc')
-  return result.rows.map(mapDevice)
+  const result = await pool.query<DeviceRow & { device_name: string | null }>(
+    `select d.*, b.device_name
+       from devices d
+       left join lateral (
+         select device_name
+         from device_binding
+         where device_id = d.id
+         order by created_at desc
+         limit 1
+       ) b on true
+      order by d.created_at desc`
+  )
+  return result.rows.map((row) => ({
+    ...mapDevice(row),
+    deviceName: row.device_name
+  }))
 }
 
 export async function listRegistrationIdentities() {

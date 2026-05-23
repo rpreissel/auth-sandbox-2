@@ -154,6 +154,8 @@ All detailed diagrams live under `docs/diagrams/`.
 
 - Keycloak `username` always equals `userId`.
 - The encrypted challenge remains mandatory in the login flow.
+- The device key is the possession factor and must stay protected on the device, but it does not require user confirmation by itself.
+- Password and biometrics are alternative second factors: password provides knowledge, biometric provides local user verification.
 - No Keycloak Required Actions are used for this password flow.
 - Keycloak configuration is managed through OpenTofu in `infra/tofu/keycloak`.
 - The device login token exchange now uses a custom OAuth grant at `/protocol/openid-connect/token` instead of a browser redirect flow.

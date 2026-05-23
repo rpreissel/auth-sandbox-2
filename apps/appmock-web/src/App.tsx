@@ -100,7 +100,7 @@ type ClaimRow = {
 }
 
 type SecurePrompt = {
-  kind: 'register' | 'login'
+  kind: 'login'
   title: string
   body: string
   caption: string
@@ -714,12 +714,8 @@ export function App() {
 
   async function handleRegister(event: FormEvent) {
     event.preventDefault()
-    setSecurePrompt({
-      kind: 'register',
-      title: 'Bestätige deine Identität',
-      body: 'Nutze deine Displaysperre, um diese Gerätebindung im Android-Keystore zu speichern.',
-      caption: 'Sicherheitsprüfung erforderlich',
-      confirmLabel: 'Displaysperre verwenden'
+    await runAction(async () => {
+      await completeRegister()
     })
   }
 
@@ -876,61 +872,85 @@ export function App() {
     event.preventDefault()
     if (!device) return
     await runAction(async () => {
+      const currentDevice = device
       const flow = traceState ?? await createFlowTrace('device_password_setup', [{
         name: 'password_request',
         // Trace-only mirror of the password setup payload; the auth-api call
         // below sends its own request body separately.
-        value: { userId: device.userId, password: form.password }
+        value: { userId: currentDevice.userId, password: form.password }
       }])
       setStatus('Keycloak-Passwort wird gespeichert...')
-      await api.setPassword({ userId: device.userId, password: form.password }, flow)
-      await persistDeviceBinding(device, false)
-      await requestLoginChallenge('Automatische Anmeldung läuft...', { autoFinish: true })
+      await api.setPassword({ userId: currentDevice.userId, password: form.password }, flow)
+      await persistDeviceBinding(currentDevice, false)
+      setStatus('Automatische Anmeldung mit Passwort läuft...')
+      const loginChallenge = await api.startLogin({ publicKeyHash: currentDevice.publicKeyHash }, flow)
+      setChallenge(loginChallenge)
+      setStep('login')
+      setPendingSecondFactor('password')
+      await finishLoginWithDevice(currentDevice, loginChallenge, flow, {
+        preserveStatus: true,
+        secondFactor: { password: form.password }
+      })
     })
   }
 
   async function handleStartLogin() {
     if (!device) return
     await runAction(async () => {
-      await requestLoginChallenge('Bestätige den Schlüsselspeicherzugriff zur Anmeldung')
+      await requestLoginChallenge('Geräte-Challenge ist bereit. Wähle jetzt den zweiten Faktor für die Anmeldung.')
     })
+  }
+
+  async function finishLoginWithDevice(
+    currentDevice: DeviceState,
+    currentChallenge: StartLoginResponse,
+    flow: { traceId: string; sessionId: string },
+    options?: {
+      preserveStatus?: boolean
+      clearAutoLogin?: boolean
+      secondFactor?: { password: string } | { biometricPublicKey: string; signedChallenge: string }
+    }
+  ) {
+    setStatus('Secure Element wird verwendet...')
+    const signature = await signEncryptedData(currentChallenge.encryptedData, currentDevice.privateKey)
+    const result = await api.finishLogin({
+      nonce: currentChallenge.nonce,
+      encryptedKey: currentChallenge.encryptedKey,
+      encryptedData: currentChallenge.encryptedData,
+      iv: currentChallenge.iv,
+      signature,
+      secondFactor: options?.secondFactor
+    }, flow)
+    await sendFlowEvent(flow, 'device_login_finished', [{
+      name: 'token_bundle',
+      value: {
+        tokenType: result.tokenType,
+        expiresIn: result.expiresIn,
+        scope: result.scope
+      }
+    }])
+    setTraceState(null)
+    setTokens(result)
+    setChallenge(null)
+    if (options?.clearAutoLogin) {
+      setAutoLogin(null)
+    }
+    setActiveAuthenticatedTab('tokens')
+    setStatus(options?.preserveStatus ? 'Automatisch angemeldet' : 'Angemeldet')
+    setStep('authenticated')
   }
 
   async function handleFinishLogin(options?: { preserveStatus?: boolean; clearAutoLogin?: boolean; secondFactor?: { password: string } | { biometricPublicKey: string; signedChallenge: string } }) {
     if (!device || !challenge) return
+    const currentDevice = device
+    const currentChallenge = challenge
     setSecurePrompt(null)
     await runAction(async () => {
       const flow = traceState ?? await createFlowTrace('device_login_finish_started', [{
         name: 'challenge_payload',
-        value: challenge
+        value: currentChallenge
       }])
-      setStatus('Secure Element wird verwendet...')
-      const signature = await signEncryptedData(challenge.encryptedData, device.privateKey)
-      const result = await api.finishLogin({
-        nonce: challenge.nonce,
-        encryptedKey: challenge.encryptedKey,
-        encryptedData: challenge.encryptedData,
-        iv: challenge.iv,
-        signature,
-        secondFactor: options?.secondFactor
-      }, flow)
-      await sendFlowEvent(flow, 'device_login_finished', [{
-        name: 'token_bundle',
-        value: {
-          tokenType: result.tokenType,
-          expiresIn: result.expiresIn,
-          scope: result.scope
-        }
-      }])
-      setTraceState(null)
-      setTokens(result)
-      setChallenge(null)
-      if (options?.clearAutoLogin) {
-        setAutoLogin(null)
-      }
-      setActiveAuthenticatedTab('tokens')
-      setStatus(options?.preserveStatus ? 'Automatisch angemeldet' : 'Angemeldet')
-      setStep('authenticated')
+      await finishLoginWithDevice(currentDevice, currentChallenge, flow, options)
     })
   }
 
@@ -1146,16 +1166,7 @@ export function App() {
       return
     }
 
-    const kind = securePrompt.kind
     setSecurePrompt(null)
-
-    if (kind === 'register') {
-      await runAction(async () => {
-        await completeRegister()
-      })
-      return
-    }
-
     await handleFinishLoginWithBiometric()
   }
 
@@ -1426,8 +1437,8 @@ export function App() {
                       <strong>{challenge ? 'Bestätigung ausstehend' : 'Registriertes Gerät wartet auf Anmeldung'}</strong>
                       <p className="muted-copy">
                         {challenge
-                          ? 'Bestätige dich mit der Displaysperre, um die Anmeldung abzuschließen.'
-                          : 'Erst nach der Challenge und der Android-Bestätigung wird eine neue Keycloak-Sitzung erstellt.'}
+                          ? 'Die Geräte-Challenge ist bereit. Bestätige jetzt den gewählten zweiten Faktor.'
+                          : 'Erst nach der Challenge und einem zweiten Faktor wird eine neue Keycloak-Sitzung erstellt.'}
                       </p>
                       {challenge && (
                         <div className="second-factor-options">
@@ -1656,7 +1667,7 @@ function TokenEmptyState({ hasDevice, hasChallenge }: { hasDevice: boolean; hasC
       </div>
       <p className="muted-copy">
         {hasChallenge
-          ? 'Bestätige den sicheren Anmeldedialog, um den Token-Bereich zu entsperren.'
+          ? 'Schließe die Geräte-Challenge mit einem zweiten Faktor ab, um den Token-Bereich zu entsperren.'
           : hasDevice
             ? 'Dieses Telefon ist bereits registriert, aber aktuell noch nicht bei Keycloak angemeldet.'
             : 'Richte dieses Telefon zuerst ein und bestätige die Registrierung per Code oder SMS-TAN.'}

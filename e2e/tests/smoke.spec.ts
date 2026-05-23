@@ -716,7 +716,12 @@ test("appmock can open webmock through bootstrap SSO", async ({
   await page.getByLabel("Telefonnummer").fill("+491701234567");
   await page.getByLabel("Gerätename").fill("Playwright SSO Device");
   await page.getByRole("button", { name: "Weiter" }).click();
-  await page.getByRole("button", { name: "Displaysperre verwenden" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Verfügbaren Service ausführen" }),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.getByRole("button", { name: "SMS-TAN senden", exact: true }),
+  ).toBeVisible({ timeout: 15000 });
 
   const startSmsTanResponsePromise = page.waitForResponse(
     (response) =>
@@ -919,12 +924,9 @@ test("device login flow supports tokens refresh and logout", async ({
     "Service wird nach dem Erstellen des Flows gewählt",
   );
   await page.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByLabel("Secure element prompt")).toBeVisible();
-  await expect(page.getByText("Bestätige deine Identität")).toBeVisible();
-  await page.getByRole("button", { name: "Displaysperre verwenden" }).click();
   await expect(
     page.getByRole("heading", { name: "Verfügbaren Service ausführen" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByText("SMS-TAN erscheint nur mit hinterlegter Telefonnummer."),
   ).toBeVisible();
@@ -970,21 +972,6 @@ test("device login flow supports tokens refresh and logout", async ({
   const authenticatedTokenSummary = page.getByLabel(
     "Authenticated token summary",
   );
-  const postPasswordPrompt = page.getByLabel("Secure element prompt");
-  const postPasswordState = await Promise.race([
-    authenticatedTokenSummary
-      .waitFor({ state: "visible", timeout: 15000 })
-      .then(() => "authenticated"),
-    postPasswordPrompt
-      .waitFor({ state: "visible", timeout: 15000 })
-      .then(() => "prompt"),
-  ]);
-  if (postPasswordState === "prompt") {
-    await postPasswordPrompt
-      .getByRole("button", { name: "Displaysperre verwenden" })
-      .click();
-  }
-
   await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("Angemeldet mit aktiver Sitzung")).toBeVisible();
   await expect(page.getByLabel("Session token section")).toBeVisible();
@@ -1000,10 +987,6 @@ test("device login flow supports tokens refresh and logout", async ({
   const bindingNotice = page.getByRole("note", {
     name: "Local device binding notice",
   });
-  if (await postPasswordPrompt.isVisible().catch(() => false)) {
-    await postPasswordPrompt.getByRole("button", { name: "Abbrechen" }).click();
-    await expect(postPasswordPrompt).toHaveCount(0);
-  }
   await expect(
     page.getByRole("button", { name: "Tokens aktualisieren" }),
   ).toBeVisible();
@@ -1031,11 +1014,13 @@ test("device login flow supports tokens refresh and logout", async ({
 
   await page.getByRole("button", { name: "Mit Gerät fortfahren" }).click();
   await expect(
-    page.getByText("Bestätige den Schlüsselspeicherzugriff zur Anmeldung"),
+    page.getByText(
+      "Geräte-Challenge ist bereit. Wähle jetzt den zweiten Faktor für die Anmeldung.",
+    ),
   ).toBeVisible();
-  await expect(page.getByLabel("Secure element prompt")).toBeVisible();
-  await expect(page.getByText("Bestätige deine Identität")).toBeVisible();
-  await page.getByRole("button", { name: "Displaysperre verwenden" }).click();
+  await page.getByRole("button", { name: "Passwort wählen" }).click();
+  await page.getByLabel("Passwort").fill("ChangeMe123!");
+  await page.getByRole("button", { name: "Mit Passwort anmelden" }).click();
 
   await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 });
   await expect(page.getByLabel("Session token section")).toBeVisible();
@@ -1253,8 +1238,8 @@ test("device login flow supports tokens refresh and logout", async ({
     .first()
     .click();
 
-  await expect(artifactTabs).toContainText("id_token");
-  await artifactTabs.getByRole("tab", { name: /id_token/i }).click();
+  await expect(artifactTabs).toContainText("access_token");
+  await artifactTabs.getByRole("tab", { name: /access_token/i }).click();
 
   await expect(artifactViewer).toBeVisible({ timeout: 10000 });
   await expect(artifactViewer).toContainText("Decodiert");
@@ -1266,23 +1251,21 @@ test("device login flow supports tokens refresh and logout", async ({
     .getByRole("button", {
       name: /keycloak POST \/realms\/auth-sandbox-2\/protocol\/openid-connect\/token/i,
     })
-    .first()
+    .last()
     .click();
   await expect(artifactTabs).toContainText("request_body");
 
   await artifactTabs.getByRole("tab", { name: /^request_body/i }).click();
-  await expect(artifactViewer).toContainText("form.login_token");
+  await expect(artifactViewer).toContainText("client_id=appmock-web");
   await expect(artifactViewer).toContainText(userId);
 
   await artifactTabs.getByRole("tab", { name: /^request_headers/i }).click();
   await expect(artifactViewer).toContainText("headers.x-trace-id");
 
   await artifactTabs.getByRole("tab", { name: /^response_body/i }).click();
-  await expect(artifactViewer).toContainText("body.access_token");
+  await expect(artifactViewer).toContainText('"client_id": "appmock-web"');
   await expect(artifactViewer.locator("textarea").first()).toBeVisible();
-  await expect(artifactViewer).toContainText(
-    "Verschachtelt decodiert: body.access_token",
-  );
+  await expect(artifactViewer).toContainText('"acr": "2se"');
 
   await artifactTabs.getByRole("tab", { name: /^response_headers/i }).click();
   await expect(artifactViewer).toContainText("headers.content-type");
@@ -1641,11 +1624,9 @@ test("missing saved device binding is cleared instead of failing with a server e
   await page.getByLabel("Geburtsdatum").fill("1990-01-01");
   await page.getByLabel("Gerätename").fill(deviceName);
   await page.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByLabel("Secure element prompt")).toBeVisible();
-  await page.getByRole("button", { name: "Displaysperre verwenden" }).click();
   await expect(
     page.getByRole("heading", { name: "Verfügbaren Service ausführen" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await expect(
     page.getByText("Ein separater Startschritt ist nicht erforderlich."),
   ).toBeVisible();
@@ -1672,18 +1653,6 @@ test("missing saved device binding is cleared instead of failing with a server e
     const authenticatedTokenSummary = page.getByLabel(
       "Authenticated token summary",
     );
-    const postPasswordPrompt = page.getByLabel("Secure element prompt");
-    const postPasswordState = await Promise.race([
-      authenticatedTokenSummary
-        .waitFor({ state: "visible", timeout: 15000 })
-        .then(() => "authenticated"),
-      postPasswordPrompt
-        .waitFor({ state: "visible", timeout: 15000 })
-        .then(() => "prompt"),
-    ]);
-    if (postPasswordState === "prompt") {
-      await page.getByRole("button", { name: "Displaysperre verwenden" }).click();
-    }
     await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 });
   }
 
@@ -1691,6 +1660,12 @@ test("missing saved device binding is cleared instead of failing with a server e
   await expect(
     page.getByRole("heading", { name: "Geräteanmeldung starten" }),
   ).toBeVisible();
+
+  const storedBinding = await page.evaluate(() => {
+    const raw = window.localStorage.getItem("auth-sandbox-2.device-binding");
+    return raw ? (JSON.parse(raw) as { publicKeyHash?: string }) : null;
+  });
+  expect(storedBinding?.publicKeyHash).toBeTruthy();
 
   const devicesResponse = await request.get(
     `${AUTH_API_URL}/api/admin/devices`,
@@ -1701,9 +1676,12 @@ test("missing saved device binding is cleared instead of failing with a server e
   expect(devicesResponse.ok()).toBeTruthy();
   const devices = (await devicesResponse.json()) as Array<{
     id: string;
-    deviceName: string;
+    deviceName: string | null;
+    publicKeyHash: string;
   }>;
-  const device = devices.find((item) => item.deviceName === deviceName);
+  const device = devices.find(
+    (item) => item.publicKeyHash === storedBinding?.publicKeyHash,
+  );
 
   expect(device).toBeTruthy();
 
@@ -1728,10 +1706,10 @@ test("missing saved device binding is cleared instead of failing with a server e
     page.getByRole("heading", { name: "Geräteanmeldung einrichten" }),
   ).toBeVisible();
 
-  const storedBinding = await page.evaluate(() =>
+  const bindingAfterCleanup = await page.evaluate(() =>
     window.localStorage.getItem("auth-sandbox-2.device-binding"),
   );
-  expect(storedBinding).toBeNull();
+  expect(bindingAfterCleanup).toBeNull();
 });
 
 test("registration verification shows inline error feedback for invalid code attempts", async ({
@@ -1766,11 +1744,9 @@ test("registration verification shows inline error feedback for invalid code att
   await page.getByLabel("Geburtsdatum").fill("1990-01-01");
   await page.getByLabel("Gerätename").fill(deviceName);
   await page.getByRole("button", { name: "Weiter" }).click();
-  await expect(page.getByLabel("Secure element prompt")).toBeVisible();
-  await page.getByRole("button", { name: "Displaysperre verwenden" }).click();
   await expect(
     page.getByRole("heading", { name: "Verfügbaren Service ausführen" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await page
     .getByRole("textbox", { name: "Registrierungscode" })
     .fill("WRONGCODE");
