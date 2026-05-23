@@ -25,6 +25,7 @@ type DeviceState = {
   publicKey: string
   publicKeyHash: string
   privateKey: CryptoKey
+  biometricPromptPending: boolean
   biometricPrivateKey?: CryptoKey
   biometricPublicKey?: string
 }
@@ -40,6 +41,7 @@ type StoredDeviceBinding = {
   publicKeyHash: string
   privateKey: string
   passwordRequired: boolean
+  biometricPromptPending: boolean
   biometricPrivateKey?: string
   biometricPublicKey?: string
 }
@@ -68,14 +70,11 @@ type PendingRegistration = {
   serviceToken?: string
   publicKey: string
   privateKey: CryptoKey
-  biometricPublicKey?: string
-  biometricPrivateKey?: CryptoKey
   availableServices: AssuranceFlowServiceOption[]
   selectedService: AssuranceFlowService
   // Redacted SMS destination shown back to the user, e.g. ***1234.
   maskedTarget?: string | null
   devCode?: string | null
-  enableBiometric: boolean
 }
 
 type VerificationFeedback = {
@@ -158,8 +157,7 @@ function createInitialForm() {
     selectedService: 'person_code' as AssuranceFlowService,
     code: '',
     tan: '',
-    password: 'ChangeMe123!',
-    enableBiometric: false
+    password: 'ChangeMe123!'
   }
 }
 
@@ -182,7 +180,10 @@ function readStoredDeviceBinding() {
       return null
     }
 
-    return parsed as StoredDeviceBinding
+    return {
+      ...parsed,
+      biometricPromptPending: parsed.biometricPromptPending === true
+    } as StoredDeviceBinding
   } catch {
     return null
   }
@@ -198,6 +199,7 @@ async function persistDeviceBinding(device: DeviceState, passwordRequired: boole
     publicKeyHash: device.publicKeyHash,
     privateKey: serializedPrivateKey,
     passwordRequired,
+    biometricPromptPending: device.biometricPromptPending,
     biometricPrivateKey: serializedBiometricPrivateKey,
     biometricPublicKey: device.biometricPublicKey
   }
@@ -234,6 +236,7 @@ export function App() {
   const [ssoLaunch, setSsoLaunch] = useState<CreateSsoLaunchResponse | null>(null)
   const [ssoCopyStatus, setSsoCopyStatus] = useState<string | null>(null)
   const [loginPassword, setLoginPassword] = useState('')
+  const [showBiometricEnrollmentPrompt, setShowBiometricEnrollmentPrompt] = useState(false)
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -300,6 +303,7 @@ export function App() {
           publicKey: stored.publicKey,
           publicKeyHash: stored.publicKeyHash,
           privateKey,
+          biometricPromptPending: stored.biometricPromptPending === true,
           biometricPrivateKey,
           biometricPublicKey: stored.biometricPublicKey
         })
@@ -338,6 +342,7 @@ export function App() {
     setTraceState(null)
     setAutoLogin(null)
     setActiveAuthenticatedTab('tokens')
+    setShowBiometricEnrollmentPrompt(false)
     setServiceMockApi({
       profile: null,
       messages: [],
@@ -605,7 +610,7 @@ export function App() {
     setStatus(nextStatus)
   }
 
-  async function finalizeRegistration(result: PublicAssuranceFlowRecord, signingKeys: { publicKey: string; privateKey: CryptoKey; biometricPublicKey?: string; biometricPrivateKey?: CryptoKey }) {
+  async function finalizeRegistration(result: PublicAssuranceFlowRecord, signingKeys: { publicKey: string; privateKey: CryptoKey }) {
     if (!result.finalization || result.finalization.kind !== 'registration_result') {
       throw new Error('Registration flow did not return a registration result')
     }
@@ -618,8 +623,7 @@ export function App() {
       publicKey: signingKeys.publicKey,
       publicKeyHash: result.finalization.publicKeyHash,
       privateKey: signingKeys.privateKey,
-      biometricPublicKey: signingKeys.biometricPublicKey,
-      biometricPrivateKey: signingKeys.biometricPrivateKey
+      biometricPromptPending: true
     }
 
     setDevice(nextDevice)
@@ -650,16 +654,10 @@ export function App() {
     }])
     setStatus('Sicherer Geräteschlüssel wird vorbereitet...')
     const signingKeys = await createSigningKeys()
-    let biometricKeys: { publicKey: string; privateKey: CryptoKey } | undefined
-    if (form.enableBiometric) {
-      setStatus('Biometrischer Schlüssel wird vorbereitet...')
-      biometricKeys = await createBiometricKeys()
-    }
     setStatus('Registrierungs-Flow wird angelegt...')
     const created = await api.createRegistrationFlow({
       deviceName: form.deviceName,
-      publicKey: signingKeys.publicKey,
-      biometricPublicKey: biometricKeys?.publicKey
+      publicKey: signingKeys.publicKey
     }, flow)
 
     const withIdentity = await api.submitRegistrationIdentity(
@@ -687,14 +685,11 @@ export function App() {
       serviceToken: undefined,
       publicKey: signingKeys.publicKey,
       privateKey: signingKeys.privateKey,
-      biometricPublicKey: biometricKeys?.publicKey,
-      biometricPrivateKey: biometricKeys?.privateKey,
       availableServices: withIdentity.availableServices,
       selectedService,
       maskedTarget: withIdentity.method?.maskedTarget ?? null
       ,
-      devCode: withIdentity.method?.devCode ?? null,
-      enableBiometric: form.enableBiometric
+      devCode: withIdentity.method?.devCode ?? null
     })
     setForm((current) => ({
       ...current,
@@ -803,9 +798,7 @@ export function App() {
       )
       await finalizeRegistration(finalized, {
         publicKey: pendingRegistration.publicKey,
-        privateKey: pendingRegistration.privateKey,
-        biometricPublicKey: pendingRegistration.biometricPublicKey,
-        biometricPrivateKey: pendingRegistration.biometricPrivateKey
+        privateKey: pendingRegistration.privateKey
       })
     } catch (error) {
       const message = readErrorMessage(error)
@@ -935,6 +928,11 @@ export function App() {
     if (options?.clearAutoLogin) {
       setAutoLogin(null)
     }
+    setShowBiometricEnrollmentPrompt(Boolean(
+      currentDevice.biometricPromptPending &&
+      !currentDevice.biometricPrivateKey &&
+      !currentDevice.biometricPublicKey
+    ))
     setActiveAuthenticatedTab('tokens')
     setStatus(options?.preserveStatus ? 'Automatisch angemeldet' : 'Angemeldet')
     setStep('authenticated')
@@ -975,6 +973,7 @@ export function App() {
       setTokens(result)
       setChallenge(null)
       setAutoLogin(null)
+      setShowBiometricEnrollmentPrompt(false)
       setActiveAuthenticatedTab('tokens')
       setStatus('Angemeldet (Biometrie)')
       setStep('authenticated')
@@ -1006,10 +1005,12 @@ export function App() {
         }, tokens.accessToken, traceState ?? undefined)
         const nextDevice = {
           ...device,
+          biometricPromptPending: false,
           biometricPrivateKey: undefined,
           biometricPublicKey: undefined
         }
         setDevice(nextDevice)
+        setShowBiometricEnrollmentPrompt(false)
         await persistDeviceBinding(nextDevice, false)
         setStatus(result.message)
         return
@@ -1023,12 +1024,31 @@ export function App() {
       }, tokens.accessToken, traceState ?? undefined)
       const nextDevice = {
         ...device,
+        biometricPromptPending: false,
         biometricPrivateKey: biometricKeys.privateKey,
         biometricPublicKey: biometricKeys.publicKey
       }
       setDevice(nextDevice)
+      setShowBiometricEnrollmentPrompt(false)
       await persistDeviceBinding(nextDevice, false)
       setStatus(result.message)
+    })
+  }
+
+  async function handleDismissBiometricPrompt() {
+    if (!device || !device.biometricPromptPending) {
+      return
+    }
+
+    await runAction(async () => {
+      const nextDevice = {
+        ...device,
+        biometricPromptPending: false
+      }
+      setDevice(nextDevice)
+      setShowBiometricEnrollmentPrompt(false)
+      await persistDeviceBinding(nextDevice, false)
+      setStatus('Biometrie kann später in der Verwaltung aktiviert werden.')
     })
   }
 
@@ -1303,17 +1323,6 @@ export function App() {
                         <span className="field-label">Gerätename</span>
                         <input name="deviceName" value={form.deviceName} onChange={(event) => setForm({ ...form, deviceName: event.target.value })} disabled={busy} />
                       </label>
-                      <label className="toggle-label">
-                        <span className="field-label">Biometrie aktivieren</span>
-                        <span className="toggle-description">Erstellt einen zweiten Schlüssel im sicheren Speicher dieses Geräts für eine optionale Login-Alternative.</span>
-                        <input
-                          name="enableBiometric"
-                          type="checkbox"
-                          checked={form.enableBiometric}
-                          onChange={(event) => setForm({ ...form, enableBiometric: event.target.checked })}
-                          disabled={busy}
-                        />
-                      </label>
                       <label>
                         <input value="Service wird nach dem Erstellen des Flows gewählt" disabled aria-label="Nächster Schritt" />
                       </label>
@@ -1561,6 +1570,14 @@ export function App() {
                       <strong>Angemeldet mit aktiver Sitzung</strong>
                       <p className="muted-copy">Aktualisieren holt ein neues Token-Bündel. Abmelden beendet die Sitzung, behält aber die Gerätebindung für spätere Anmeldungen.</p>
                     </div>
+                    {showBiometricEnrollmentPrompt && (
+                      <PostLoginBiometricPrompt
+                        strongSession={currentSessionAcr === '2se'}
+                        busy={busy}
+                        onEnable={() => void handleManageBiometric('add')}
+                        onDismiss={() => void handleDismissBiometricPrompt()}
+                      />
+                    )}
                     <div className="actions stacked-actions">
                       <button type="button" onClick={handleRefresh} disabled={busy}>Tokens aktualisieren</button>
                       <button type="button" onClick={() => void handlePrepareWebmockSso()} disabled={busy}>WebMock SSO vorbereiten</button>
@@ -1892,6 +1909,31 @@ function SecureElementPrompt(props: {
         </div>
       </section>
     </div>
+  )
+}
+
+function PostLoginBiometricPrompt(props: {
+  strongSession: boolean
+  busy: boolean
+  onEnable: () => void
+  onDismiss: () => void
+}) {
+  return (
+    <section className="challenge-card authenticated-card" aria-label="Biometric enrollment prompt">
+      <p className="section-label">Biometrie</p>
+      <strong>Biometrie für dieses Gerät aktivieren?</strong>
+      <p className="muted-copy">
+        {props.strongSession
+          ? 'Dieses Gerät ist gerade erfolgreich angemeldet. Du kannst jetzt optional einen lokalen biometrischen Zweitfaktor hinzufügen.'
+          : 'Nach dieser Gerätebindung kannst du Biometrie später in der Verwaltung aktivieren, sobald eine starke 2se-Sitzung vorliegt.'}
+      </p>
+      <div className="actions stacked-actions">
+        {props.strongSession && (
+          <button type="button" onClick={props.onEnable} disabled={props.busy}>Jetzt aktivieren</button>
+        )}
+        <button type="button" className="button-secondary" onClick={props.onDismiss} disabled={props.busy}>Später</button>
+      </div>
+    </section>
   )
 }
 

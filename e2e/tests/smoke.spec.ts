@@ -974,6 +974,18 @@ test("device login flow supports tokens refresh and logout", async ({
   );
   await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("Angemeldet mit aktiver Sitzung")).toBeVisible();
+  const biometricEnrollmentPrompt = page.getByRole("region", {
+    name: "Biometric enrollment prompt",
+  });
+  await expect(biometricEnrollmentPrompt).toBeVisible();
+  await expect(biometricEnrollmentPrompt).toContainText(
+    "Biometrie für dieses Gerät aktivieren?",
+  );
+  await page.getByRole("button", { name: "Später" }).click();
+  await expect(biometricEnrollmentPrompt).toBeHidden();
+  await expect(
+    page.getByText("Biometrie kann später in der Verwaltung aktiviert werden."),
+  ).toBeVisible();
   await expect(page.getByLabel("Session token section")).toBeVisible();
   await expect(page.getByText("Zugriff")).toBeVisible();
   await expect(page.getByText("Access-Token bereit")).toBeVisible();
@@ -1023,6 +1035,7 @@ test("device login flow supports tokens refresh and logout", async ({
   await page.getByRole("button", { name: "Mit Passwort anmelden" }).click();
 
   await expect(authenticatedTokenSummary).toBeVisible({ timeout: 15000 });
+  await expect(biometricEnrollmentPrompt).toBeHidden();
   await expect(page.getByLabel("Session token section")).toBeVisible();
   await expect(
     page.getByRole("tab", { name: "Token Sitzung" }),
@@ -1885,7 +1898,7 @@ test("ekw broker login is single-use - second login with same ekw fails", async 
 
   // Should show error - EKW already consumed or invalid
   await expect(
-    brokerPage2.getByText(/ungueltig|verbraucht|invalid/i, { timeout: 10000 }),
+    brokerPage2.getByText(/ungueltig|verbraucht|invalid/i),
   ).toBeVisible({ timeout: 10000 });
 
   await brokerContext1.close();
