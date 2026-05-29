@@ -142,6 +142,21 @@ export function getAndroidSecurityStatus(args: {
   return { pills, detail }
 }
 
+export function getDeviceConflictIds(deviceIds: Array<{ id: string }>) {
+  return [...new Set(deviceIds.map((device) => device.id))]
+}
+
+export function getConflictDevices(conflict: {
+  existingDevices?: Array<{ id: string }>
+  existingDevice?: { id: string } | null
+}) {
+  if (Array.isArray(conflict.existingDevices)) {
+    return conflict.existingDevices
+  }
+
+  return conflict.existingDevice ? [conflict.existingDevice] : []
+}
+
 const DEVICE_BINDING_STORAGE_KEY = 'auth-sandbox-2.device-binding'
 const TIMESTAMP_CLAIM_KEYS = new Set(['auth_time', 'exp', 'iat', 'nbf'])
 const PRIORITY_CLAIM_KEYS = ['sub', 'preferred_username', 'userId', 'scope', 'azp', 'aud', 'iss', 'auth_time', 'iat', 'nbf', 'exp']
@@ -237,6 +252,7 @@ export function App() {
   const [ssoCopyStatus, setSsoCopyStatus] = useState<string | null>(null)
   const [loginPassword, setLoginPassword] = useState('')
   const [showBiometricEnrollmentPrompt, setShowBiometricEnrollmentPrompt] = useState(false)
+  const [deviceConflictMessage, setDeviceConflictMessage] = useState<string | null>(null)
 
   const accessClaims = useMemo<ClaimRecord | null>(() => tokens?.accessTokenClaims ?? null, [tokens])
   const idClaims = useMemo<ClaimRecord | null>(() => tokens?.idTokenClaims ?? null, [tokens])
@@ -707,9 +723,43 @@ export function App() {
     setStep('register_verify')
   }
 
+  async function ensureRegisterDeviceNameAvailable() {
+    const conflict = await api.checkDeviceConflict({
+      userId: form.userId,
+      deviceName: form.deviceName
+    })
+
+    const existingDeviceIds = getDeviceConflictIds(getConflictDevices(conflict))
+    if (existingDeviceIds.length === 0) {
+      setDeviceConflictMessage(null)
+      return true
+    }
+
+    const shouldDelete = window.confirm(`Für ${form.userId} existiert bereits ein Gerät mit dem Namen "${form.deviceName}". Soll das alte Gerät gelöscht werden?`)
+    if (!shouldDelete) {
+      setDeviceConflictMessage('Wähle einen anderen Gerätenamen oder bestätige das Löschen des bestehenden Geräts.')
+      setStatus('Gerätename ist bereits vergeben')
+      return false
+    }
+
+    await Promise.all(existingDeviceIds.map((id) => api.deleteDeviceConflict(id)))
+
+    setDeviceConflictMessage(
+      existingDeviceIds.length === 1
+        ? `Vorhandenes Gerät "${form.deviceName}" wurde gelöscht.`
+        : `${existingDeviceIds.length} vorhandene Geräte mit dem Namen "${form.deviceName}" wurden gelöscht.`
+    )
+    setStatus('Vorhandenes Gerät wurde gelöscht. Registrierung wird fortgesetzt...')
+    return true
+  }
+
   async function handleRegister(event: FormEvent) {
     event.preventDefault()
     await runAction(async () => {
+      const canContinue = await ensureRegisterDeviceNameAvailable()
+      if (!canContinue) {
+        return
+      }
       await completeRegister()
     })
   }
@@ -1298,6 +1348,12 @@ export function App() {
                       <strong>Prüfe zuerst deine Personendaten und wähle dann Code oder SMS-TAN.</strong>
                       <p className="muted-copy">Die hinterlegte Methode wird gegen die beim Admin vorbereiteten Personendaten geprüft und bleibt als Flow später für Browser-Step-up wiederverwendbar.</p>
                     </div>
+                    {deviceConflictMessage && (
+                      <div className="feedback-banner feedback-info" role="status">
+                        <strong>Hinweis</strong>
+                        <p>{deviceConflictMessage}</p>
+                      </div>
+                    )}
                     <form className="grid form-stack" onSubmit={handleRegister}>
                       <label>
                         <span className="field-label">Benutzer-ID</span>

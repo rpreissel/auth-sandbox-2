@@ -1725,6 +1725,170 @@ test("missing saved device binding is cleared instead of failing with a server e
   expect(bindingAfterCleanup).toBeNull();
 });
 
+test("registration checks duplicate device names on the first page and can delete the old device", async ({
+  page,
+  request,
+}) => {
+  const userId = trackCleanupUserId(`e2e-duplicate-device-${Date.now()}`);
+  const deviceName = `Duplicate Device ${Date.now()}`;
+  const registrationCode = `DUP${Date.now().toString(36).toUpperCase()}`;
+  const signingKeys = createSigningKeys();
+
+  const registrationResponse = await request.post(
+    `${AUTH_API_URL}/api/admin/registration-identities`,
+    {
+      headers: ADMIN_PROXY_HEADERS,
+      data: {
+        userId,
+        firstName: "Duplicate",
+        lastName: "Device",
+        birthDate: "1990-01-01",
+        code: registrationCode,
+        codeValidForDays: 30,
+      },
+    },
+  );
+  expect(registrationResponse.ok()).toBeTruthy();
+
+  const firstRegistrationFlowResponse = await request.post(
+    `${AUTH_API_URL}/api/registration-flows`,
+    {
+      data: {
+        deviceName,
+        publicKey: signingKeys.publicKey,
+      },
+    },
+  );
+  expect(firstRegistrationFlowResponse.status()).toBe(201);
+  const firstRegistrationFlow = (await firstRegistrationFlowResponse.json()) as {
+    flowId: string;
+    flowToken: string;
+  };
+
+  const submitIdentityResponse = await request.post(
+    `${AUTH_API_URL}/api/flows/${firstRegistrationFlow.flowId}/registration-identity`,
+    {
+      headers: {
+        authorization: `Bearer ${firstRegistrationFlow.flowToken}`,
+      },
+      data: {
+        userId,
+        firstName: "Duplicate",
+        lastName: "Device",
+        birthDate: "1990-01-01",
+      },
+    },
+  );
+  expect(submitIdentityResponse.ok()).toBeTruthy();
+
+  const selectServiceResponse = await request.post(
+    `${AUTH_API_URL}/api/flows/${firstRegistrationFlow.flowId}/select-service`,
+    {
+      headers: {
+        authorization: `Bearer ${firstRegistrationFlow.flowToken}`,
+      },
+      data: {
+        service: "person_code",
+      },
+    },
+  );
+  expect(selectServiceResponse.ok()).toBeTruthy();
+  const selectedService = (await selectServiceResponse.json()) as {
+    serviceToken: string;
+  };
+
+  const completeCodeResponse = await request.post(
+    `${AUTH_API_URL}/api/identification/person-code/complete`,
+    {
+      headers: {
+        authorization: `Bearer ${selectedService.serviceToken}`,
+      },
+      data: {
+        code: registrationCode,
+      },
+    },
+  );
+  expect(completeCodeResponse.ok()).toBeTruthy();
+  const completedService = (await completeCodeResponse.json()) as {
+    serviceResultToken: string;
+  };
+
+  const finalizeResponse = await request.post(
+    `${AUTH_API_URL}/api/flows/${firstRegistrationFlow.flowId}/finalize`,
+    {
+      headers: {
+        authorization: `Bearer ${firstRegistrationFlow.flowToken}`,
+      },
+      data: {
+        serviceResultToken: completedService.serviceResultToken,
+        channel: "registration",
+      },
+    },
+  );
+  expect(finalizeResponse.ok()).toBeTruthy();
+
+  await page.goto("https://appmock.localhost:8443");
+  await page.getByLabel("Benutzer-ID").fill(userId);
+  await page.getByLabel("Vorname").fill("Duplicate");
+  await page.getByLabel("Nachname").fill("Device");
+  await page.getByLabel("Geburtsdatum").fill("1990-01-01");
+  await page.getByLabel("Gerätename").fill(deviceName);
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Soll das alte Gerät gelöscht werden?");
+    await dialog.dismiss();
+  });
+  await page.getByRole("button", { name: "Weiter" }).click();
+  await expect(
+    page.getByText(
+      "Wähle einen anderen Gerätenamen oder bestätige das Löschen des bestehenden Geräts.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Geräteanmeldung einrichten" }),
+  ).toBeVisible();
+
+  const beforeDeleteResponse = await request.get(
+    `${AUTH_API_URL}/api/admin/devices`,
+    {
+      headers: ADMIN_PROXY_HEADERS,
+    },
+  );
+  expect(beforeDeleteResponse.ok()).toBeTruthy();
+  const beforeDeleteDevices = (await beforeDeleteResponse.json()) as Array<{
+    id: string;
+    deviceName: string | null;
+  }>;
+  expect(
+    beforeDeleteDevices.filter((device) => device.deviceName === deviceName),
+  ).toHaveLength(1);
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Soll das alte Gerät gelöscht werden?");
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "Weiter" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Verfügbaren Service ausführen" }),
+  ).toBeVisible({ timeout: 15000 });
+
+  const afterDeleteResponse = await request.get(
+    `${AUTH_API_URL}/api/admin/devices`,
+    {
+      headers: ADMIN_PROXY_HEADERS,
+    },
+  );
+  expect(afterDeleteResponse.ok()).toBeTruthy();
+  const afterDeleteDevices = (await afterDeleteResponse.json()) as Array<{
+    id: string;
+    deviceName: string | null;
+  }>;
+  expect(
+    afterDeleteDevices.filter((device) => device.deviceName === deviceName),
+  ).toHaveLength(0);
+});
+
 test("registration verification shows inline error feedback for invalid code attempts", async ({
   page,
   request,

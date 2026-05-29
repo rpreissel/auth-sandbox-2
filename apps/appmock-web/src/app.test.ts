@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ServiceMockApiMessagesResponse, ServiceMockApiProfileResponse } from '@auth-sandbox-2/shared-types'
 
-import { getAndroidSecurityStatus } from './App'
+import { getAndroidSecurityStatus, getConflictDevices, getDeviceConflictIds } from './App'
 
 const mockProfile: ServiceMockApiProfileResponse = {
   traceId: 'trace-1',
@@ -63,5 +63,19 @@ describe('appmock-web status card', () => {
     expect(mockProfile.audience).toContain('servicemock-api')
     expect(mockProfile.clientId).toBe('appmock-web')
     expect(mockMessages.items[0]?.category).toBe('seed')
+  })
+
+  it('deduplicates conflicting device ids before deletion', () => {
+    expect(getDeviceConflictIds([
+      { id: 'device-1' },
+      { id: 'device-2' },
+      { id: 'device-1' }
+    ])).toEqual(['device-1', 'device-2'])
+  })
+
+  it('supports legacy single-device conflict responses', () => {
+    expect(getConflictDevices({
+      existingDevice: { id: 'device-1' }
+    })).toEqual([{ id: 'device-1' }])
   })
 })

@@ -27,6 +27,7 @@ import {
   createRegistrationIdentity,
   deleteRegistrationIdentity,
   deleteDevice,
+  findDeviceConflict,
   finishLogin,
   listRegistrationIdentities,
   listDevices,
@@ -95,6 +96,15 @@ const createRegistrationIdentitySchema = z.object({
 const setPasswordSchema = z.object({
   userId: z.string().min(1),
   password: z.string().min(8)
+})
+
+const deviceConflictCheckSchema = z.object({
+  userId: z.string().min(1),
+  deviceName: z.string().min(1)
+})
+
+const deviceConflictParamsSchema = z.object({
+  id: z.string().uuid()
 })
 
 const startLoginSchema = z.object({
@@ -614,6 +624,33 @@ export async function registerRoutes(app: any) {
       body,
       run: () => setPassword(body)
     })
+  })
+  app.post('/api/device/conflicts/check', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
+    const body = deviceConflictCheckSchema.parse(request.body)
+    return tracedRoute({
+      request,
+      reply,
+      traceType: 'device_conflict_check',
+      title: `Check device conflict for ${body.userId}`,
+      summary: 'AppMock Web checked whether the chosen device name already exists for the user.',
+      userId: body.userId,
+      body,
+      run: () => findDeviceConflict(body.userId, body.deviceName)
+    })
+  })
+  app.delete('/api/device/conflicts/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
+    const params = deviceConflictParamsSchema.parse(request.params)
+    await tracedRoute({
+      request,
+      reply,
+      traceType: 'device_conflict_delete',
+      title: `Delete conflicting device ${params.id}`,
+      summary: 'AppMock Web deleted an existing conflicting device before starting a replacement registration.',
+      run: () => deleteDevice(params.id)
+    })
+    reply.code(204)
   })
   app.post('/api/device/login/start', async (request: FastifyRequest, reply: FastifyReply) => {
     const body = startLoginSchema.parse(request.body)

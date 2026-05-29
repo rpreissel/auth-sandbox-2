@@ -29,10 +29,16 @@ export type RegistrationPersonSmsNumberRecord = {
 
 export type DeviceRecord = {
   id: string
+  userId?: string | null
   deviceName: string | null
   publicKeyHash: string
   active: boolean | null
   createdAt: IsoDateTime
+}
+
+export type DeviceConflictCheckResponse = {
+  existingDevices?: DeviceRecord[]
+  existingDevice?: DeviceRecord | null
 }
 
 export type RegistrationIdentityRecord = {

@@ -8,6 +8,7 @@ import type {
   CreateSsoLaunchInput,
   CreateSsoLaunchResponse,
   CreateRegistrationIdentityInput,
+  DeviceConflictCheckResponse,
   DeviceRecord,
   FinishLoginInput,
   FinishLoginResponse,
@@ -145,6 +146,7 @@ function mapRegistrationPersonSmsNumber(row: RegistrationPersonSmsNumberRow): Re
 function mapDevice(row: DeviceRow): DeviceRecord {
   return {
     id: row.id,
+    userId: null,
     deviceName: null,
     publicKeyHash: row.public_key_hash,
     active: null,
@@ -234,18 +236,44 @@ export async function listDevices() {
     `select d.*, b.device_name
        from devices d
        left join lateral (
-         select device_name
-         from device_binding
-         where device_id = d.id
-         order by created_at desc
-         limit 1
-       ) b on true
+          select device_name
+          from device_bindings
+          where device_id = d.id
+          order by created_at desc
+          limit 1
+        ) b on true
       order by d.created_at desc`
   )
   return result.rows.map((row) => ({
     ...mapDevice(row),
     deviceName: row.device_name
   }))
+}
+
+export async function findDeviceConflict(userId: string, deviceName: string): Promise<DeviceConflictCheckResponse> {
+  const normalizedUserId = userId.trim()
+  const normalizedDeviceName = deviceName.trim()
+
+  if (!normalizedUserId || !normalizedDeviceName) {
+    throw badRequest('userId and deviceName are required')
+  }
+
+  const result = await pool.query<DeviceRow & { user_id: string; device_name: string | null }>(
+    `select d.*, b.user_id, b.device_name
+       from device_bindings b
+       join devices d on d.id = b.device_id
+      where b.user_id = $1 and b.device_name = $2
+      order by b.created_at desc`,
+    [normalizedUserId, normalizedDeviceName]
+  )
+
+  return {
+    existingDevices: result.rows.map((row) => ({
+      ...mapDevice(row),
+      userId: row.user_id,
+      deviceName: row.device_name
+    }))
+  }
 }
 
 export async function listRegistrationIdentities() {

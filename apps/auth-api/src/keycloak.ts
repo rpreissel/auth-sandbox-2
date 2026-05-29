@@ -55,6 +55,13 @@ async function fetchNoContent(input: string, init?: RequestInit) {
   return response
 }
 
+function isMissingCredentialDeleteError(error: unknown) {
+  return error instanceof Error
+    && error.message.includes('/credentials/')
+    && error.message.includes('failed: 404')
+    && error.message.includes('Credential not found')
+}
+
 function createFormBody(values: Record<string, string>) {
   const body = new URLSearchParams()
   for (const [key, value] of Object.entries(values)) {
@@ -421,15 +428,22 @@ export class KeycloakAdminClient {
       return
     }
     const token = await this.getAdminToken()
-    await fetchNoContent(
-      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${user.id}/credentials/${credentialId}`,
-      {
-        method: 'DELETE',
-        headers: {
-          authorization: `Bearer ${token}`
+    try {
+      await fetchNoContent(
+        `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${user.id}/credentials/${credentialId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            authorization: `Bearer ${token}`
+          }
         }
+      )
+    } catch (error) {
+      if (isMissingCredentialDeleteError(error)) {
+        return
       }
-    )
+      throw error
+    }
   }
 }
 
