@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createFlowToken, createServiceResultToken, createServiceToken, verifyFlowToken, verifyServiceResultToken, verifyServiceToken } from './flow-tokens.js'
+import {
+  createDeviceConflictToken,
+  createFlowToken,
+  createMobileStepUpToken,
+  createPasswordSetupToken,
+  createServiceResultToken,
+  createServiceToken,
+  verifyDeviceConflictToken,
+  verifyFlowToken,
+  verifyMobileStepUpToken,
+  verifyPasswordSetupToken,
+  verifyServiceResultToken,
+  verifyServiceToken
+} from './flow-tokens.js'
 
 describe('flow tokens', () => {
   it('round-trips a valid token', () => {
@@ -76,6 +89,51 @@ describe('flow tokens', () => {
         service: 'person_code',
         serviceSessionId: 'svc-2',
         achievedAcr: 'level_2',
+        expiresAt
+      }
+    })
+  })
+
+  it('round-trips a valid password setup token', () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString()
+    const token = createPasswordSetupToken('flow-123', 'demo-user', expiresAt)
+
+    expect(verifyPasswordSetupToken(token, 'flow-123', 'demo-user')).toEqual({
+      ok: true,
+      claims: {
+        kind: 'password_setup',
+        flowId: 'flow-123',
+        userId: 'demo-user',
+        expiresAt
+      }
+    })
+  })
+
+  it('round-trips a valid device conflict token', () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString()
+    const token = createDeviceConflictToken('demo-user', 'device-1', expiresAt)
+
+    expect(verifyDeviceConflictToken(token, 'demo-user', 'device-1')).toEqual({
+      ok: true,
+      claims: {
+        kind: 'device_conflict',
+        userId: 'demo-user',
+        deviceId: 'device-1',
+        expiresAt
+      }
+    })
+  })
+
+  it('round-trips a valid mobile step-up token', () => {
+    const expiresAt = new Date(Date.now() + 60_000).toISOString()
+    const token = createMobileStepUpToken('demo-user', '+491701234567', expiresAt)
+
+    expect(verifyMobileStepUpToken(token, 'demo-user', '+491701234567')).toEqual({
+      ok: true,
+      claims: {
+        kind: 'mobile_step_up',
+        userId: 'demo-user',
+        phoneNumber: '+491701234567',
         expiresAt
       }
     })

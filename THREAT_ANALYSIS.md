@@ -21,7 +21,7 @@ Out of scope:
 ## Trust Boundaries
 
 1. Browser or device client -> Caddy / public APIs
-2. Caddy -> browser-facing backend routes protected by exact proxy bearer tokens
+2. Caddy -> browser-facing backend routes protected either by exact proxy bearer tokens or an allowlisted browser origin
 3. `auth-api` -> Keycloak Admin API and custom grant / redeem integrations
 4. Keycloak extension -> `auth-api` internal browser-step-up and redeem endpoints
 5. Backend services -> `trace-api` internal observability write endpoints
@@ -36,7 +36,7 @@ The most important design rule is that the system does not trust network reachab
 - flow state, service state, and redeem artifacts
 - admin registration identities and device inventory
 - trace data, which includes sensitive demo payloads by design
-- proxy tokens and internal write/redeem tokens
+- proxy tokens, allowlisted browser origins, and internal write/redeem tokens
 
 ## Main Attack Surfaces
 
@@ -50,10 +50,11 @@ The most important design rule is that the system does not trust network reachab
 - `POST /api/device/logout`
 - health endpoints
 
-### Browser-facing but protected through Caddy-injected exact tokens
+### Browser-facing but protected through Caddy-injected exact tokens or allowlisted browser origin
 
 - `/api/admin/*`
 - `/api/device/set-password`
+- `/api/device/conflicts/*`
 - `/api/step-up/mobile/complete`
 - trace read routes and `/client-events`
 

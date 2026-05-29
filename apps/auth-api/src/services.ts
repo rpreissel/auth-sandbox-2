@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { appConfig, logger, pool, recordArtifact, runWithSpan, withTransaction } from '@auth-sandbox-2/backend-core'
 import type {
+  CompleteMobileStepUpInput,
   AssuranceFlowService,
   BiometricCredentialManagementInput,
   BiometricCredentialManagementResponse,
@@ -32,7 +33,7 @@ import {
   selectPublicAssuranceFlowService,
   startPublicAssuranceFlowMethod
 } from './assurance-flows.js'
-import { verifyServiceToken } from './flow-tokens.js'
+import { createDeviceConflictToken, verifyServiceToken } from './flow-tokens.js'
 import { createHandoverEnvelope, getUserHandoverSecret } from './device-handover.js'
 import { createEncryptedChallenge, hashPublicKey, verifyPayloadSignature } from './lib/crypto.js'
 import { KeycloakAdminClient, KeycloakAuthClient } from './keycloak.js'
@@ -271,7 +272,8 @@ export async function findDeviceConflict(userId: string, deviceName: string): Pr
     existingDevices: result.rows.map((row) => ({
       ...mapDevice(row),
       userId: row.user_id,
-      deviceName: row.device_name
+      deviceName: row.device_name,
+      conflictToken: createDeviceConflictToken(normalizedUserId, row.id, new Date(Date.now() + 10 * 60_000).toISOString())
     }))
   }
 }
@@ -848,11 +850,7 @@ export async function logout(input: RefreshTokensInput): Promise<LogoutResponse>
   )
 }
 
-export async function completeMobileStepUp(input: {
-  userId: string
-  phoneNumber: string
-  refreshToken?: string
-}) {
+export async function completeMobileStepUp(input: CompleteMobileStepUpInput) {
   const created = await createStepUpFlow({
     userId: input.userId,
     requiredAcr: 'level_1',

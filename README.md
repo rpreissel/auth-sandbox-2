@@ -91,7 +91,7 @@ sequenceDiagram
   Auth-->>Device: Device bound\n(password setup may be required)
 
   Device->>Caddy: Set initial password
-  Caddy->>Auth: Forward with app proxy token
+  Caddy->>Auth: Forward password-setup token
   Auth->>KC: Set password via Admin API
   KC-->>Auth: Password stored
   Auth-->>Device: Password accepted
@@ -171,7 +171,9 @@ All detailed diagrams live under `docs/diagrams/`.
 - `POST /api/step-up-flows` requires a valid Keycloak user bearer token from the allowed browser/app clients and binds the flow to that bearer user.
 - `GET /api/flows/:flowId`, `POST /api/flows/:flowId/select-service`, and `POST /api/flows/:flowId/finalize` require `Authorization: Bearer <flowToken>`.
 - Direct identification endpoints require `Authorization: Bearer <serviceToken>` and return a `serviceResultToken` for finalization.
-- `POST /api/admin/registration-identities`, `GET /api/admin/registration-identities`, `GET /api/admin/devices`, `DELETE /api/admin/devices/:id`, `POST /api/device/set-password`, and `POST /api/step-up/mobile/complete` are protected by exact proxy bearer tokens that Caddy injects for the demo browser apps.
+- `POST /api/admin/registration-identities`, `GET /api/admin/registration-identities`, and `DELETE /api/admin/devices/:id` stay protected by an exact admin proxy bearer token that Caddy injects for the demo admin browser app.
+- `POST /api/device/set-password` requires a signed `passwordSetupToken` emitted only after finalized registration, and `/api/device/conflicts/*` uses signed per-device `conflictToken`s.
+- `POST /api/step-up/mobile/complete` remains protected by the app proxy bearer token.
 - `POST /api/internal/browser-step-up/start`, `POST /api/internal/browser-step-up/complete`, and `POST /api/internal/flows/redeem` require a Keycloak bearer token from the dedicated service-account client `auth-api-internal-redeem`.
 - `trace-api` browser reads and `client-events` require a dedicated browser proxy token, while `/internal/observability/*` requires a separate internal write token.
 - The old public browser shortcut `POST /api/step-up/browser/start` was removed. Browser step-up now starts only inside Keycloak through the internal backchannel flow.
@@ -192,14 +194,16 @@ flowchart TB
 
   subgraph Proxy[Browser routes protected by Caddy-injected demo bearer tokens]
     AdminToken[admin proxy token] --> A1[/api/admin/*/]
-    AppToken[app proxy token] --> A2[/api/device/set-password/]
-    AppToken --> A3[/api/step-up/mobile/complete/]
+    AppToken[app proxy token] --> A3[/api/step-up/mobile/complete/]
     TraceToken[trace browser proxy token] --> T1[/traces/]
     TraceToken --> T2[/traces/:traceId/]
     TraceToken --> T3[/spans/:spanId/]
     TraceToken --> T4[/artifacts/:artifactId/]
     TraceToken --> T5[/client-events/]
   end
+
+  PasswordSetupToken[passwordSetupToken] --> A2[/api/device/set-password/]
+  ConflictToken[device conflict token] --> A6[/api/device/conflicts/*/]
 
   subgraph AuthTokens[Token-scoped auth-api routes]
     FlowToken[flowToken] --> F1[/GET /api/flows/:flowId/]

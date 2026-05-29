@@ -208,7 +208,7 @@ flowchart LR
   EkwClient[webmock-ekw-login\nclient / browser-ekw-login-flow]
 
   Admin --> Caddy -->|admin proxy token| Auth
-  Device --> Caddy -->|app proxy token for set-password| Auth
+  Device --> Caddy -->|password-setup token after finalized registration| Auth
   Device --> Auth
   Browser -->|EKW bootstrap: acr=ekw, state=ekw:…| EkwClient --> KC
   Browser -->|one-time silent handoff prompt=none + acr=ekw, then optional step-up 2se| KC

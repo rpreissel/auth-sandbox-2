@@ -43,10 +43,6 @@ https://appmock.localhost:8443 {
     request_header Authorization "Bearer change-me-trace-browser-token"
     reverse_proxy trace-api:3001
   }
-  handle /api/device/set-password {
-    request_header Authorization "Bearer change-me-app-proxy-token"
-    reverse_proxy auth-api:3000
-  }
   handle /api/* {
     reverse_proxy auth-api:3000
   }
@@ -114,11 +110,6 @@ https://auth.localhost:8443 {
   @admin_api path /api/admin/*
   handle @admin_api {
     request_header Authorization "Bearer change-me-admin-proxy-token"
-    reverse_proxy auth-api:3000
-  }
-  @set_password path /api/device/set-password
-  handle @set_password {
-    request_header Authorization "Bearer change-me-app-proxy-token"
     reverse_proxy auth-api:3000
   }
   reverse_proxy auth-api:3000

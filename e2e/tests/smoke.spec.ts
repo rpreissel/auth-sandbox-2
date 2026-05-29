@@ -18,7 +18,6 @@ const MOCK_WEB_URL = "https://webmock.localhost:8443";
 const ADMIN_PROXY_HEADERS = {
   authorization: "Bearer change-me-admin-proxy-token",
 };
-const APP_PROXY_HEADERS = { authorization: "Bearer change-me-app-proxy-token" };
 const TRACE_BROWSER_HEADERS = {
   authorization: "Bearer change-me-trace-browser-token",
 };
@@ -209,12 +208,13 @@ async function createBrowserUser(request: APIRequestContext, suffix: string) {
   expect(response.ok()).toBeTruthy();
 
   const passwordResponse = await request.post(
-    `${AUTH_API_URL}/api/device/set-password`,
-    {
-      headers: APP_PROXY_HEADERS,
-      data: {
-        userId,
-        password,
+      `${AUTH_API_URL}/api/device/set-password`,
+      {
+        data: {
+          flowId: "test-bootstrap-flow",
+          userId,
+          password,
+          passwordSetupToken: "invalid-test-token",
       },
     },
   );
@@ -1418,6 +1418,7 @@ test("registration and step-up flow APIs support service selection, concrete ser
       kind: string;
       userId: string;
       publicKeyHash: string | null;
+      passwordSetupToken?: string;
     };
   };
   expect(finalizedRegistration.finalization.kind).toBe("registration_result");
@@ -1429,10 +1430,11 @@ test("registration and step-up flow APIs support service selection, concrete ser
   const setPasswordResponse = await request.post(
     `${AUTH_API_URL}/api/device/set-password`,
     {
-      headers: APP_PROXY_HEADERS,
       data: {
+        flowId: registrationFlow.flowId,
         userId,
         password: "ChangeMe123!",
+        passwordSetupToken: finalizedRegistration.finalization.passwordSetupToken,
       },
     },
   );

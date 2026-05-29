@@ -281,3 +281,4 @@
 {"id":"int-556e0bc4","kind":"field_change","created_at":"2026-05-23T06:47:48.10005Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-ntvj","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-e0de8d44","kind":"field_change","created_at":"2026-05-27T19:22:23.078507Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-4yp3","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
 {"id":"int-5bdda0e8","kind":"field_change","created_at":"2026-05-29T03:43:45.8231Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-4yp3","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Done"}}
+{"id":"int-ada5425a","kind":"field_change","created_at":"2026-05-29T03:52:12.175137Z","actor":"Rene Preissel","issue_id":"auth-sandbox-2-mqvb","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}

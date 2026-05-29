@@ -17,7 +17,7 @@ import {
   submitRegistrationIdentity,
   redeemFlowArtifact
 } from './assurance-flows.js'
-import { verifyFlowToken, verifyServiceToken } from './flow-tokens.js'
+import { verifyDeviceConflictToken, verifyFlowToken, verifyMobileStepUpToken, verifyPasswordSetupToken, verifyServiceToken } from './flow-tokens.js'
 import { isAllowedInternalRedeemTokenClaims, type InternalRedeemAccessTokenClaims } from './internal-auth.js'
 import {
   completeSsoBootstrapCallback,
@@ -94,8 +94,10 @@ const createRegistrationIdentitySchema = z.object({
 })
 
 const setPasswordSchema = z.object({
+  flowId: z.string().min(1),
   userId: z.string().min(1),
-  password: z.string().min(8)
+  password: z.string().min(8),
+  passwordSetupToken: z.string().min(1)
 })
 
 const deviceConflictCheckSchema = z.object({
@@ -104,7 +106,9 @@ const deviceConflictCheckSchema = z.object({
 })
 
 const deviceConflictParamsSchema = z.object({
-  id: z.string().uuid()
+  id: z.string().uuid(),
+  userId: z.string().min(1),
+  conflictToken: z.string().min(1)
 })
 
 const startLoginSchema = z.object({
@@ -149,7 +153,8 @@ const refreshSchema = z.object({
 const mobileStepUpSchema = z.object({
   userId: z.string().min(1),
   phoneNumber: z.string().min(1),
-  refreshToken: z.string().min(1).optional()
+  refreshToken: z.string().min(1).optional(),
+  mobileStepUpToken: z.string().min(1)
 })
 
 const internalBrowserStepUpStartSchema = z.object({
@@ -202,6 +207,13 @@ function requireProxyBearerToken(app: any, request: FastifyRequest, expectedToke
   const token = requireBearerToken(app, request)
   if (token !== expectedToken) {
     throw app.httpErrors.forbidden(`Invalid ${label} token`)
+  }
+}
+
+function requireBrowserOrigin(app: any, request: FastifyRequest, expectedOrigin: string) {
+  const origin = typeof request.headers.origin === 'string' ? request.headers.origin : null
+  if (origin !== expectedOrigin) {
+    throw app.httpErrors.forbidden(`Invalid browser origin: expected ${expectedOrigin}`)
   }
 }
 
@@ -612,8 +624,14 @@ export async function registerRoutes(app: any) {
   })
 
   app.post('/api/device/set-password', async (request: FastifyRequest, reply: FastifyReply) => {
-    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
     const body = setPasswordSchema.parse(request.body)
+    const result = verifyPasswordSetupToken(body.passwordSetupToken, body.flowId, body.userId)
+    if (!result.ok) {
+      if (result.reason === 'expired') {
+        throw app.httpErrors.unauthorized('Password setup token expired')
+      }
+      throw app.httpErrors.forbidden('Invalid password setup token')
+    }
     return tracedRoute({
       request,
       reply,
@@ -626,7 +644,6 @@ export async function registerRoutes(app: any) {
     })
   })
   app.post('/api/device/conflicts/check', async (request: FastifyRequest, reply: FastifyReply) => {
-    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
     const body = deviceConflictCheckSchema.parse(request.body)
     return tracedRoute({
       request,
@@ -640,8 +657,21 @@ export async function registerRoutes(app: any) {
     })
   })
   app.delete('/api/device/conflicts/:id', async (request: FastifyRequest, reply: FastifyReply) => {
-    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
-    const params = deviceConflictParamsSchema.parse(request.params)
+    const requestParams = request.params as Record<string, unknown>
+    const requestBody = typeof request.body === 'object' && request.body !== null
+      ? request.body as Record<string, unknown>
+      : {}
+    const params = deviceConflictParamsSchema.parse({
+      ...requestParams,
+      ...requestBody
+    })
+    const result = verifyDeviceConflictToken(params.conflictToken, params.userId, params.id)
+    if (!result.ok) {
+      if (result.reason === 'expired') {
+        throw app.httpErrors.unauthorized('Device conflict token expired')
+      }
+      throw app.httpErrors.forbidden('Invalid device conflict token')
+    }
     await tracedRoute({
       request,
       reply,
@@ -761,8 +791,18 @@ export async function registerRoutes(app: any) {
   })
 
   app.post('/api/step-up/mobile/complete', async (request: FastifyRequest, reply: FastifyReply) => {
-    requireProxyBearerToken(app, request, appConfig.appProxyToken, 'app proxy')
+    const authenticatedUser = await requireUserAccessToken(app, request)
     const body = mobileStepUpSchema.parse(request.body)
+    const result = verifyMobileStepUpToken(body.mobileStepUpToken, body.userId, body.phoneNumber)
+    if (!result.ok) {
+      if (result.reason === 'expired') {
+        throw app.httpErrors.unauthorized('Mobile step-up token expired')
+      }
+      throw app.httpErrors.forbidden('Invalid mobile step-up token')
+    }
+    if (authenticatedUser.userId !== body.userId) {
+      throw app.httpErrors.forbidden('Authenticated user does not match mobile step-up target')
+    }
     return tracedRoute({
       request,
       reply,

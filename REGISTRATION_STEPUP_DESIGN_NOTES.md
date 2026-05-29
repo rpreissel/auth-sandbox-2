@@ -435,11 +435,14 @@ flowchart TB
 
   subgraph ProxyScoped[Caddy-injected proxy tokens]
     A1[admin proxy token] --> A2[/api/admin/*]
-    A3[app proxy token] --> A4[/api/device/set-password]
-    A3 --> A5[/api/step-up/mobile/complete]
+    A3[app proxy token] --> A5[/api/step-up/mobile/complete]
     T1[trace browser token] --> T2[/traces + trace detail routes]
     T1 --> T3[/client-events]
   end
+
+  P1[password-setup token] --> P2[/api/device/set-password]
+  P3[device-conflict token] --> P4[/api/device/conflicts/*]
+  P5[user bearer + mobile-step-up token] --> P6[/api/step-up/mobile/complete]
 
   subgraph Internal[Internal-only]
     I1[Keycloak service-account bearer] --> I2[/api/internal/browser-step-up/start]

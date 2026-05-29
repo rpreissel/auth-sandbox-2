@@ -36,9 +36,13 @@ export type DeviceRecord = {
   createdAt: IsoDateTime
 }
 
+export type ConflictProtectedDeviceRecord = DeviceRecord & {
+  conflictToken: string
+}
+
 export type DeviceConflictCheckResponse = {
-  existingDevices?: DeviceRecord[]
-  existingDevice?: DeviceRecord | null
+  existingDevices?: ConflictProtectedDeviceRecord[]
+  existingDevice?: ConflictProtectedDeviceRecord | null
 }
 
 export type RegistrationIdentityRecord = {
@@ -114,6 +118,7 @@ export type AssuranceFlowFinalization =
     deviceId?: string
     publicKeyHash?: string
     passwordSetupRequired: boolean
+    passwordSetupToken?: string
   }
   | {
     kind: 'assurance_handle'
@@ -263,8 +268,17 @@ export type RedeemFlowArtifactResponse = {
 }
 
 export type SetPasswordInput = {
+  flowId: string
   userId: string
   password: string
+  passwordSetupToken: string
+}
+
+export type CompleteMobileStepUpInput = {
+  userId: string
+  phoneNumber: string
+  refreshToken?: string
+  mobileStepUpToken: string
 }
 
 export type StartLoginInput = {

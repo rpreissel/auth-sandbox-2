@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { appConfig } from '@auth-sandbox-2/backend-core'
 
 type BaseTokenClaims = {
-  kind: 'flow' | 'service' | 'service_result'
+  kind: 'flow' | 'service' | 'service_result' | 'password_setup' | 'device_conflict' | 'mobile_step_up'
   expiresAt: string
 }
 
@@ -24,6 +24,21 @@ type ServiceResultTokenClaims = BaseTokenClaims & {
   serviceSessionId: string
 }
 
+type PasswordSetupTokenClaims = BaseTokenClaims & {
+  flowId: string
+  userId: string
+}
+
+type DeviceConflictTokenClaims = BaseTokenClaims & {
+  userId: string
+  deviceId: string
+}
+
+type MobileStepUpTokenClaims = BaseTokenClaims & {
+  userId: string
+  phoneNumber: string
+}
+
 type VerifyFlowTokenResult =
   | { ok: true; claims: FlowTokenClaims }
   | { ok: false; reason: 'invalid' | 'expired' }
@@ -34,6 +49,18 @@ type VerifyServiceTokenResult =
 
 type VerifyServiceResultTokenResult =
   | { ok: true; claims: ServiceResultTokenClaims }
+  | { ok: false; reason: 'invalid' | 'expired' }
+
+type VerifyPasswordSetupTokenResult =
+  | { ok: true; claims: PasswordSetupTokenClaims }
+  | { ok: false; reason: 'invalid' | 'expired' }
+
+type VerifyDeviceConflictTokenResult =
+  | { ok: true; claims: DeviceConflictTokenClaims }
+  | { ok: false; reason: 'invalid' | 'expired' }
+
+type VerifyMobileStepUpTokenResult =
+  | { ok: true; claims: MobileStepUpTokenClaims }
   | { ok: false; reason: 'invalid' | 'expired' }
 
 function encodeBase64Url(value: string | Buffer) {
@@ -73,6 +100,18 @@ export function createServiceResultToken(flowId: string, service: string, servic
   return createSignedToken<ServiceResultTokenClaims>({ kind: 'service_result', flowId, service, serviceSessionId, achievedAcr, expiresAt })
 }
 
+export function createPasswordSetupToken(flowId: string, userId: string, expiresAt: string) {
+  return createSignedToken<PasswordSetupTokenClaims>({ kind: 'password_setup', flowId, userId, expiresAt })
+}
+
+export function createDeviceConflictToken(userId: string, deviceId: string, expiresAt: string) {
+  return createSignedToken<DeviceConflictTokenClaims>({ kind: 'device_conflict', userId, deviceId, expiresAt })
+}
+
+export function createMobileStepUpToken(userId: string, phoneNumber: string, expiresAt: string) {
+  return createSignedToken<MobileStepUpTokenClaims>({ kind: 'mobile_step_up', userId, phoneNumber, expiresAt })
+}
+
 export function verifyFlowToken(token: string, expectedFlowId: string): VerifyFlowTokenResult {
   const verified = verifyClaims<FlowTokenClaims>(token)
   if (!verified.ok) {
@@ -101,6 +140,39 @@ export function verifyServiceResultToken(token: string, expectedFlowId: string):
     return verified
   }
   if (verified.claims.kind !== 'service_result' || verified.claims.flowId !== expectedFlowId) {
+    return { ok: false, reason: 'invalid' }
+  }
+  return verified
+}
+
+export function verifyPasswordSetupToken(token: string, expectedFlowId: string, expectedUserId: string): VerifyPasswordSetupTokenResult {
+  const verified = verifyClaims<PasswordSetupTokenClaims>(token)
+  if (!verified.ok) {
+    return verified
+  }
+  if (verified.claims.kind !== 'password_setup' || verified.claims.flowId !== expectedFlowId || verified.claims.userId !== expectedUserId) {
+    return { ok: false, reason: 'invalid' }
+  }
+  return verified
+}
+
+export function verifyDeviceConflictToken(token: string, expectedUserId: string, expectedDeviceId: string): VerifyDeviceConflictTokenResult {
+  const verified = verifyClaims<DeviceConflictTokenClaims>(token)
+  if (!verified.ok) {
+    return verified
+  }
+  if (verified.claims.kind !== 'device_conflict' || verified.claims.userId !== expectedUserId || verified.claims.deviceId !== expectedDeviceId) {
+    return { ok: false, reason: 'invalid' }
+  }
+  return verified
+}
+
+export function verifyMobileStepUpToken(token: string, expectedUserId: string, expectedPhoneNumber: string): VerifyMobileStepUpTokenResult {
+  const verified = verifyClaims<MobileStepUpTokenClaims>(token)
+  if (!verified.ok) {
+    return verified
+  }
+  if (verified.claims.kind !== 'mobile_step_up' || verified.claims.userId !== expectedUserId || verified.claims.phoneNumber !== expectedPhoneNumber) {
     return { ok: false, reason: 'invalid' }
   }
   return verified

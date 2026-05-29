@@ -66,6 +66,7 @@ type PendingRegistration = {
   flowId: string
   // Flow-scoped bearer for the whole registration/assurance journey.
   flowToken: string
+  passwordSetupToken?: string
   // Service-scoped bearer for the currently selected identification step.
   serviceToken?: string
   publicKey: string
@@ -147,8 +148,8 @@ export function getDeviceConflictIds(deviceIds: Array<{ id: string }>) {
 }
 
 export function getConflictDevices(conflict: {
-  existingDevices?: Array<{ id: string }>
-  existingDevice?: { id: string } | null
+  existingDevices?: Array<{ id: string; conflictToken: string }>
+  existingDevice?: { id: string; conflictToken: string } | null
 }) {
   if (Array.isArray(conflict.existingDevices)) {
     return conflict.existingDevices
@@ -729,7 +730,8 @@ export function App() {
       deviceName: form.deviceName
     })
 
-    const existingDeviceIds = getDeviceConflictIds(getConflictDevices(conflict))
+    const existingDevices = getConflictDevices(conflict)
+    const existingDeviceIds = getDeviceConflictIds(existingDevices)
     if (existingDeviceIds.length === 0) {
       setDeviceConflictMessage(null)
       return true
@@ -742,7 +744,10 @@ export function App() {
       return false
     }
 
-    await Promise.all(existingDeviceIds.map((id) => api.deleteDeviceConflict(id)))
+    await Promise.all(existingDevices.map((device) => api.deleteDeviceConflict(device.id, {
+      userId: form.userId,
+      conflictToken: device.conflictToken
+    })))
 
     setDeviceConflictMessage(
       existingDeviceIds.length === 1
@@ -923,7 +928,12 @@ export function App() {
         value: { userId: currentDevice.userId, password: form.password }
       }])
       setStatus('Keycloak-Passwort wird gespeichert...')
-      await api.setPassword({ userId: currentDevice.userId, password: form.password }, flow)
+      await api.setPassword({
+        flowId: pendingRegistration?.flowId ?? '',
+        userId: currentDevice.userId,
+        password: form.password,
+        passwordSetupToken: pendingRegistration?.passwordSetupToken ?? ''
+      }, flow)
       await persistDeviceBinding(currentDevice, false)
       setStatus('Automatische Anmeldung mit Passwort läuft...')
       const loginChallenge = await api.startLogin({ publicKeyHash: currentDevice.publicKeyHash }, flow)

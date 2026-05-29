@@ -75,7 +75,7 @@ describe('appmock-web status card', () => {
 
   it('supports legacy single-device conflict responses', () => {
     expect(getConflictDevices({
-      existingDevice: { id: 'device-1' }
-    })).toEqual([{ id: 'device-1' }])
+      existingDevice: { id: 'device-1', conflictToken: 'token-1' }
+    })).toEqual([{ id: 'device-1', conflictToken: 'token-1' }])
   })
 })

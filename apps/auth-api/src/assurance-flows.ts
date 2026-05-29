@@ -22,7 +22,7 @@ import type {
 
 import { createEncryptedChallenge, hashPublicKey } from './lib/crypto.js'
 import { ensureUserHandoverSecret } from './device-handover.js'
-import { createFlowToken, createServiceResultToken, createServiceToken, verifyServiceResultToken } from './flow-tokens.js'
+import { createFlowToken, createPasswordSetupToken, createServiceResultToken, createServiceToken, verifyServiceResultToken } from './flow-tokens.js'
 import { KeycloakAdminClient } from './keycloak.js'
 import type {
   AssuranceFlowEventRow,
@@ -359,7 +359,8 @@ function buildFinalization(row: AssuranceFlowRow): AssuranceFlowFinalization | n
       userId: result.userId,
       deviceId: typeof result.deviceId === 'string' ? result.deviceId : undefined,
       publicKeyHash: typeof result.publicKeyHash === 'string' ? result.publicKeyHash : undefined,
-      passwordSetupRequired: result.passwordSetupRequired
+      passwordSetupRequired: result.passwordSetupRequired,
+      passwordSetupToken: result.passwordSetupRequired ? createPasswordSetupToken(row.id, result.userId, row.expires_at) : undefined
     }
   }
 
