@@ -27,3 +27,4 @@ runtime/*.tgz
 keycloak-extension/target/
 *.class
 *.jar
+?? .beads/export-state.json
