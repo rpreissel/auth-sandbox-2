@@ -2,7 +2,7 @@
 
 ## Summary
 
-AppMock Web first creates an unbound device, then optionally generates a second biometric keypair, then attaches the user identity later in the same flow before the backend creates the single Keycloak `device-login` credential (containing all of the user's bindings, optionally including `biometricPublicKey`) and optional password bootstrap. The handover uses the persistent per-user secret stored in `user.handover_secret`.
+AppMock Web first creates an unbound device, then optionally generates a second biometric keypair, then attaches the user identity later in the same flow before the backend creates the single Keycloak `device-login` credential (containing all of the user's bindings, optionally including `biometricPublicKey`) and optional password bootstrap. The handover uses the persistent per-user secret stored in `account_user.handover_secret`.
 
 **Key decision**: The biometric key is optional. Registration with `enableBiometric: false` produces a device that only supports password 2FA. Registration with `enableBiometric: true` generates a second local keypair (biometric private key stored in OS-protected keystore mock) and stores the `biometricPublicKey` in the Keycloak credential. This key can be added, rotated, or removed later via the biometric management flow (gated on strong authentication — successful 2FA login counts).
 
@@ -26,7 +26,7 @@ sequenceDiagram
   App->>Auth: Submit deferred identity data
   App->>Auth: Complete code or SMS verification
   Auth->>DB: Consume verification and confirm deferred identity
-  Auth->>DB: Read or create user.handover_secret
+  Auth->>DB: Read or create account_user.handover_secret
   Auth->>KC: Upsert device login credential with optional biometric key
   Auth->>DB: Persist device binding and password status
   Auth->>KC: Check whether password credential exists
@@ -49,7 +49,7 @@ AppMock Web, Auth API, Postgres, Keycloak
 6. **Submit deferred identity data** (AppMock Web → Auth API): AppMock Web sends userId, name, birth date, and optional phone number only after the device has already been created.
 7. **Complete code or SMS verification** (AppMock Web → Auth API): AppMock Web selects person code or SMS-TAN, starts the chosen method when needed, and submits the entered code or TAN.
 8. **Consume verification and confirm deferred identity** (Auth API → Postgres): The backend verifies the submitted code or TAN against the now-attached registration identity and marks the flow as finalizable.
-9. **Read or create user.handover_secret** (Auth API → Postgres): On first registration for a user, auth-api generates a random 32-byte secret and stores it in `user.handover_secret`. On subsequent registrations, it reuses the existing secret.
+9. **Read or create account_user.handover_secret** (Auth API → Postgres): On first registration for a user, auth-api generates a random 32-byte secret and stores it in `account_user.handover_secret`. On subsequent registrations, it reuses the existing secret.
 10. **Upsert device-login credential with all bindings + biometricPublicKey** (Auth API → Keycloak): Only during finalization does auth-api upsert exactly one `device-login` credential for the user. The credential holds `version: handover-v2`, all `bindings` (each with `publicKeyHash` and `deviceName`), optionally `biometricPublicKey` in `credentialData`, and the per-user `handoverSecret` in `secretData`. Any previous credential for this user is replaced.
 11. **Persist device binding and password status** (Auth API → Postgres): Auth-api writes the device binding (with `device_name`) and returns whether password setup is still required.
 12. **Check whether password credential exists** (Auth API → Keycloak): After storing the device binding, auth-api fetches the user credentials from the Keycloak Admin API and checks whether any credential of type password already exists for the same user.

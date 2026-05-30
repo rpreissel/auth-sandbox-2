@@ -15,7 +15,7 @@ sequenceDiagram
   App->>Auth: Submit deferred identity data
   App->>Auth: Complete code or SMS verification
   Auth->>DB: Consume verification and confirm deferred identity
-  Auth->>DB: Read or create user.handover_secret
+  Auth->>DB: Read or create account_user.handover_secret
   Auth->>KC: Upsert device login credential with optional biometric key
   Auth->>DB: Persist device binding and password status
   Auth->>KC: Check whether password credential exists

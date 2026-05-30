@@ -14,7 +14,7 @@ handover-v2 replaces the HMAC-only `handoverProof` field with an AES-256-GCM enc
 
 - **Cipher**: AES-256-GCM
 - **IV**: 12 random bytes, generated fresh per login token
-- **Key**: 32-byte secret from Postgres `user.handover_secret`
+- **Key**: 32-byte secret from Postgres `account_user.handover_secret`
 - **Auth tag**: 16 bytes, appended to ciphertext (automatically produced by `createCipheriv`)
 - **KDF**: None — the per-user secret is used directly as the AES key
 
@@ -100,7 +100,7 @@ The version field inside `credentialData` determines which validation path Keycl
 
 ## Key Properties
 
-1. **No global derivation secret** — the per-user secret is stored in Postgres `user.handover_secret`
+1. **No global derivation secret** — the per-user secret is stored in Postgres `account_user.handover_secret`
 2. **Confidentiality** — the inner payload is not visible to observers between auth-api and Keycloak
 3. **Integrity** — GCM auth tag catches ciphertext tampering
 4. **Cross-check** — Keycloak cross-validates inner vs outer fields, so ciphertext-only tampering fails

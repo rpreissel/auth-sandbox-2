@@ -20,6 +20,8 @@ local-certs/
 *.tfstate.*
 .opencode/
 .beads/.beads-credential-key
+.beads/interactions.jsonl
+.beads/export-state.json
 artifacts/
 runtime/caddy-logs/*.json
 runtime/caddy-logs/*.json.gz
@@ -27,4 +29,3 @@ runtime/*.tgz
 keycloak-extension/target/
 *.class
 *.jar
-?? .beads/export-state.json

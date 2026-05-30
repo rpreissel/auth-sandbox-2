@@ -40,7 +40,7 @@ WebMock Web, Keycloak, KC Extension, Auth API, Postgres
 2. **Return 1se session and tokens** (Keycloak → WebMock Web): Keycloak returns a browser session and tokens that satisfy 1se.
 3. **Detect stronger endpoint requirement** (WebMock Web → WebMock Web): WebMock detects that a stronger endpoint still requires a 2se step-up.
 4. **Start fresh auth with acr_values=2se** (WebMock Web → Keycloak): For step-up, WebMock sends the browser through a fresh OIDC authorization request with acr_values=2se against the webmock-web client so Keycloak can re-run the authentication flow and decide whether extra authenticators must execute.
-5. **Enter inline browser step-up branch** (Keycloak → KC Extension): Keycloak routes the stronger request into the custom inline step-up branch. The browser-step-up-flow now handles only the 2se path; there is no LoA-1 subflow in this flow.
+5. **Enter inline browser step-up branch** (Keycloak → KC Extension): Keycloak routes the stronger request into the custom inline step-up branch inside `browser-step-up-flow`. This flow still contains the LoA-1 username/password branch and the conditional LoA-2 SMS-TAN branch.
 6. **Start internal browser step-up** (KC Extension → Auth API): The extension starts an internal SMS-TAN step-up flow for the current user through auth-api.
 7. **Create flow, challenge, and result code** (Auth API → Postgres): Auth-api stores the step-up flow state, SMS challenge, and final result data.
 8. **Return masked target and demo TAN** (Auth API → KC Extension): The extension receives the masked target and the challenge data needed for inline verification.

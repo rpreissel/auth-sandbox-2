@@ -133,7 +133,7 @@ erDiagram
 
 ## handover_secret
 
-Das Feld `user.handover_secret` ist die Source of Truth für das kryptografische Handover-Secret. Es wird bei der ersten Geräteregistrierung erzeugt und in Keycloaals `secretData` des einen `device-login`-Credentials pro User gespiegelt.
+Das Feld `account_user.handover_secret` ist die Source of Truth für das kryptografische Handover-Secret. Es wird bei der ersten Geräteregistrierung erzeugt und in Keycloaks `secretData` des einen `device-login`-Credentials pro User gespiegelt.
 
 ## Dateien
 
